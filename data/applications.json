@@ -1,0 +1,47 @@
+[
+  {
+    "id": "1755502888182",
+    "lineId": "U789822fe6e3cffca9139f2c80925be37",
+    "prefix": "นาย",
+    "firstName": "สันติภาพ",
+    "lastName": "ศรีจันทร์",
+    "email": "ball@gmail.com",
+    "phone": "0826520388",
+    "gender": "ชาย",
+    "birthDate": "1998-06-23",
+    "nationality": "ไทย",
+    "religion": "พุทธ",
+    "maritalStatus": "โสด",
+    "address": "298",
+    "province": "กรุงเทพ",
+    "district": "หนองแขม",
+    "subDistrict": "หนองแขม",
+    "postalCode": "10160",
+    "emergencyContact": "กิติ",
+    "emergencyPhone": "0826520388",
+    "profileImageUrl": "profile_1755502888182.png",
+    "educationList": [
+      {
+        "level": "ปริญญาตรี",
+        "school": "มรภ",
+        "major": "คอมาธุ",
+        "startYear": "2560",
+        "endYear": "2563",
+        "gpa": "4"
+      }
+    ],
+    "workList": [
+      {
+        "position": "หน่วยแพทยื",
+        "company": "วชว",
+        "startDate": "2024-10-10",
+        "endDate": "2025-01-10",
+        "isCurrent": false,
+        "description": "สากกะเบือยั้นเรือรบ",
+        "salary": "15000"
+      }
+    ],
+    "createdAt": "2025-08-18T07:41:27.073Z",
+    "status": "pending"
+  }
+]
