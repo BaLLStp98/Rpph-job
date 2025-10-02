@@ -167,10 +167,12 @@ export default function ApplicationForm() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+  const [copyFromRegisteredAddress, setCopyFromRegisteredAddress] = useState(false);
   
-  // รับข้อมูล department จาก URL parameters
+  // รับข้อมูล department และ resumeId จาก URL parameters
   const departmentName = searchParams.get('department') || '';
   const departmentId = searchParams.get('departmentId') || '';
+  const resumeId = searchParams.get('resumeId') || '';
   
   // อัปเดตข้อมูล department ในฟอร์มเมื่อมีข้อมูลจาก URL
   useEffect(() => {
@@ -182,6 +184,14 @@ export default function ApplicationForm() {
       }));
     }
   }, [departmentName]);
+
+  // ดึงข้อมูลฝากประวัติตาม resumeId เมื่อมีใน URL
+  useEffect(() => {
+    if (resumeId && status === 'authenticated') {
+      console.log('🔍 พบ resumeId ใน URL:', resumeId);
+      loadResumeById(resumeId);
+    }
+  }, [resumeId, status]);
   const [formData, setFormData] = useState<FormData>({
     profileImage: undefined,
     prefix: '',
@@ -305,65 +315,124 @@ export default function ApplicationForm() {
   useEffect(() => {
     const loadMyResume = async () => {
       if (status !== 'authenticated') return;
+      
+      // ถ้ามี resumeId ใน URL ให้ข้ามการโหลดข้อมูลตามอีเมล
+      if (resumeId) {
+        console.log('🔍 มี resumeId ใน URL - ข้ามการโหลดข้อมูลตามอีเมล');
+        return;
+      }
+      
+      console.log('🔄 เริ่มโหลดข้อมูลฝากประวัติ...');
+      setIsLoading(true);
+      
       try {
-        // พยายามค้นจากอีเมล session ก่อน ถัดไปใช้ mine=1 ถ้า API รองรับ
+        // พยายามค้นจากอีเมล session ก่อน
         const userEmail = (session?.user as any)?.email || '';
+        console.log('🔍 ค้นหาข้อมูลฝากประวัติด้วยอีเมล:', userEmail);
+        
         let found: any = null;
+        
+        // 1. ค้นหาจาก resume-deposit API
         try {
           const q = userEmail ? `?email=${encodeURIComponent(userEmail)}` : '';
+          console.log('🔍 เรียก API:', `/api/resume-deposit${q}`);
+          
           const res = await fetch(`/api/resume-deposit${q}`);
-          if (res.ok) {
-            const json = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
             const list = (json?.data || json || []) as any[];
+            console.log('🔍 ข้อมูลที่ได้รับ:', list.length, 'รายการ');
+            
             const filtered = Array.isArray(list)
               ? (userEmail ? list.filter((r) => (r?.email || '').toLowerCase() === userEmail.toLowerCase()) : list)
               : [];
+              
             if (filtered.length > 0) {
+              // เรียงลำดับตามวันที่อัปเดตล่าสุด
               filtered.sort((a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime());
               found = filtered[0];
+              console.log('✅ พบข้อมูลฝากประวัติ:', found.id);
+        } else {
+              console.log('❌ ไม่พบข้อมูลฝากประวัติสำหรับอีเมลนี้');
             }
+          } else {
+            console.log('❌ API response ไม่สำเร็จ:', res.status);
           }
-        } catch (_) {}
+        } catch (error) {
+          console.error('❌ เกิดข้อผิดพลาดในการค้นหาข้อมูลฝากประวัติ:', error);
+        }
 
+        // 2. ดึงรายละเอียดข้อมูลฝากประวัติ (ถ้าพบ)
         if (found?.id) {
           try {
+            console.log('🔍 ดึงรายละเอียดข้อมูลฝากประวัติ ID:', found.id);
             const detail = await fetch(`/api/resume-deposit/${found.id}`);
             if (detail.ok) {
               const dj = await detail.json().catch(() => ({}));
               found = dj?.data || dj || found;
+              console.log('✅ ดึงรายละเอียดข้อมูลฝากประวัติสำเร็จ');
+            } else {
+              console.log('❌ ไม่สามารถดึงรายละเอียดข้อมูลฝากประวัติได้:', detail.status);
             }
-          } catch (_) {}
+          } catch (error) {
+            console.error('❌ เกิดข้อผิดพลาดในการดึงรายละเอียดข้อมูลฝากประวัติ:', error);
+          }
         }
 
+        // 3. นำข้อมูลมาแสดงในฟอร์ม
         if (found) {
-          console.log('🔍 Found resume data:', found);
-          console.log('🔍 Profile image URL:', found.profileImageUrl);
+          console.log('✅ พบข้อมูลฝากประวัติ - กำลังโหลดลงฟอร์ม...');
+          console.log('🔍 ข้อมูลฝากประวัติ:', {
+            id: found.id,
+            name: `${found.firstName} ${found.lastName}`,
+            email: found.email,
+            profileImageUrl: found.profileImageUrl
+          });
+          
           setSavedResume(found);
           applyResumeToFormInputs(found);
           
           // โหลดรูปภาพโปรไฟล์ที่บันทึกไว้แล้ว
           if (found.profileImageUrl) {
-            console.log('🔍 Loading saved profile image:', found.profileImageUrl);
-            // ใช้ path แบบเดียวกับ profile page
+            console.log('🔍 โหลดรูปภาพโปรไฟล์:', found.profileImageUrl);
             const imagePath = `/api/image?file=${found.profileImageUrl}`;
-            console.log('✅ Using API path for profile image:', imagePath);
             setProfileImage(imagePath);
+            console.log('✅ โหลดรูปภาพโปรไฟล์สำเร็จ');
           }
           
           // โหลดข้อมูลเอกสารที่อัปโหลดแล้ว
           if (found.id) {
-            const documents = await fetchUploadedDocuments(found.id);
-            setUploadedDocuments(documents);
+            console.log('🔍 โหลดข้อมูลเอกสารแนบ...');
+            try {
+              const documents = await fetchUploadedDocuments(found.id);
+              setUploadedDocuments(documents);
+              console.log('✅ โหลดข้อมูลเอกสารแนบสำเร็จ:', documents.length, 'ไฟล์');
+            } catch (error) {
+              console.error('❌ เกิดข้อผิดพลาดในการโหลดเอกสารแนบ:', error);
+            }
           }
+          
+          console.log('✅ โหลดข้อมูลฝากประวัติสำเร็จ - ข้อมูลถูกเติมลงในฟอร์มแล้ว');
         } else {
           // ถ้ายังไม่มีการบันทึกข้อมูลฝากประวัติ ให้ดึงข้อมูลจาก register
-          console.log('🔍 loadMyResume - No resume found, calling fetchProfileData...');
+          // แต่ถ้ามี resumeId ใน URL ให้ข้ามการโหลดข้อมูลจากโปรไฟล์
+          if (resumeId) {
+            console.log('🔍 มี resumeId ใน URL - ข้ามการโหลดข้อมูลจากโปรไฟล์');
+            return;
+          }
+          console.log('🔍 ไม่พบข้อมูลฝากประวัติ - กำลังโหลดข้อมูลจากโปรไฟล์...');
           await fetchProfileData();
         }
-      } catch (_) {}
+      } catch (error) {
+        console.error('❌ เกิดข้อผิดพลาดในการโหลดข้อมูลฝากประวัติ:', error);
+      } finally {
+        setIsLoading(false);
+        console.log('✅ การโหลดข้อมูลฝากประวัติเสร็จสิ้น');
+      }
     };
+    
     loadMyResume();
-  }, [status]);
+  }, [status, resumeId]);
 
   // นำข้อมูลที่บันทึกแล้วมากรอกกลับในฟอร์ม
   const applyResumeToFormInputs = (resume: any) => {
@@ -501,8 +570,8 @@ export default function ApplicationForm() {
       setProfileImage(imagePath);
       
       // อัปเดต formData.profileImage ด้วย
-      setFormData(prev => ({
-        ...prev,
+      setFormData(prev => ({ 
+        ...prev, 
         profileImage: new File([], resume.profileImageUrl, { type: 'image/jpeg' })
       }));
     } else if (resume.id) {
@@ -711,7 +780,7 @@ export default function ApplicationForm() {
         }
         setSavedResume(json.data || json);
         applyResumeToFormInputs(json.data || json);
-      } else {
+            } else {
         // POST เริ่มเรคคอร์ดใหม่ (ส่งเฉพาะ personal ที่จำเป็น)
         const fd = new FormData();
         const baseCreate = {
@@ -761,7 +830,7 @@ export default function ApplicationForm() {
       alert('บันทึกสำเร็จ');
     } catch (err: any) {
       alert(err?.message || 'เกิดข้อผิดพลาดในการบันทึก');
-    } finally {
+        } finally {
       setIsSaving(false);
     }
   };
@@ -1045,80 +1114,80 @@ export default function ApplicationForm() {
   // ตั้งค่า flatpickr สำหรับ input วันที่ต่างๆ
   useEffect(() => {
     // วันเกิด
-    if (birthDateRef.current) {
-      const inst = (birthDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-      if (inst) inst.destroy();
-      flatpickr(birthDateRef.current, {
-        locale: Thai,
-        dateFormat: 'd/m/Y',
-        allowInput: true,
-        clickOpens: true,
-        onChange: (dates) => {
-          if (dates.length > 0) {
-            const d = dates[0];
-            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (birthDateRef.current) {
+        const inst = (birthDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+        if (inst) inst.destroy();
+        flatpickr(birthDateRef.current, {
+            locale: Thai,
+            dateFormat: 'd/m/Y',
+            allowInput: true,
+            clickOpens: true,
+          onChange: (dates) => {
+            if (dates.length > 0) {
+              const d = dates[0];
+              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
             handleInputChange('birthDate', iso);
+            }
           }
-        }
-      });
-    }
+        });
+      }
 
     // วันที่ออกบัตร
-    if (idCardIssueDateRef.current) {
-      const inst = (idCardIssueDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-      if (inst) inst.destroy();
-      flatpickr(idCardIssueDateRef.current, {
-        locale: Thai,
-        dateFormat: 'd/m/Y',
-        allowInput: true,
-        clickOpens: true,
-        onChange: (dates) => {
-          if (dates.length > 0) {
-            const d = dates[0];
-            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (idCardIssueDateRef.current) {
+        const inst = (idCardIssueDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+        if (inst) inst.destroy();
+        flatpickr(idCardIssueDateRef.current, {
+            locale: Thai,
+            dateFormat: 'd/m/Y',
+            allowInput: true,
+            clickOpens: true,
+          onChange: (dates) => {
+            if (dates.length > 0) {
+              const d = dates[0];
+              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
             handleInputChange('idCardIssueDate', iso);
+            }
           }
-        }
-      });
-    }
+        });
+      }
 
     // วันหมดอายุบัตร
-    if (idCardExpiryDateRef.current) {
-      const inst = (idCardExpiryDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-      if (inst) inst.destroy();
-      flatpickr(idCardExpiryDateRef.current, {
-        locale: Thai,
-        dateFormat: 'd/m/Y',
-        allowInput: true,
-        clickOpens: true,
-        onChange: (dates) => {
-          if (dates.length > 0) {
-            const d = dates[0];
-            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (idCardExpiryDateRef.current) {
+        const inst = (idCardExpiryDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+        if (inst) inst.destroy();
+        flatpickr(idCardExpiryDateRef.current, {
+            locale: Thai,
+            dateFormat: 'd/m/Y',
+            allowInput: true,
+            clickOpens: true,
+          onChange: (dates) => {
+            if (dates.length > 0) {
+              const d = dates[0];
+              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
             handleInputChange('idCardExpiryDate', iso);
+            }
           }
-        }
-      });
-    }
+        });
+      }
 
     // วันที่พร้อมเริ่มงาน
-    if (availableDateRef.current) {
-      const inst = (availableDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-      if (inst) inst.destroy();
-      flatpickr(availableDateRef.current, {
-        locale: Thai,
-        dateFormat: 'd/m/Y',
-        allowInput: true,
-        clickOpens: true,
-        onChange: (dates) => {
-          if (dates.length > 0) {
-            const d = dates[0];
-            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (availableDateRef.current) {
+        const inst = (availableDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+        if (inst) inst.destroy();
+        flatpickr(availableDateRef.current, {
+            locale: Thai,
+            dateFormat: 'd/m/Y',
+            allowInput: true,
+            clickOpens: true,
+          onChange: (dates) => {
+            if (dates.length > 0) {
+              const d = dates[0];
+              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
             handleInputChange('availableDate', iso);
-          }
+              }
+            }
+          });
         }
-      });
-    }
   }, []);
   // ตั้งค่า flatpickr สำหรับวันที่เริ่มงานและสิ้นสุดงาน
   useEffect(() => {
@@ -1128,19 +1197,19 @@ export default function ApplicationForm() {
         const inst = (workStartRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
         if (inst) inst.destroy();
         flatpickr(workStartRefs.current[index], {
-          locale: Thai,
-          dateFormat: 'd/m/Y',
-          allowInput: true,
-          clickOpens: true,
+            locale: Thai,
+            dateFormat: 'd/m/Y',
+            allowInput: true,
+            clickOpens: true,
           defaultDate: formData.workExperience[index]?.startDate ? new Date(formData.workExperience[index].startDate) : undefined,
           onChange: (dates) => {
             if (dates.length > 0) {
               const d = dates[0];
               const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
               handleWorkExperienceChange(index, 'startDate', iso);
+              }
             }
-          }
-        });
+          });
       }
 
       // วันที่สิ้นสุดงาน
@@ -1148,21 +1217,21 @@ export default function ApplicationForm() {
         const inst = (workEndRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
         if (inst) inst.destroy();
         flatpickr(workEndRefs.current[index], {
-          locale: Thai,
-          dateFormat: 'd/m/Y',
-          allowInput: true,
-          clickOpens: true,
+            locale: Thai,
+            dateFormat: 'd/m/Y',
+            allowInput: true,
+            clickOpens: true,
           defaultDate: formData.workExperience[index]?.endDate ? new Date(formData.workExperience[index].endDate) : undefined,
           onChange: (dates) => {
             if (dates.length > 0) {
               const d = dates[0];
               const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
               handleWorkExperienceChange(index, 'endDate', iso);
-            }
           }
-        });
-      }
-    });
+        }
+      });
+        }
+      });
   }, [formData.workExperience.length]);
 
   // ฟังก์ชันดึงข้อมูลจาก profile
@@ -1293,8 +1362,8 @@ export default function ApplicationForm() {
             setProfileImage(imagePath);
             
             // อัปเดต formData.profileImage ด้วย
-            setFormData(prev => ({
-              ...prev,
+              setFormData(prev => ({
+                ...prev,
               profileImage: new File([], user.profileImageUrl, { type: 'image/jpeg' })
             }));
           } else if (user.id) {
@@ -1352,13 +1421,142 @@ export default function ApplicationForm() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-gray-600">กำลังตรวจสอบสิทธิ์การเข้าถึง...</div>
-      </div>
+            </div>
     );
   }
 
   if (status === 'unauthenticated') {
     return null;
   }
+
+  // ฟังก์ชันดึงข้อมูลฝากประวัติตาม resumeId
+  const loadResumeById = async (id: string) => {
+    console.log('🔄 ดึงข้อมูลฝากประวัติตาม ID:', id);
+    setIsLoading(true);
+    
+    try {
+      // ดึงรายละเอียดข้อมูลฝากประวัติตาม ID
+      const res = await fetch(`/api/resume-deposit/${id}`);
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        const resumeData = json?.data || json;
+        
+        if (resumeData) {
+          console.log('✅ พบข้อมูลฝากประวัติ:', {
+            id: resumeData.id,
+            name: `${resumeData.firstName} ${resumeData.lastName}`,
+            email: resumeData.email,
+            profileImageUrl: resumeData.profileImageUrl
+          });
+          
+          // นำข้อมูลมาแสดงในฟอร์ม
+          setSavedResume(resumeData);
+          applyResumeToFormInputs(resumeData);
+          
+          // โหลดรูปภาพโปรไฟล์
+          if (resumeData.profileImageUrl) {
+            console.log('🔍 โหลดรูปภาพโปรไฟล์:', resumeData.profileImageUrl);
+            const imagePath = `/api/image?file=${resumeData.profileImageUrl}`;
+            setProfileImage(imagePath);
+            console.log('✅ โหลดรูปภาพโปรไฟล์สำเร็จ');
+          }
+          
+          // โหลดเอกสารแนบ
+          console.log('🔍 โหลดข้อมูลเอกสารแนบ...');
+          try {
+            const documents = await fetchUploadedDocuments(resumeData.id);
+            setUploadedDocuments(documents);
+            console.log('✅ โหลดข้อมูลเอกสารแนบสำเร็จ:', documents.length, 'ไฟล์');
+          } catch (error) {
+            console.error('❌ เกิดข้อผิดพลาดในการโหลดเอกสารแนบ:', error);
+          }
+          
+          console.log('✅ ดึงข้อมูลฝากประวัติตาม ID สำเร็จ');
+          alert(`โหลดข้อมูลฝากประวัติของ ${resumeData.firstName} ${resumeData.lastName} เรียบร้อยแล้ว`);
+        } else {
+          console.log('❌ ไม่พบข้อมูลฝากประวัติสำหรับ ID นี้');
+          alert('ไม่พบข้อมูลฝากประวัติสำหรับ ID นี้');
+        }
+      } else {
+        console.log('❌ ไม่สามารถดึงข้อมูลฝากประวัติได้:', res.status);
+        alert('ไม่สามารถดึงข้อมูลฝากประวัติได้');
+      }
+    } catch (error) {
+      console.error('❌ เกิดข้อผิดพลาดในการดึงข้อมูลฝากประวัติ:', error);
+      alert('เกิดข้อผิดพลาดในการดึงข้อมูลฝากประวัติ');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ฟังก์ชันรีเฟรชข้อมูลฝากประวัติ
+  const refreshResumeData = async () => {
+    console.log('🔄 รีเฟรชข้อมูลฝากประวัติ...');
+    setIsLoading(true);
+    
+    try {
+      const userEmail = (session?.user as any)?.email || '';
+      if (!userEmail) {
+        console.log('❌ ไม่พบอีเมลผู้ใช้');
+        alert('ไม่พบอีเมลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
+
+      // ค้นหาข้อมูลฝากประวัติล่าสุด
+      const res = await fetch(`/api/resume-deposit?email=${encodeURIComponent(userEmail)}`);
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        const list = (json?.data || json || []) as any[];
+        const filtered = Array.isArray(list)
+          ? list.filter((r) => (r?.email || '').toLowerCase() === userEmail.toLowerCase())
+          : [];
+          
+        if (filtered.length > 0) {
+          // เรียงลำดับตามวันที่อัปเดตล่าสุด
+          filtered.sort((a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime());
+          const found = filtered[0];
+          
+          // ดึงรายละเอียดข้อมูล
+          const detail = await fetch(`/api/resume-deposit/${found.id}`);
+          if (detail.ok) {
+            const dj = await detail.json().catch(() => ({}));
+            const resumeData = dj?.data || dj || found;
+            
+            // นำข้อมูลมาแสดงในฟอร์ม
+            setSavedResume(resumeData);
+            applyResumeToFormInputs(resumeData);
+            
+            // โหลดรูปภาพโปรไฟล์
+            if (resumeData.profileImageUrl) {
+              const imagePath = `/api/image?file=${resumeData.profileImageUrl}`;
+              setProfileImage(imagePath);
+            }
+            
+            // โหลดเอกสารแนบ
+            const documents = await fetchUploadedDocuments(resumeData.id);
+            setUploadedDocuments(documents);
+            
+            console.log('✅ รีเฟรชข้อมูลฝากประวัติสำเร็จ');
+            alert('รีเฟรชข้อมูลฝากประวัติเรียบร้อยแล้ว');
+          } else {
+            console.log('❌ ไม่สามารถดึงรายละเอียดข้อมูลได้');
+            alert('ไม่สามารถดึงรายละเอียดข้อมูลได้');
+          }
+        } else {
+          console.log('❌ ไม่พบข้อมูลฝากประวัติ');
+          alert('ไม่พบข้อมูลฝากประวัติ');
+        }
+      } else {
+        console.log('❌ ไม่สามารถเชื่อมต่อ API ได้');
+        alert('ไม่สามารถเชื่อมต่อ API ได้');
+      }
+    } catch (error) {
+      console.error('❌ เกิดข้อผิดพลาดในการรีเฟรชข้อมูล:', error);
+      alert('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // ฟังก์ชันโหลดข้อมูลจาก profile มาใส่ในฟอร์ม
   const loadProfileData = () => {
@@ -1630,12 +1828,108 @@ export default function ApplicationForm() {
       const docType = key.split('.')[1];
       const errorKey = `documents${docType.charAt(0).toUpperCase() + docType.slice(1)}`;
       if (errors[errorKey]) {
-        setErrors(prev => {
-          const newErrors = { ...prev };
-          delete newErrors[errorKey];
-          return newErrors;
-        });
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[errorKey];
+        return newErrors;
+      });
       }
+    }
+  };
+
+  // ฟังก์ชันป้องกันการกรอกตัวเลข (เฉพาะตัวอักษรภาษาไทย อังกฤษ และช่องว่าง)
+  const handleTextOnlyChange = (key: string, value: string) => {
+    // ลบตัวเลขออกจาก value
+    const textOnly = value.replace(/[0-9]/g, '');
+    handleInputChange(key, textOnly);
+  };
+
+  // ฟังก์ชันป้องกันการกรอกตัวอักษร (เฉพาะตัวเลข)
+  const handleNumberOnlyChange = (key: string, value: string) => {
+    // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลข
+    const numberOnly = value.replace(/[^0-9]/g, '');
+    handleInputChange(key, numberOnly);
+  };
+
+  // ฟังก์ชันสำหรับเลขบัตรประชาชน (จำกัด 13 หลัก)
+  const handleIdNumberChange = (value: string) => {
+    // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลข
+    const numberOnly = value.replace(/[^0-9]/g, '');
+    // จำกัดความยาวไม่เกิน 13 หลัก
+    const limitedValue = numberOnly.slice(0, 13);
+    handleInputChange('idNumber', limitedValue);
+  };
+
+  // ฟังก์ชันสำหรับรหัสไปรษณีย์ (จำกัด 5 หลัก)
+  const handlePostalCodeChange = (key: string, value: string) => {
+    // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลข
+    const numberOnly = value.replace(/[^0-9]/g, '');
+    // จำกัดความยาวไม่เกิน 5 หลัก
+    const limitedValue = numberOnly.slice(0, 5);
+    handleInputChange(key, limitedValue);
+  };
+
+  // ฟังก์ชันสำหรับเกรดเฉลี่ย (ทศนิยม 2 ตำแหน่ง)
+  const handleGpaChange = (value: string) => {
+    // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลขและจุด
+    const numberOnly = value.replace(/[^0-9.]/g, '');
+    
+    // ตรวจสอบว่ามีจุดมากกว่า 1 จุดหรือไม่
+    const dotCount = (numberOnly.match(/\./g) || []).length;
+    if (dotCount > 1) {
+      // ถ้ามีจุดมากกว่า 1 จุด ให้เก็บแค่จุดแรก
+      const firstDotIndex = numberOnly.indexOf('.');
+      const beforeDot = numberOnly.substring(0, firstDotIndex);
+      const afterDot = numberOnly.substring(firstDotIndex + 1).replace(/\./g, '');
+      const limitedValue = beforeDot + '.' + afterDot;
+      
+      // จำกัดทศนิยม 2 ตำแหน่ง
+      const parts = limitedValue.split('.');
+      if (parts[1] && parts[1].length > 2) {
+        return beforeDot + '.' + parts[1].slice(0, 2);
+      }
+      return limitedValue;
+    }
+    
+    // จำกัดทศนิยม 2 ตำแหน่ง
+    const parts = numberOnly.split('.');
+    if (parts[1] && parts[1].length > 2) {
+      return parts[0] + '.' + parts[1].slice(0, 2);
+    }
+    
+    return numberOnly;
+  };
+
+  // ฟังก์ชันสำหรับปีที่จบ (จำกัด 4 หลัก)
+  const handleYearChange = (value: string) => {
+    // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลข
+    const numberOnly = value.replace(/[^0-9]/g, '');
+    // จำกัดความยาวไม่เกิน 4 หลัก
+    const limitedValue = numberOnly.slice(0, 4);
+    return limitedValue;
+  };
+
+  // ฟังก์ชันคัดลอกข้อมูลจากที่อยู่ทะเบียนบ้านไปที่อยู่ปัจจุบัน
+  const handleCopyFromRegisteredAddress = (checked: boolean) => {
+    setCopyFromRegisteredAddress(checked);
+    
+    if (checked && formData.registeredAddress) {
+      setFormData(prev => ({
+        ...prev,
+        currentAddressDetail: {
+          ...prev.currentAddressDetail,
+          houseNumber: formData.registeredAddress?.houseNumber || '',
+          villageNumber: formData.registeredAddress?.villageNumber || '',
+          alley: formData.registeredAddress?.alley || '',
+          road: formData.registeredAddress?.road || '',
+          subDistrict: formData.registeredAddress?.subDistrict || '',
+          district: formData.registeredAddress?.district || '',
+          province: formData.registeredAddress?.province || '',
+          postalCode: formData.registeredAddress?.postalCode || '',
+          homePhone: formData.registeredAddress?.phone || '',
+          mobilePhone: formData.registeredAddress?.mobile || ''
+        }
+      }));
     }
   };
 
@@ -1767,14 +2061,14 @@ export default function ApplicationForm() {
 
   const addEducation = () => {
     setFormData(prev => ({
-      ...prev,
-      education: [...prev.education, {
-        level: '',
-        institution: '',
-        major: '',
-        year: '',
-        gpa: ''
-      }]
+        ...prev,
+        education: [...prev.education, {
+          level: '',
+          institution: '',
+          major: '',
+          year: '',
+          gpa: ''
+        }]
     }));
   };
 
@@ -1787,15 +2081,15 @@ export default function ApplicationForm() {
 
   const addWorkExperience = () => {
     setFormData(prev => ({
-      ...prev,
-      workExperience: [...prev.workExperience, {
-        position: '',
-        company: '',
-        startDate: '',
-        endDate: '',
-        salary: '',
-        reason: ''
-      }]
+        ...prev,
+        workExperience: [...prev.workExperience, {
+          position: '',
+          company: '',
+          startDate: '',
+          endDate: '',
+          salary: '',
+          reason: ''
+        }]
     }));
   };
 
@@ -2167,7 +2461,221 @@ export default function ApplicationForm() {
     try {
       const timestamp = new Date().toISOString();
 
-      // ส่งข้อมูลไปยังตาราง ResumeDeposit + ความสัมพันธ์ Education/WorkExperience
+      // ตรวจสอบโหมดการบันทึก: ถ้ามี departmentId หรือ departmentName = โหมดสมัครงาน
+      const isApplicationMode = departmentId || departmentName;
+      console.log('🔍 Mode:', isApplicationMode ? 'APPLICATION (สมัครงาน)' : 'RESUME (ฝากประวัติ)');
+      console.log('🔍 departmentId:', departmentId);
+      console.log('🔍 departmentName:', departmentName);
+
+      // ========== โหมดสมัครงาน: บันทึกไปที่ ApplicationForm ==========
+      if (isApplicationMode) {
+        console.log('📝 Saving to ApplicationForm...');
+        
+        // 1. สร้าง ApplicationForm record ก่อน
+        const initialPayload = {
+          firstName: formData.firstName || 'ไม่ระบุ',
+          lastName: formData.lastName || 'ไม่ระบุ',
+          email: formData.email || 'ไม่ระบุ@example.com',
+          department: departmentName || formData.department || null,
+          departmentId: departmentId || null,
+          appliedPosition: formData.appliedPosition || departmentName || null,
+          gender: formData.gender || 'UNKNOWN',
+          maritalStatus: formData.maritalStatus || 'UNKNOWN',
+          status: 'PENDING'
+        };
+
+        const appRes = await fetch('/api/prisma/applications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(initialPayload)
+        });
+
+        const appJson = await appRes.json().catch(() => ({}));
+        if (!appRes.ok) {
+          console.error('❌ ApplicationForm create failed:', appRes.status, appJson);
+          alert(appJson?.message || 'ไม่สามารถบันทึกข้อมูลสมัครงานได้');
+          setIsSaving(false);
+          return;
+        }
+
+        const applicationId = appJson?.data?.id;
+        console.log('✅ ApplicationForm created:', applicationId);
+
+        // 2. อัปโหลดรูปโปรไฟล์ (ถ้ามี)
+        if (formData.profileImage && formData.profileImage instanceof File) {
+          try {
+            const imgFd = new FormData();
+            imgFd.append('profileImage', formData.profileImage);
+            imgFd.append('personalInfoId', applicationId);
+
+            const imgRes = await fetch('/api/upload-image', {
+              method: 'POST',
+              body: imgFd
+            });
+
+            if (!imgRes.ok) {
+              console.error('❌ Profile image upload failed');
+            } else {
+              console.log('✅ Profile image uploaded');
+            }
+          } catch (err) {
+            console.error('❌ Error uploading profile image:', err);
+          }
+        }
+
+        // 3. อัปโหลดเอกสารแนบ (ถ้ามี)
+        if (formData.documents) {
+          const docTypes = [
+            'idCard',
+            'houseRegistration',
+            'transcript',
+            'militaryCertificate',
+            'medicalCertificate',
+            'drivingLicense',
+            'other'
+          ];
+
+          for (const docType of docTypes) {
+            const doc = formData.documents[docType as keyof typeof formData.documents];
+            if (doc && doc instanceof File) {
+              try {
+                const docFd = new FormData();
+                docFd.append('document', doc);
+                docFd.append('personalInfoId', applicationId);
+                docFd.append('documentType', docType);
+
+                const docRes = await fetch('/api/documents/upload', {
+                  method: 'POST',
+                  body: docFd
+                });
+
+                if (!docRes.ok) {
+                  console.error(`❌ Document upload failed: ${docType}`);
+                } else {
+                  console.log(`✅ Document uploaded: ${docType}`);
+                }
+              } catch (err) {
+                console.error(`❌ Error uploading document ${docType}:`, err);
+              }
+            }
+          }
+        }
+
+        // 4. อัปเดตข้อมูลครบถ้วนพร้อม education & workExperience
+        const fullPayload = {
+          // ข้อมูลส่วนตัว
+        prefix: formData.prefix || null,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+          idNumber: formData.idNumber || null,
+          idCardIssuedAt: formData.idCardIssuedAt || null,
+          idCardIssueDate: formData.idCardIssueDate ? new Date(formData.idCardIssueDate).toISOString() : null,
+          idCardExpiryDate: formData.idCardExpiryDate ? new Date(formData.idCardExpiryDate).toISOString() : null,
+          birthDate: formData.birthDate ? new Date(formData.birthDate).toISOString() : null,
+        age: formData.age ? Number(formData.age) : null,
+          race: formData.race || null,
+          placeOfBirth: formData.placeOfBirth || null,
+          placeOfBirthProvince: formData.placeOfBirthProvince || null,
+          gender: formData.gender || 'UNKNOWN',
+        nationality: formData.nationality || 'ไทย',
+        religion: formData.religion || null,
+          maritalStatus: formData.maritalStatus || 'UNKNOWN',
+          // ที่อยู่
+          registeredAddressHouseNumber: formData.registeredAddress?.houseNumber || null,
+          registeredAddressVillageNumber: formData.registeredAddress?.villageNumber || null,
+          registeredAddressAlley: formData.registeredAddress?.alley || null,
+          registeredAddressRoad: formData.registeredAddress?.road || null,
+          registeredAddressSubDistrict: formData.registeredAddress?.subDistrict || null,
+          registeredAddressDistrict: formData.registeredAddress?.district || null,
+          registeredAddressProvince: formData.registeredAddress?.province || null,
+          registeredAddressPostalCode: formData.registeredAddress?.postalCode || null,
+          registeredAddressPhone: formData.registeredAddress?.phone || null,
+          currentAddressHouseNumber: formData.currentAddressDetail?.houseNumber || null,
+          currentAddressVillageNumber: formData.currentAddressDetail?.villageNumber || null,
+          currentAddressAlley: formData.currentAddressDetail?.alley || null,
+          currentAddressRoad: formData.currentAddressDetail?.road || null,
+          currentAddressSubDistrict: formData.currentAddressDetail?.subDistrict || null,
+          currentAddressDistrict: formData.currentAddressDetail?.district || null,
+          currentAddressProvince: formData.currentAddressDetail?.province || null,
+          currentAddressPostalCode: formData.currentAddressDetail?.postalCode || null,
+          currentAddressPhone: formData.currentAddressDetail?.homePhone || null,
+          // ติดต่อ
+          phone: formData.phone,
+          email: formData.email,
+          emergencyContact: formData.emergencyContact || `${formData.emergencyContactFirstName || ''} ${formData.emergencyContactLastName || ''}`.trim(),
+          emergencyPhone: formData.emergencyPhone || null,
+          emergencyRelationship: formData.emergencyRelationship || null,
+          emergencyAddressHouseNumber: formData.emergencyAddress?.houseNumber || null,
+          emergencyAddressVillageNumber: formData.emergencyAddress?.villageNumber || null,
+          emergencyAddressAlley: formData.emergencyAddress?.alley || null,
+          emergencyAddressRoad: formData.emergencyAddress?.road || null,
+          emergencyAddressSubDistrict: formData.emergencyAddress?.subDistrict || null,
+          emergencyAddressDistrict: formData.emergencyAddress?.district || null,
+          emergencyAddressProvince: formData.emergencyAddress?.province || null,
+          emergencyAddressPostalCode: formData.emergencyAddress?.postalCode || null,
+          // ความสามารถ
+          skills: formData.skills || null,
+          languages: formData.languages || null,
+          computerSkills: formData.computerSkills || null,
+          certificates: formData.certificates || null,
+          references: formData.references || null,
+          // งานที่สนใจ
+          appliedPosition: formData.appliedPosition || departmentName || null,
+          expectedSalary: formData.expectedSalary || null,
+          availableDate: formData.availableDate ? new Date(formData.availableDate).toISOString() : null,
+          currentWork: formData.currentWork || false,
+          department: departmentName || formData.department || null,
+          departmentId: departmentId || null,
+          // ข้อมูลคู่สมรส
+          spouseFirstName: formData.spouseInfo?.firstName || null,
+          spouseLastName: formData.spouseInfo?.lastName || null,
+          // การศึกษา
+          education: (formData.education || []).map((e) => ({
+            level: e.level,
+            institution: e.institution,
+            major: e.major || null,
+            year: e.year || null,
+            gpa: e.gpa ? parseFloat(e.gpa) : null,
+          })),
+          // ประสบการณ์ทำงาน
+          workExperience: (formData.workExperience || []).map((w) => ({
+            position: w.position,
+            company: w.company,
+            startDate: w.startDate ? new Date(w.startDate).toISOString() : null,
+            endDate: w.endDate ? new Date(w.endDate).toISOString() : null,
+            salary: w.salary || null,
+            reason: w.reason || null,
+          })),
+        };
+
+        const updateRes = await fetch(`/api/prisma/applications/${applicationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fullPayload)
+        });
+
+        const updateJson = await updateRes.json().catch(() => ({}));
+        if (!updateRes.ok) {
+          console.error('❌ ApplicationForm update failed:', updateRes.status, updateJson);
+          alert(updateJson?.message || 'ไม่สามารถอัปเดตข้อมูลสมัครงานได้');
+          setIsSaving(false);
+          return;
+        }
+
+        console.log('✅ ApplicationForm updated successfully');
+        alert('บันทึกใบสมัครงานสำเร็จ!');
+        
+        // รีเฟรชหน้า หรือนำทางไปหน้าอื่น
+        setTimeout(() => {
+          window.location.href = '/application-form';
+        }, 1500);
+        
+        setIsSaving(false);
+        return;
+      }
+
+      // ========== โหมดฝากประวัติ: บันทึกไปที่ ResumeDeposit (เดิม) ==========
+      console.log('📝 Saving to ResumeDeposit...');
       const resumePayload = {
         // บุคคล
         prefix: formData.prefix || null,
@@ -2389,10 +2897,10 @@ export default function ApplicationForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           // ส่งข้อมูลหลักที่จำเป็นขั้นต่ำให้ API สร้างเรคคอร์ด
-          prefix: formData.prefix,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
+        prefix: formData.prefix,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
           idNumber: formData.idNumber,
           department: formData.department,
           appliedPosition: formData.appliedPosition,
@@ -2709,10 +3217,10 @@ export default function ApplicationForm() {
       // บันทึกข้อมูลไปยังฐานข้อมูล MySQL ผ่าน Prisma
       try {
         const saveResponse = await fetch('/api/prisma/applications', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
           body: JSON.stringify(prismaData)
         });
         
@@ -2729,8 +3237,8 @@ export default function ApplicationForm() {
         if (result.success) {
           console.log('✅ Data saved successfully');
           alert('บันทึกข้อมูลเรียบร้อยแล้ว');
-          // รีเซ็ตฟอร์ม
-          setFormData({
+        // รีเซ็ตฟอร์ม
+        setFormData({
             profileImage: undefined,
             prefix: '',
             firstName: '',
@@ -2841,10 +3349,10 @@ export default function ApplicationForm() {
           
           // กลับไปหน้า dashboard
           router.push('/dashboard');
-        } else {
+      } else {
           throw new Error(result.message || 'Failed to save application');
-        }
-      } catch (error) {
+      }
+    } catch (error) {
         console.error('Error saving application data:', error);
         alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
       }
@@ -2895,7 +3403,7 @@ export default function ApplicationForm() {
     const randomYear = Math.floor(Math.random() * 10) + 2560;
     const randomMonth = Math.floor(Math.random() * 12) + 1;
     const randomDay = Math.floor(Math.random() * 28) + 1;
-    
+
     return {
       profileImage: undefined,
       prefix: randomPrefix,
@@ -3053,11 +3561,11 @@ export default function ApplicationForm() {
                   <div className="flex items-center gap-2 mb-2">
                     <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+            </svg>
                     <span className="text-sm font-medium text-green-800">
                         สมัครงานตำแหน่งในแผนก: <span className="font-bold">{departmentName}</span>
                     </span>
-                  </div>
+          </div>
                     {departmentId && (
                     <div className="text-xs text-green-700">
                         <span className="font-medium">รหัสแผนก:</span> {departmentId}
@@ -3080,7 +3588,7 @@ export default function ApplicationForm() {
             </div>
           </div>
         </div>
-      </div>
+        </div>
 
       {/* Navigation like official-documents */}
       {/* <div className="bg-white shadow-sm border-b sticky top-0 z-20">
@@ -3287,8 +3795,52 @@ export default function ApplicationForm() {
             
             // ตรวจสอบว่ามี resume ID หรือไม่
             if (!savedResume?.id) {
-              alert('กรุณาบันทึกข้อมูลส่วนตัวก่อนอัปโหลดรูปภาพ');
-              return;
+              // สร้าง resume ID ชั่วคราวสำหรับอัปโหลดรูปภาพ
+              console.log('🔍 ไม่มี resume ID - สร้าง ID ชั่วคราวสำหรับอัปโหลดรูปภาพ');
+              const tempId = `temp_${Date.now()}`;
+              
+              // ตั้งค่า savedResume ชั่วคราว
+              setSavedResume({
+                id: tempId,
+                firstName: formData.firstName || 'ไม่ระบุ',
+                lastName: formData.lastName || 'ไม่ระบุ',
+                email: formData.email || 'ไม่ระบุ@example.com',
+                profileImageUrl: null
+              });
+              
+              // ใช้ tempId สำหรับอัปโหลด
+              const form = new FormData()
+              form.append('file', file)
+              form.append('applicationId', tempId)
+              
+              try {
+                const res = await fetch('/api/profile-image/upload', { method: 'POST', body: form })
+                const data = await res.json()
+                if (res.ok && data.profileImage) {
+                  console.log('✅ Profile image upload success with temp ID:', data.profileImage);
+                  setProfileImage(`/api/image?file=${data.profileImage}`)
+                  setFormData((prev: any) => ({ ...prev, profileImage: file }))
+                  
+                  // อัปเดต savedResume ด้วย
+                  setSavedResume((prev: any) => prev ? {
+                    ...prev,
+                    profileImageUrl: data.profileImage
+                  } : null);
+                  
+                  console.log('🔍 Updated formData.profileImage:', file);
+                  console.log('🔍 Updated savedResume.profileImageUrl:', data.profileImage);
+                  alert('อัปโหลดรูปภาพเรียบร้อยแล้ว (จะบันทึกเมื่อบันทึกข้อมูลส่วนตัว)')
+                } else {
+                  console.error('❌ Profile image upload failed:', data);
+                  alert('อัปโหลดรูปภาพไม่สำเร็จ')
+                }
+              } catch (err) {
+                console.error(err)
+                alert('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ')
+              } finally {
+                if (fileInputRef.current) fileInputRef.current.value = ''
+              }
+                return;
             }
             
             const form = new FormData()
@@ -3328,63 +3880,15 @@ export default function ApplicationForm() {
         <Card className="mb-8  bg-white/80 backdrop-blur-sm">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
                 <h2 className="text-2xl font-bold text-gray-900">รูปภาพโปรไฟล์</h2>
               </div>
-              {isProfileLoaded && profileData && (
-                <div className="flex gap-2">
-                <Button
-                  color="success"
-                  variant="flat"
-                  size="sm"
-                  onPress={loadProfileData}
-                  startContent={
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                  }
-                >
-                  โหลดข้อมูลจากโปรไฟล์
-                </Button>
-                  <Button
-                    color="warning"
-                    variant="flat"
-                    size="sm"
-                    onPress={fetchProfileData}
-                    startContent={
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    }
-                  >
-                    ดึงข้อมูลจาก Profile API
-                  </Button>
-                  <Button
-                    color="primary"
-                    variant="flat"
-                    size="sm"
-                    onPress={() => {
-                      console.log('🔍 Debug - Current states:');
-                      console.log('  - profileImage:', profileImage);
-                      console.log('  - formData.profileImage:', formData.profileImage);
-                      console.log('  - savedResume:', savedResume);
-                      console.log('  - isProfileLoaded:', isProfileLoaded);
-                    }}
-                    startContent={
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    }
-                  >
-                    Debug States
-                  </Button>
-                </div>
-              )}
+              
             </div>
           </CardHeader>
           <CardBody>
@@ -3452,28 +3956,18 @@ export default function ApplicationForm() {
                   <div className="w-40 h-40 rounded-full bg-gradient-to-r from-gray-200 to-gray-300 flex items-center justify-center border-4 border-white shadow-lg">
                     <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
+                      </svg>
+                    </div>
                   <p className="text-sm text-gray-500 mt-3">
                     ไม่มีรูปภาพโปรไฟล์
                   </p>
-                  <div className="text-xs text-gray-400 mt-2 p-2 bg-gray-50 rounded">
-                    <p>Debug Info:</p>
-                    <p>• profileImage: {profileImage || 'null'}</p>
-                    <p>• savedResume?.profileImageUrl: {savedResume?.profileImageUrl || 'null'}</p>
-                    <p>• profileData?.profileImageUrl: {profileData?.profileImageUrl || 'null'}</p>
-                    <p>• profileData?.id: {profileData?.id || 'null'}</p>
-                  </div>
+                  
                   {savedResume?.profileImageUrl && (
                     <p className="text-xs text-gray-400 mt-1">
                       รูปภาพที่บันทึกไว้: {savedResume.profileImageUrl}
                     </p>
                   )}
-                  {profileData?.profileImageUrl && !savedResume?.profileImageUrl && (
-                    <p className="text-xs text-blue-400 mt-1">
-                      รูปภาพจากโปรไฟล์: {profileData.profileImageUrl}
-                    </p>
-                  )}
+                  
                   <div className="mt-4 flex flex-col gap-2">
                     <button
                       type="button"
@@ -3485,93 +3979,11 @@ export default function ApplicationForm() {
                       </svg>
                       อัปโหลดรูปโปรไฟล์
                     </button>
-                    {profileData?.profileImageUrl && !savedResume?.profileImageUrl && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const imagePath = `/api/image?file=${profileData.profileImageUrl}`;
-                          console.log('🔍 Trying to load profile image:', imagePath);
-                          setProfileImage(imagePath);
-                          setFormData(prev => ({
-                            ...prev,
-                            profileImage: new File([], profileData.profileImageUrl, { type: 'image/jpeg' })
-                          }));
-                          alert('นำรูปภาพจากโปรไฟล์มาใช้เรียบร้อยแล้ว');
-                        }}
-                        className="px-4 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 shadow-md transition-colors duration-200 flex items-center gap-2 mx-auto hover:shadow-lg"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        ใช้รูปจากโปรไฟล์
-                      </button>
-                    )}
-                    {profileData?.id && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          console.log('🔍 Testing image loading for ID:', profileData.id);
-                          // ลองหาไฟล์ JPG ก่อน
-                          const jpgPath = `/api/image?file=profile_${profileData.id}.jpg`;
-                          console.log('🔍 Trying JPG path:', jpgPath);
-                          try {
-                            const response = await fetch(jpgPath, { method: 'HEAD' });
-                            if (response.ok) {
-                              console.log('✅ Found JPG image:', jpgPath);
-                              setProfileImage(jpgPath);
-                              setFormData(prev => ({
-                                ...prev,
-                                profileImage: new File([], `profile_${profileData.id}.jpg`, { type: 'image/jpeg' })
-                              }));
-                              alert('พบรูปภาพ JPG และโหลดเรียบร้อยแล้ว');
-                            } else {
-                              // ลองหาไฟล์ PNG
-                              const pngPath = `/api/image?file=profile_${profileData.id}.png`;
-                              console.log('🔍 Trying PNG path:', pngPath);
-                              const pngResponse = await fetch(pngPath, { method: 'HEAD' });
-                              if (pngResponse.ok) {
-                                console.log('✅ Found PNG image:', pngPath);
-                                setProfileImage(pngPath);
-                                setFormData(prev => ({
-                                  ...prev,
-                                  profileImage: new File([], `profile_${profileData.id}.png`, { type: 'image/png' })
-                                }));
-                                alert('พบรูปภาพ PNG และโหลดเรียบร้อยแล้ว');
-                              } else {
-                                console.log('❌ No image found for ID:', profileData.id);
-                                alert('ไม่พบรูปภาพสำหรับ ID นี้');
-                              }
-                            }
-                          } catch (error) {
-                            console.error('❌ Error testing image:', error);
-                            alert('เกิดข้อผิดพลาดในการทดสอบรูปภาพ');
-                          }
-                        }}
-                        className="px-4 py-2 text-sm rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 shadow-md transition-colors duration-200 flex items-center gap-2 mx-auto hover:shadow-lg"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        ทดสอบโหลดรูป
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        console.log('🔄 Refreshing profile data...');
-                        fetchProfileData();
-                      }}
-                      className="px-4 py-2 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 shadow-md transition-colors duration-200 flex items-center gap-2 mx-auto hover:shadow-lg"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      รีเฟรชข้อมูล
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-3 text-center">
-                    รูปภาพจะถูกบันทึกในโฟลเดอร์ Image
-                  </p>
+                    
+                    
+                    
+              </div>
+                 
                 </>
               )}
             </div>
@@ -3676,13 +4088,20 @@ export default function ApplicationForm() {
             <CardBody className="p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-sm text-green-700 font-semibold mb-1">บันทึกข้อมูลเรียบร้อยแล้ว</div>
+                  <div className="text-sm text-green-700 font-semibold mb-1">
+                    {resumeId ? 'โหลดข้อมูลฝากประวัติเรียบร้อยแล้ว' : 'บันทึกข้อมูลเรียบร้อยแล้ว'}
+                  </div>
                   <div className="text-sm text-green-800">
                     <span className="font-medium">ชื่อ-นามสกุล:</span> {savedResume.firstName} {savedResume.lastName}
                   </div>
                   <div className="text-sm text-green-800">
                     <span className="font-medium">ตำแหน่งที่สนใจ:</span> {savedResume.expectedPosition || '-'}
                   </div>
+                  {resumeId && (
+                    <div className="text-xs text-blue-600 mt-1">
+                      📄 โหลดจาก Resume ID: {resumeId}
+                    </div>
+                  )}
                   <div className="text-sm text-green-800">
                     <span className="font-medium">สถานะ:</span> {savedResume.status || 'PENDING'}
                   </div>
@@ -3693,9 +4112,9 @@ export default function ApplicationForm() {
                   </div>
                   <Button size="sm" variant="light" className="text-green-700" onClick={() => setShowPreview(false)}>ซ่อน</Button>
                 </div>
-              </div>
-            </CardBody>
-          </Card>
+            </div>
+          </CardBody>
+        </Card>
         )} */}
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -3759,8 +4178,8 @@ export default function ApplicationForm() {
                     name="firstName"
                          data-error-key="firstName"
                     value={formData.firstName}
-                         onChange={(e) => handleTextInputChange('firstName', e.target.value)}
-                    placeholder="กรอกชื่อ"
+                         onChange={(e) => handleTextOnlyChange('firstName', e.target.value)}
+                    placeholder="กรอกชื่อ (เฉพาะตัวอักษร)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('firstName') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -3778,8 +4197,8 @@ export default function ApplicationForm() {
                     name="lastName"
                          data-error-key="lastName"
                     value={formData.lastName}
-                         onChange={(e) => handleTextInputChange('lastName', e.target.value)}
-                    placeholder="กรอกนามสกุล"
+                         onChange={(e) => handleTextOnlyChange('lastName', e.target.value)}
+                    placeholder="กรอกนามสกุล (เฉพาะตัวอักษร)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('lastName') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -3820,8 +4239,8 @@ export default function ApplicationForm() {
                          name="age"
                          data-error-key="age"
                          value={formData.age}
-                          onChange={(e) => handleNumberInputChange('age', e.target.value)}
-                         placeholder="กรอกอายุ"
+                          onChange={(e) => handleNumberOnlyChange('age', e.target.value)}
+                         placeholder="กรอกอายุ (เฉพาะตัวเลข)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('age') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -3841,8 +4260,8 @@ export default function ApplicationForm() {
                          name="placeOfBirth"
                          data-error-key="placeOfBirth"
                          value={formData.placeOfBirth || ''}
-                         onChange={(e) => handleTextInputChange('placeOfBirth', e.target.value)}
-                         placeholder="กรอกสถานที่เกิด"
+                         onChange={(e) => handleTextOnlyChange('placeOfBirth', e.target.value)}
+                         placeholder="กรอกสถานที่เกิด (เฉพาะตัวอักษร)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('placeOfBirth') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -3860,8 +4279,8 @@ export default function ApplicationForm() {
                          name="placeOfBirthProvince"
                          data-error-key="placeOfBirthProvince"
                          value={formData.placeOfBirthProvince || ''}
-                         onChange={(e) => handleTextInputChange('placeOfBirthProvince', e.target.value)}
-                         placeholder="กรอกจังหวัด"
+                         onChange={(e) => handleTextOnlyChange('placeOfBirthProvince', e.target.value)}
+                         placeholder="กรอกจังหวัด (เฉพาะตัวอักษร)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('placeOfBirthProvince') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -3879,8 +4298,8 @@ export default function ApplicationForm() {
                          name="race"
                          data-error-key="race"
                          value={formData.race || ''}
-                         onChange={(e) => handleTextInputChange('race', e.target.value)}
-                         placeholder="กรอกเชื้อชาติ"
+                         onChange={(e) => handleTextOnlyChange('race', e.target.value)}
+                         placeholder="กรอกเชื้อชาติ (เฉพาะตัวอักษร)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('race') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -3898,8 +4317,8 @@ export default function ApplicationForm() {
                     name="nationality"
                          data-error-key="nationality"
                     value={formData.nationality}
-                         onChange={(e) => handleTextInputChange('nationality', e.target.value)}
-                    placeholder="กรอกสัญชาติ"
+                         onChange={(e) => handleTextOnlyChange('nationality', e.target.value)}
+                    placeholder="กรอกสัญชาติ (เฉพาะตัวอักษร)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('nationality') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -3917,8 +4336,8 @@ export default function ApplicationForm() {
                     name="religion"
                          data-error-key="religion"
                     value={formData.religion}
-                         onChange={(e) => handleTextInputChange('religion', e.target.value)}
-                    placeholder="กรอกศาสนา"
+                         onChange={(e) => handleTextOnlyChange('religion', e.target.value)}
+                    placeholder="กรอกศาสนา (เฉพาะตัวอักษร)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('religion') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -4071,17 +4490,22 @@ export default function ApplicationForm() {
                          name="idNumber"
                          data-error-key="idNumber"
                          value={formData.idNumber}
-                          onChange={(e) => handleNumberInputChange('idNumber', e.target.value)}
-                         placeholder="กรุณากรอกเลขบัตรประชาชน"
+                          onChange={(e) => handleIdNumberChange(e.target.value)}
+                         placeholder="กรุณากรอกเลขบัตรประชาชน (13 หลัก)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('idNumber') 
                         ? 'border-red-500 focus:ring-red-500' 
                         : 'border-gray-300 focus:ring-blue-500'
                     }`}
                     />
+                      <div className="flex justify-between items-center">
                        {hasError('idNumber') && (
-                         <p className="text-red-500 text-xs mt-1">{getErrorMessage('idNumber')}</p>
+                          <p className="text-red-500 text-xs">{getErrorMessage('idNumber')}</p>
                   )}
+                        <p className="text-xs text-gray-500 ml-auto">
+                          {formData.idNumber.length}/13 หลัก
+                        </p>
+                      </div>
                 </div>
                   <div className="space-y-2">
                                              <label className="text-sm font-medium text-gray-700">ออกให้ ณ อำเภอ/เขต<span className="text-red-500">*</span></label>
@@ -4090,8 +4514,8 @@ export default function ApplicationForm() {
                         name="idCardIssuedAt"
                         data-error-key="idCardIssuedAt"
                         value={formData.idCardIssuedAt}
-                        onChange={(e) => handleTextInputChange('idCardIssuedAt', e.target.value)}
-                        placeholder="กรอกสถานที่ออกบัตร"
+                        onChange={(e) => handleTextOnlyChange('idCardIssuedAt', e.target.value)}
+                        placeholder="กรอกสถานที่ออกบัตร (เฉพาะตัวอักษร)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('idCardIssuedAt') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -4159,8 +4583,8 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                         value={formData.registeredAddress?.houseNumber || ''}
-                         onChange={(e) => handleNumberInputChange('registeredAddress.houseNumber', e.target.value)}
-                        placeholder="กรอกเลขที่"
+                         onChange={(e) => handleNumberOnlyChange('registeredAddress.houseNumber', e.target.value)}
+                        placeholder="กรอกเลขที่ (เฉพาะตัวเลข)"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressHouseNumber') 
                           ? 'border-red-500 focus:ring-red-500' 
@@ -4176,8 +4600,8 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                         value={formData.registeredAddress?.villageNumber || ''}
-                         onChange={(e) => handleNumberInputChange('registeredAddress.villageNumber', e.target.value)}
-                        placeholder="กรอกหมู่ที่"
+                         onChange={(e) => handleNumberOnlyChange('registeredAddress.villageNumber', e.target.value)}
+                        placeholder="กรอกหมู่ที่ (เฉพาะตัวเลข)"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressVillageNumber') 
                           ? 'border-red-500 focus:ring-red-500' 
@@ -4227,8 +4651,8 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                         value={formData.registeredAddress?.subDistrict || ''}
-                        onChange={(e) => handleTextInputChange('registeredAddress.subDistrict', e.target.value)}
-                      placeholder="กรอกตำบล/แขวง"
+                        onChange={(e) => handleTextOnlyChange('registeredAddress.subDistrict', e.target.value)}
+                      placeholder="กรอกตำบล/แขวง (เฉพาะตัวอักษร)"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressSubDistrict') 
                           ? 'border-red-500 focus:ring-red-500' 
@@ -4244,8 +4668,8 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                         value={formData.registeredAddress?.district || ''}
-                        onChange={(e) => handleTextInputChange('registeredAddress.district', e.target.value)}
-                      placeholder="กรอกอำเภอ/เขต"
+                        onChange={(e) => handleTextOnlyChange('registeredAddress.district', e.target.value)}
+                      placeholder="กรอกอำเภอ/เขต (เฉพาะตัวอักษร)"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressDistrict') 
                           ? 'border-red-500 focus:ring-red-500' 
@@ -4261,8 +4685,8 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                         value={formData.registeredAddress?.province || ''}
-                        onChange={(e) => handleTextInputChange('registeredAddress.province', e.target.value)}
-                        placeholder="กรอกจังหวัด"
+                        onChange={(e) => handleTextOnlyChange('registeredAddress.province', e.target.value)}
+                        placeholder="กรอกจังหวัด (เฉพาะตัวอักษร)"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressProvince') 
                           ? 'border-red-500 focus:ring-red-500' 
@@ -4278,24 +4702,29 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                         value={formData.registeredAddress?.postalCode || ''}
-                         onChange={(e) => handleNumberInputChange('registeredAddress.postalCode', e.target.value)}
-                      placeholder="กรอกรหัสไปรษณีย์"
+                         onChange={(e) => handlePostalCodeChange('registeredAddress.postalCode', e.target.value)}
+                        placeholder="กรอกรหัสไปรษณีย์ (5 หลัก)"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressPostalCode') 
                           ? 'border-red-500 focus:ring-red-500' 
                           : 'border-gray-300 focus:ring-blue-500'
                       }`}
                     />
+                      <div className="flex justify-between items-center">
                       {hasError('registeredAddressPostalCode') && (
-                        <p className="text-red-500 text-xs mt-1">{getErrorMessage('registeredAddressPostalCode')}</p>
+                          <p className="text-red-500 text-xs">{getErrorMessage('registeredAddressPostalCode')}</p>
                     )}
+                        <p className="text-xs text-gray-500 ml-auto">
+                          {formData.registeredAddress?.postalCode?.length || 0}/5 หลัก
+                        </p>
+                      </div>
                   </div>
                   <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">โทรศัพท์บ้าน</label>
                     <input
                       type="text"
                         value={formData.registeredAddress?.phone || ''}
-                         onChange={(e) => handleNumberInputChange('registeredAddress.phone', e.target.value)}
+                         onChange={(e) => handleInputChange('registeredAddress.phone', e.target.value)}
                         placeholder="กรอกเบอร์โทรศัพท์บ้าน"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressPhone') 
@@ -4312,7 +4741,7 @@ export default function ApplicationForm() {
                     <input
                         type="text"
                         value={formData.registeredAddress?.mobile || ''}
-                         onChange={(e) => handleNumberInputChange('registeredAddress.mobile', e.target.value)}
+                         onChange={(e) => handleInputChange('registeredAddress.mobile', e.target.value)}
                         placeholder="กรอกเบอร์โทรศัพท์มือถือ"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressMobile') 
@@ -4326,20 +4755,34 @@ export default function ApplicationForm() {
                 </div>
               </div>
                   </div>
-                {/* ๑.๕ ที่อยู่ปัจจุบันเลขที่ */}
-                <div className="mb-6">
-                  <h4 className="text-md font-semibold text-gray-700 mb-3 text-left">๑.๕ ที่อยู่ปัจจุบันเลขที่</h4>
+                 {/* ๑.๕ ที่อยู่ปัจจุบันเลขที่ */}
+                 <div className="mb-6">
+                   <div className="flex items-center justify-between mb-3">
+                     <h4 className="text-md font-semibold text-gray-700 text-left">๑.๕ ที่อยู่ปัจจุบันเลขที่</h4>
+                     <label className="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
+                       <input
+                         type="checkbox"
+                        checked={copyFromRegisteredAddress}
+                        onChange={(e) => handleCopyFromRegisteredAddress(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <span>คัดลอกจากที่อยู่ทะเบียนบ้าน</span>
+                     </label>
+                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">เลขที่<span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         value={formData.currentAddressDetail?.houseNumber || ''}
-                         onChange={(e) => handleNumberInputChange('currentAddressDetail.houseNumber', e.target.value)}
-                        placeholder="กรอกเลขที่"
+                         onChange={(e) => handleNumberOnlyChange('currentAddressDetail.houseNumber', e.target.value)}
+                        placeholder="กรอกเลขที่ (เฉพาะตัวเลข)"
+                        disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressHouseNumber') 
                             ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
                       />
@@ -4352,11 +4795,14 @@ export default function ApplicationForm() {
                       <input
                         type="text"
                         value={formData.currentAddressDetail?.villageNumber || ''}
-                         onChange={(e) => handleNumberInputChange('currentAddressDetail.villageNumber', e.target.value)}
-                        placeholder="กรอกหมู่ที่"
+                         onChange={(e) => handleNumberOnlyChange('currentAddressDetail.villageNumber', e.target.value)}
+                        placeholder="กรอกหมู่ที่ (เฉพาะตัวเลข)"
+                        disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressVillageNumber') 
                             ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
                       />
@@ -4371,9 +4817,12 @@ export default function ApplicationForm() {
                         value={formData.currentAddressDetail?.alley || ''}
                         onChange={(e) => handleInputChange('currentAddressDetail.alley', e.target.value)}
                         placeholder="กรอกตรอก/ซอย"
+                        disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressAlley') 
                             ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
                       />
@@ -4388,9 +4837,12 @@ export default function ApplicationForm() {
                         value={formData.currentAddressDetail?.road || ''}
                         onChange={(e) => handleInputChange('currentAddressDetail.road', e.target.value)}
                         placeholder="กรอกถนน"
+                        disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressRoad') 
                             ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
                       />
@@ -4403,11 +4855,14 @@ export default function ApplicationForm() {
                       <input
                         type="text"
                         value={formData.currentAddressDetail?.subDistrict || ''}
-                        onChange={(e) => handleTextInputChange('currentAddressDetail.subDistrict', e.target.value)}
-                        placeholder="กรอกตำบล/แขวง"
+                        onChange={(e) => handleTextOnlyChange('currentAddressDetail.subDistrict', e.target.value)}
+                        placeholder="กรอกตำบล/แขวง (เฉพาะตัวอักษร)"
+                        disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressSubDistrict') 
                             ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
                       />
@@ -4420,11 +4875,14 @@ export default function ApplicationForm() {
                       <input
                         type="text"
                         value={formData.currentAddressDetail?.district || ''}
-                        onChange={(e) => handleTextInputChange('currentAddressDetail.district', e.target.value)}
-                        placeholder="กรอกอำเภอ/เขต"
+                        onChange={(e) => handleTextOnlyChange('currentAddressDetail.district', e.target.value)}
+                        placeholder="กรอกอำเภอ/เขต (เฉพาะตัวอักษร)"
+                        disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressDistrict') 
                             ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
                       />
@@ -4437,11 +4895,14 @@ export default function ApplicationForm() {
                       <input
                         type="text"
                         value={formData.currentAddressDetail?.province || ''}
-                        onChange={(e) => handleTextInputChange('currentAddressDetail.province', e.target.value)}
-                        placeholder="กรอกจังหวัด"
+                        onChange={(e) => handleTextOnlyChange('currentAddressDetail.province', e.target.value)}
+                        placeholder="กรอกจังหวัด (เฉพาะตัวอักษร)"
+                        disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressProvince') 
                             ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
                       />
@@ -4454,26 +4915,39 @@ export default function ApplicationForm() {
                       <input
                         type="text"
                         value={formData.currentAddressDetail?.postalCode || ''}
-                        onChange={(e) => handleNumberInputChange('currentAddressDetail.postalCode', e.target.value)}
-                        placeholder="กรอกรหัสไปรษณีย์"
+                        onChange={(e) => handlePostalCodeChange('currentAddressDetail.postalCode', e.target.value)}
+                        placeholder="กรอกรหัสไปรษณีย์ (5 หลัก)"
+                        disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressPostalCode') 
                             ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
                       />
+                      <div className="flex justify-between items-center">
                       {hasError('currentAddressPostalCode') && (
-                        <p className="text-red-500 text-xs mt-1">{getErrorMessage('currentAddressPostalCode')}</p>
+                          <p className="text-red-500 text-xs">{getErrorMessage('currentAddressPostalCode')}</p>
                       )}
+                        <p className="text-xs text-gray-500 ml-auto">
+                          {formData.currentAddressDetail?.postalCode?.length || 0}/5 หลัก
+                        </p>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">โทรศัพท์บ้าน</label>
                       <input
                         type="tel"
                         value={formData.currentAddressDetail?.homePhone || ''}
-                        onChange={(e) => handleNumberInputChange('currentAddressDetail.homePhone', e.target.value)}
-                        placeholder="กรอกเบอร์โทรศัพท์บ้าน"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onChange={(e) => handleNumberOnlyChange('currentAddressDetail.homePhone', e.target.value)}
+                        placeholder="กรอกเบอร์โทรศัพท์บ้าน (เฉพาะตัวเลข)"
+                        disabled={copyFromRegisteredAddress}
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                          copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                       />
                     </div>
                     <div className="space-y-2">
@@ -4481,11 +4955,14 @@ export default function ApplicationForm() {
                       <input
                         type="tel"
                         value={formData.currentAddressDetail?.mobilePhone || ''}
-                         onChange={(e) => handleNumberInputChange('currentAddressDetail.mobilePhone', e.target.value)}
-                        placeholder="กรอกเบอร์โทรศัพท์มือถือ"
+                         onChange={(e) => handleNumberOnlyChange('currentAddressDetail.mobilePhone', e.target.value)}
+                        placeholder="กรอกเบอร์โทรศัพท์มือถือ (เฉพาะตัวเลข)"
+                        disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressMobilePhone') 
                             ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
                             : 'border-gray-300 focus:ring-blue-500'
                         }`}
                       />
@@ -4508,8 +4985,8 @@ export default function ApplicationForm() {
                         <input
                           type="text"
                           value={formData.emergencyContactFirstName || ''}
-                          onChange={(e) => handleTextInputChange('emergencyContactFirstName', e.target.value)}
-                          placeholder="กรอกชื่อผู้ติดต่อฉุกเฉิน"
+                          onChange={(e) => handleTextOnlyChange('emergencyContactFirstName', e.target.value)}
+                          placeholder="กรอกชื่อผู้ติดต่อฉุกเฉิน (เฉพาะตัวอักษร)"
                           className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyContactFirstName') ? 'border-red-500' : 'border-gray-300'}`}
                         />
                         {hasError('emergencyContactFirstName') && (
@@ -4523,8 +5000,8 @@ export default function ApplicationForm() {
                         <input
                           type="text"
                           value={formData.emergencyContactLastName || ''}
-                          onChange={(e) => handleTextInputChange('emergencyContactLastName', e.target.value)}
-                          placeholder="กรอกนามสกุลผู้ติดต่อฉุกเฉิน"
+                          onChange={(e) => handleTextOnlyChange('emergencyContactLastName', e.target.value)}
+                          placeholder="กรอกนามสกุลผู้ติดต่อฉุกเฉิน (เฉพาะตัวอักษร)"
                           className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyContactLastName') ? 'border-red-500' : 'border-gray-300'}`}
                         />
                         {hasError('emergencyContactLastName') && (
@@ -4538,8 +5015,8 @@ export default function ApplicationForm() {
                         <input
                           type="text"
                           value={formData.emergencyRelationship || ''}
-                          onChange={(e) => handleTextInputChange('emergencyRelationship', e.target.value)}
-                          placeholder="กรอกความสัมพันธ์"
+                          onChange={(e) => handleTextOnlyChange('emergencyRelationship', e.target.value)}
+                          placeholder="กรอกความสัมพันธ์ (เฉพาะตัวอักษร)"
                           className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyRelationship') ? 'border-red-500' : 'border-gray-300'}`}
                         />
                         {hasError('emergencyRelationship') && (
@@ -4553,8 +5030,8 @@ export default function ApplicationForm() {
                         <input
                           type="text"
                           value={formData.emergencyPhone}
-                          onChange={(e) => handleNumberInputChange('emergencyPhone', e.target.value)}
-                          placeholder="กรอกเบอร์โทรฉุกเฉิน"
+                          onChange={(e) => handleNumberOnlyChange('emergencyPhone', e.target.value)}
+                          placeholder="กรอกเบอร์โทรฉุกเฉิน (เฉพาะตัวเลข)"
                           className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyPhone') ? 'border-red-500' : 'border-gray-300'}`}
                         />
                         {hasError('emergencyPhone') && (
@@ -4574,7 +5051,7 @@ export default function ApplicationForm() {
                       <input
                         type="text"
                             value={formData.emergencyAddress?.houseNumber || ''}
-                            onChange={(e) => handleNumberInputChange('emergencyAddress.houseNumber', e.target.value)}
+                            onChange={(e) => handleInputChange('emergencyAddress.houseNumber', e.target.value)}
                             placeholder="กรอกบ้านเลขที่"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressHouseNumber') ? 'border-red-500' : 'border-gray-300'}`}
                           />
@@ -4589,7 +5066,7 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyAddress?.villageNumber || ''}
-                            onChange={(e) => handleNumberInputChange('emergencyAddress.villageNumber', e.target.value)}
+                            onChange={(e) => handleInputChange('emergencyAddress.villageNumber', e.target.value)}
                             placeholder="กรอกหมู่ที่"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressVillageNumber') ? 'border-red-500' : 'border-gray-300'}`}
                           />
@@ -4634,8 +5111,8 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyAddress?.subDistrict || ''}
-                            onChange={(e) => handleTextInputChange('emergencyAddress.subDistrict', e.target.value)}
-                            placeholder="กรอกตำบล/แขวง"
+                            onChange={(e) => handleTextOnlyChange('emergencyAddress.subDistrict', e.target.value)}
+                            placeholder="กรอกตำบล/แขวง (เฉพาะตัวอักษร)"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressSubDistrict') ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError('emergencyAddressSubDistrict') && (
@@ -4649,8 +5126,8 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyAddress?.district || ''}
-                            onChange={(e) => handleTextInputChange('emergencyAddress.district', e.target.value)}
-                            placeholder="กรอกอำเภอ/เขต"
+                            onChange={(e) => handleTextOnlyChange('emergencyAddress.district', e.target.value)}
+                            placeholder="กรอกอำเภอ/เขต (เฉพาะตัวอักษร)"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressDistrict') ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError('emergencyAddressDistrict') && (
@@ -4664,8 +5141,8 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyAddress?.province || ''}
-                            onChange={(e) => handleTextInputChange('emergencyAddress.province', e.target.value)}
-                            placeholder="กรอกจังหวัด"
+                            onChange={(e) => handleTextOnlyChange('emergencyAddress.province', e.target.value)}
+                            placeholder="กรอกจังหวัด (เฉพาะตัวอักษร)"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressProvince') ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError('emergencyAddressProvince') && (
@@ -4679,22 +5156,27 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyAddress?.postalCode || ''}
-                            onChange={(e) => handleNumberInputChange('emergencyAddress.postalCode', e.target.value)}
-                            placeholder="กรอกรหัสไปรษณีย์"
+                            onChange={(e) => handlePostalCodeChange('emergencyAddress.postalCode', e.target.value)}
+                            placeholder="กรอกรหัสไปรษณีย์ (5 หลัก)"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressPostalCode') ? 'border-red-500' : 'border-gray-300'}`}
                           />
+                          <div className="flex justify-between items-center">
                           {hasError('emergencyAddressPostalCode') && (
                             <div className="text-xs text-red-600">
                               {getErrorMessage('emergencyAddressPostalCode')}
                             </div>
                           )}
+                            <p className="text-xs text-gray-500 ml-auto">
+                              {formData.emergencyAddress?.postalCode?.length || 0}/5 หลัก
+                            </p>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-gray-700">โทรศัพท์</label>
                           <input
                             type="text"
                             value={formData.emergencyAddress?.phone || ''}
-                            onChange={(e) => handleNumberInputChange('emergencyAddress.phone', e.target.value)}
+                            onChange={(e) => handleInputChange('emergencyAddress.phone', e.target.value)}
                             placeholder="กรอกโทรศัพท์"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressPhone') ? 'border-red-500' : 'border-gray-300'}`}
                           />
@@ -4716,7 +5198,7 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyWorkplace?.name || ''}
-                            onChange={(e) => handleTextInputChange('emergencyWorkplace.name', e.target.value)}
+                            onChange={(e) => handleInputChange('emergencyWorkplace.name', e.target.value)}
                             placeholder="กรอกชื่อสถานที่ทำงาน"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyWorkplaceName') ? 'border-red-500' : 'border-gray-300'}`}
                           />
@@ -4731,8 +5213,8 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyWorkplace?.district || ''}
-                            onChange={(e) => handleTextInputChange('emergencyWorkplace.district', e.target.value)}
-                            placeholder="กรอกอำเภอ/เขต"
+                            onChange={(e) => handleTextOnlyChange('emergencyWorkplace.district', e.target.value)}
+                            placeholder="กรอกอำเภอ/เขต (เฉพาะตัวอักษร)"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyWorkplaceDistrict') ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError('emergencyWorkplaceDistrict') && (
@@ -4746,8 +5228,8 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyWorkplace?.province || ''}
-                            onChange={(e) => handleTextInputChange('emergencyWorkplace.province', e.target.value)}
-                            placeholder="กรอกจังหวัด"
+                            onChange={(e) => handleTextOnlyChange('emergencyWorkplace.province', e.target.value)}
+                            placeholder="กรอกจังหวัด (เฉพาะตัวอักษร)"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyWorkplaceProvince') ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError('emergencyWorkplaceProvince') && (
@@ -4761,7 +5243,7 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyWorkplace?.phone || ''}
-                            onChange={(e) => handleNumberInputChange('emergencyWorkplace.phone', e.target.value)}
+                            onChange={(e) => handleInputChange('emergencyWorkplace.phone', e.target.value)}
                             placeholder="กรอกโทรศัพท์"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyWorkplacePhone') ? 'border-red-500' : 'border-gray-300'}`}
                           />
@@ -4876,44 +5358,44 @@ export default function ApplicationForm() {
                       placeholder="กรุณากรอกความรู้ ความสามารถ และทักษะพิเศษของท่าน"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent resize-none ${
                         hasError('skills') 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
-                      }`}
+                            ? 'border-red-500 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                       rows={3}
-                    />
+                      />
                     {hasError('skills') && (
                       <p className="text-red-500 text-xs mt-1">{getErrorMessage('skills')}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
+                      )}
+                    </div>
+                    <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">ภาษาที่ใช้ได้<span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
+                      <input
+                        type="text"
                       value={formData.languages}
                       onChange={(e) => handleInputChange('languages', e.target.value)}
                       placeholder="กรอกภาษาที่ใช้ได้"
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                         hasError('languages') 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
-                      }`}
-                    />
+                            ? 'border-red-500 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                      />
                     {hasError('languages') && (
                       <p className="text-red-500 text-xs mt-1">{getErrorMessage('languages')}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
+                      )}
+                    </div>
+                    <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">ทักษะคอมพิวเตอร์<span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
+                      <input
+                        type="text"
                       value={formData.computerSkills}
                       onChange={(e) => handleInputChange('computerSkills', e.target.value)}
                       placeholder="กรอกทักษะคอมพิวเตอร์"
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                         hasError('computerSkills') 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
-                      }`}
+                            ? 'border-red-500 focus:ring-red-500' 
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
                     />
                     {hasError('computerSkills') && (
                       <p className="text-red-500 text-xs mt-1">{getErrorMessage('computerSkills')}</p>
@@ -4961,9 +5443,37 @@ export default function ApplicationForm() {
             <CardBody className="p-8">
               {/* ๔. เอกสารแนบ */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-gray-800 mb-6 border-b-2 border-dotted border-gray-400 pb-2">
+                <div className="flex justify-between items-center mb-6 border-b-2 border-dotted border-gray-400 pb-2">
+                  <h3 className="text-lg font-bold text-gray-800">
                   ๔. เอกสารแนบ
                 </h3>
+                  <Button
+                    color="danger"
+                    variant="bordered"
+                    size="sm"
+                    className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300"
+                    onClick={() => {
+                      if (confirm('คุณต้องการลบเอกสารทั้งหมดหรือไม่?')) {
+                        setFormData(prev => ({
+                          ...prev,
+                          documents: {
+                            idCard: null,
+                            houseRegistration: null,
+                            educationCertificate: null,
+                            militaryCertificate: null,
+                            medicalCertificate: null,
+                            drivingLicense: null,
+                            otherDocuments: null
+                          }
+                        }));
+                        setUploadedDocuments([]);
+                        alert('ลบเอกสารทั้งหมดเรียบร้อยแล้ว');
+                      }
+                    }}
+                  >
+                    ลบทั้งหมด
+                  </Button>
+                </div>
                 {!savedResume?.id && (
                   <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <p className="text-sm text-yellow-800">
@@ -5025,17 +5535,17 @@ export default function ApplicationForm() {
                               ✓ อัปโหลดแล้ว
                             </span>
                           </div>
-                        <Button
-                          color="secondary"
-                          variant="bordered"
-                          size="sm"
-                          className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
-                            onClick={() => {
-                              window.open(doc.filePath, '_blank');
-                            }}
-                        >
-                          ดูตัวอย่าง
-                        </Button>
+                            <Button
+                              color="secondary"
+                              variant="bordered"
+                              size="sm"
+                              className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                              onClick={() => {
+                                window.open(doc.filePath, '_blank');
+                              }}
+                            >
+                              ดูตัวอย่าง
+                            </Button>
                         </div>
                       ))}
                       
@@ -5139,17 +5649,17 @@ export default function ApplicationForm() {
                               ✓ อัปโหลดแล้ว
                             </span>
                           </div>
-                        <Button
-                          color="secondary"
-                          variant="bordered"
-                          size="sm"
-                          className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
-                            onClick={() => {
-                              window.open(doc.filePath, '_blank');
-                            }}
-                        >
-                          ดูตัวอย่าง
-                        </Button>
+                            <Button
+                              color="secondary"
+                              variant="bordered"
+                              size="sm"
+                              className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                              onClick={() => {
+                                window.open(doc.filePath, '_blank');
+                              }}
+                            >
+                              ดูตัวอย่าง
+                            </Button>
                         </div>
                       ))}
                       
@@ -5255,17 +5765,17 @@ export default function ApplicationForm() {
                               ✓ อัปโหลดแล้ว
                             </span>
                           </div>
-                        <Button
-                          color="secondary"
-                          variant="bordered"
-                          size="sm"
-                          className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
-                            onClick={() => {
-                              window.open(doc.filePath, '_blank');
-                            }}
-                        >
-                          ดูตัวอย่าง
-                        </Button>
+                            <Button
+                              color="secondary"
+                              variant="bordered"
+                              size="sm"
+                              className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                              onClick={() => {
+                                window.open(doc.filePath, '_blank');
+                              }}
+                            >
+                              ดูตัวอย่าง
+                            </Button>
                         </div>
                       ))}
                       
@@ -5313,8 +5823,8 @@ export default function ApplicationForm() {
                       <div className="mt-2 text-xs text-red-600">
                         {errors.documentsEducationCertificate}
                       </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
 
                   {/* ใบรับรองทหาร */}
                   <div className={`border-2 border-dashed rounded-lg p-4 text-center ${formData.gender === 'หญิง' ? 'border-gray-200 bg-gray-50' : 'border-gray-300'}`}>
@@ -5325,7 +5835,7 @@ export default function ApplicationForm() {
                     </div>
                     <h4 className={`font-semibold mb-2 ${formData.gender === 'หญิง' ? 'text-gray-400' : 'text-gray-700'}`}>ใบรับรองทหาร</h4>
                     <p className={`text-sm mb-3 ${formData.gender === 'หญิง' ? 'text-gray-400' : 'text-gray-500'}`}>สำเนาใบรับรองทหาร</p>
-                    <input
+                      <input
                       type="file"
                       id="militaryCertificate"
                       accept=".pdf,.jpg,.jpeg,.png"
@@ -5462,10 +5972,10 @@ export default function ApplicationForm() {
                           variant="bordered"
                           size="sm"
                           className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
-                            onClick={() => {
+                        onClick={() => {
                               if (formData.documents!.medicalCertificate instanceof File) {
                                 handlePreviewFile(formData.documents!.medicalCertificate, 'ใบรับรองแพทย์');
-                              } else {
+                            } else {
                                 alert('ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
                               }
                             }}
@@ -5610,7 +6120,7 @@ export default function ApplicationForm() {
                                   handlePreviewFile(file, `เอกสารอื่นๆ ${index + 1}`);
                                 } else if (typeof file === 'object' && 'file' in file && file.file) {
                                   handlePreviewFile(file.file, `เอกสารอื่นๆ ${index + 1}`);
-                                } else {
+                          } else {
                                   alert('ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
                                 }
                               }}
@@ -5690,7 +6200,7 @@ export default function ApplicationForm() {
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-gray-700">สาขา/วิชาเอก<span className="text-red-500">*</span></label>
-                          <input
+                        <input
                             type="text"
                             value={edu.major}
                             onChange={(e) => handleEducationChange(index, 'major', e.target.value)}
@@ -5700,9 +6210,9 @@ export default function ApplicationForm() {
                           {hasError(`education${index}Major`) && (
                             <div className="text-xs text-red-600">
                               {getErrorMessage(`education${index}Major`)}
-                            </div>
+                      </div>
                           )}
-                        </div>
+                    </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-gray-700">จากสถานศึกษา<span className="text-red-500">*</span></label>
                           <input
@@ -5723,23 +6233,28 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={edu.year}
-                            onChange={(e) => handleEducationChange(index, 'year', e.target.value)}
-                            placeholder="กรอกปีที่จบ"
+                            onChange={(e) => handleEducationChange(index, 'year', handleYearChange(e.target.value))}
+                            placeholder="กรอกปีที่จบ (4 หลัก)"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError(`education${index}Year`) ? 'border-red-500' : 'border-gray-300'}`}
                           />
+                          <div className="flex justify-between items-center">
                           {hasError(`education${index}Year`) && (
                             <div className="text-xs text-red-600">
                               {getErrorMessage(`education${index}Year`)}
                             </div>
                           )}
+                            <p className="text-xs text-gray-500 ml-auto">
+                              {edu.year.length}/4 หลัก
+                            </p>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-gray-700">เกรดเฉลี่ย<span className="text-red-500">*</span></label>
                           <input
                             type="text"
                             value={edu.gpa}
-                            onChange={(e) => handleEducationChange(index, 'gpa', e.target.value)}
-                            placeholder="กรอกเกรดเฉลี่ย"
+                            onChange={(e) => handleEducationChange(index, 'gpa', handleGpaChange(e.target.value))}
+                            placeholder="กรอกเกรดเฉลี่ย (ทศนิยม 2 ตำแหน่ง)"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError(`education${index}Gpa`) ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError(`education${index}Gpa`) && (
@@ -5882,7 +6397,7 @@ export default function ApplicationForm() {
                           <label className="text-sm font-medium text-gray-700">เงินเดือน<span className="text-red-500">*</span></label>
                           <input
                             type="text"
-                            value={work.salary}
+                        value={work.salary}
                             onChange={(e) => handleWorkExperienceChange(index, 'salary', e.target.value)}
                             placeholder="กรอกเงินเดือน"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError(`workExperience${index}Salary`) ? 'border-red-500' : 'border-gray-300'}`}
@@ -5890,7 +6405,7 @@ export default function ApplicationForm() {
                           {hasError(`workExperience${index}Salary`) && (
                             <div className="text-xs text-red-600">
                               {getErrorMessage(`workExperience${index}Salary`)}
-                            </div>
+                    </div>
                           )}
                         </div>
                         <div className="space-y-2">
@@ -5907,10 +6422,10 @@ export default function ApplicationForm() {
                               {getErrorMessage(`workExperience${index}Reason`)}
                             </div>
                           )}
-                        </div>
-                      </div>
                     </div>
-                  ))}
+                  </div>
+                </div>
+              ))}
                   {hasError('workExperience') && (
                     <div className="text-xs text-red-600 mb-2">
                       {getErrorMessage('workExperience')}
@@ -5952,8 +6467,8 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                       value={formData.appliedPosition}
-                      onChange={(e) => handleInputChange('appliedPosition', e.target.value)}
-                      placeholder="กรอกตำแหน่งที่สมัคร"
+                      onChange={(e) => handleTextOnlyChange('appliedPosition', e.target.value)}
+                      placeholder="กรอกตำแหน่งที่สมัคร (เฉพาะตัวอักษร)"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                         errors.appliedPosition 
                           ? 'border-red-500 focus:ring-red-500' 
@@ -5963,24 +6478,8 @@ export default function ApplicationForm() {
                     {errors.appliedPosition && (
                       <p className="text-red-500 text-xs mt-1">{errors.appliedPosition}</p>
                     )}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">สังกัด<span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={formData.department}
-                      onChange={(e) => handleInputChange('department', e.target.value)}
-                      placeholder="กรอกสังกัด"
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
-                        errors.department 
-                          ? 'border-red-500 focus:ring-red-500' 
-                          : 'border-gray-300 focus:ring-blue-500'
-                      }`}
-                    />
-                    {errors.department && (
-                      <p className="text-red-500 text-xs mt-1">{errors.department}</p>
-                    )}
-                  </div>
+                    </div>
+
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">วันที่พร้อมเริ่มงาน<span className="text-red-500">*</span></label>
                     <input
@@ -5998,39 +6497,10 @@ export default function ApplicationForm() {
                     {errors.availableDate && (
                       <p className="text-red-500 text-xs mt-1">{errors.availableDate}</p>
                     )}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">ฝ่าย/กลุ่มงาน<span className="text-red-500">*</span></label>
-                    {searchParams.get('department') ? (
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={formData.department}
-                          readOnly
-                          className="w-full px-3 py-2 border border-green-300 bg-green-50 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-not-allowed"
-                        />
-                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <p className="text-xs text-green-600 mt-1">✓ เลือกแผนกจากหน้า Dashboard แล้ว - ไม่สามารถแก้ไขได้</p>
-                      </div>
-                    ) : (
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={formData.department}
-                          onChange={(e) => handleInputChange('department', e.target.value)}
-                          placeholder="กรอกฝ่าย/กลุ่มงาน"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">กรุณาเลือกแผนกจากหน้า Dashboard ก่อน</p>
-                      </div>
-                    )}
+                    </div>
+                  
                   </div>
                 </div>
-              </div>
             </CardBody>
           </Card>
           )}
@@ -6061,10 +6531,10 @@ export default function ApplicationForm() {
 
             {/* ปุ่มบันทึกข้อมูล */}
             <div className="flex justify-center">
-              <Button
+            <Button
                 type="button"
-                color="primary"
-                size="lg"
+              color="primary"
+              size="lg"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-12 py-6 text-lg font-semibold shadow-xl hover:shadow-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg"
                 startContent={isSaving ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : <CheckIcon className="w-6 h-6" />}
                 onClick={() => saveCurrentTab()}
@@ -6072,10 +6542,10 @@ export default function ApplicationForm() {
               >
                 {isSaving ? 'กำลังบันทึกข้อมูล...' : 'บันทึกแท็บนี้ และไปแท็บถัดไป'}
                 
-              </Button>
-            </div>
-          </form>
-        </div>
+            </Button>
+          </div>
+        </form>
+      </div>
       {/* Preview Modal */}
       {showPreviewModal && previewFile && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
@@ -6135,4 +6605,4 @@ export default function ApplicationForm() {
       )}
     </div>
   );
-}
+} 
