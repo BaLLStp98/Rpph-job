@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -4544,7 +4544,7 @@ export default function ApplicationForm() {
                         />
                         {hasError('emergencyRelationship') && (
                           <div className="text-xs text-red-600">
-                            {getErrorMessage('emergencyRelationship')}s
+                            {getErrorMessage('emergencyRelationship')}
                           </div>
                         )}
                       </div>
@@ -5964,7 +5964,23 @@ export default function ApplicationForm() {
                       <p className="text-red-500 text-xs mt-1">{errors.appliedPosition}</p>
                     )}
                   </div>
-                 
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">สังกัด<span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={formData.department}
+                      onChange={(e) => handleInputChange('department', e.target.value)}
+                      placeholder="กรอกสังกัด"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                        errors.department 
+                          ? 'border-red-500 focus:ring-red-500' 
+                          : 'border-gray-300 focus:ring-blue-500'
+                      }`}
+                    />
+                    {errors.department && (
+                      <p className="text-red-500 text-xs mt-1">{errors.department}</p>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">วันที่พร้อมเริ่มงาน<span className="text-red-500">*</span></label>
                     <input
@@ -5983,7 +5999,36 @@ export default function ApplicationForm() {
                       <p className="text-red-500 text-xs mt-1">{errors.availableDate}</p>
                     )}
                   </div>
-                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">ฝ่าย/กลุ่มงาน<span className="text-red-500">*</span></label>
+                    {searchParams.get('department') ? (
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={formData.department}
+                          readOnly
+                          className="w-full px-3 py-2 border border-green-300 bg-green-50 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent cursor-not-allowed"
+                        />
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                          <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <p className="text-xs text-green-600 mt-1">✓ เลือกแผนกจากหน้า Dashboard แล้ว - ไม่สามารถแก้ไขได้</p>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={formData.department}
+                          onChange={(e) => handleInputChange('department', e.target.value)}
+                          placeholder="กรอกฝ่าย/กลุ่มงาน"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">กรุณาเลือกแผนกจากหน้า Dashboard ก่อน</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </CardBody>
