@@ -180,10 +180,11 @@ export default function ApplicationForm() {
       setFormData(prev => ({
         ...prev,
         appliedPosition: departmentName,
-        department: departmentName
+        department: departmentName,
+        departmentId: departmentId || null
       }));
     }
-  }, [departmentName]);
+  }, [departmentName, departmentId]);
 
   // ดึงข้อมูลฝากประวัติตาม resumeId เมื่อมีใน URL
   useEffect(() => {
@@ -192,6 +193,15 @@ export default function ApplicationForm() {
       loadResumeById(resumeId);
     }
   }, [resumeId, status]);
+
+  // ดึงข้อมูลฝากประวัติเมื่อมี department ใน URL (ค้นหาตามหลายวิธี)
+  useEffect(() => {
+    if ((departmentName || departmentId) && status === 'authenticated') {
+      console.log('🔍 พบ department ใน URL:', { departmentName, departmentId });
+      // ใช้ loadResumeByDepartment ที่ค้นหาตามหลายวิธี
+      loadResumeByDepartment();
+    }
+  }, [departmentName, departmentId, status]);
   const [formData, setFormData] = useState<FormData>({
     profileImage: undefined,
     prefix: '',
@@ -316,9 +326,9 @@ export default function ApplicationForm() {
     const loadMyResume = async () => {
       if (status !== 'authenticated') return;
       
-      // ถ้ามี resumeId ใน URL ให้ข้ามการโหลดข้อมูลตามอีเมล
-      if (resumeId) {
-        console.log('🔍 มี resumeId ใน URL - ข้ามการโหลดข้อมูลตามอีเมล');
+      // ถ้ามี resumeId หรือ department ใน URL ให้ข้ามการโหลดข้อมูลตามอีเมล
+      if (resumeId || departmentName) {
+        console.log('🔍 มี resumeId หรือ department ใน URL - ข้ามการโหลดข้อมูลตามอีเมล');
         return;
       }
       
@@ -432,7 +442,8 @@ export default function ApplicationForm() {
     };
     
     loadMyResume();
-  }, [status, resumeId]);
+  }, [status, resumeId, departmentName]);
+
 
   // นำข้อมูลที่บันทึกแล้วมากรอกกลับในฟอร์ม
   const applyResumeToFormInputs = (resume: any) => {
@@ -816,18 +827,23 @@ export default function ApplicationForm() {
         applyResumeToFormInputs(json.data || json);
       }
 
-      // ไปแท็บถัดไปอัตโนมัติหลังบันทึกสำเร็จ
-      const flow: Record<string, string> = {
-        personal: 'education',
-        education: 'work',
-        work: 'skills',
-        skills: 'position',
-        position: 'documents'
-      };
-      const next = flow[tab as keyof typeof flow];
-      if (next) setActiveTab(next);
-
-      alert('บันทึกสำเร็จ');
+      // ไปแท็บถัดไปอัตโนมัติหลังบันทึกสำเร็จ หรือ redirect ไปหน้า dashboard
+      if (tab === 'documents') {
+        alert('บันทึกข้อมูลเรียบร้อยแล้ว');
+        // Redirect ไปหน้า dashboard
+        window.location.href = '/dashboard';
+      } else {
+        const flow: Record<string, string> = {
+          personal: 'education',
+          education: 'work',
+          work: 'skills',
+          skills: 'position',
+          position: 'documents'
+        };
+        const next = flow[tab as keyof typeof flow];
+        if (next) setActiveTab(next);
+        alert('บันทึกสำเร็จ');
+      }
     } catch (err: any) {
       alert(err?.message || 'เกิดข้อผิดพลาดในการบันทึก');
         } finally {
@@ -1087,7 +1103,8 @@ export default function ApplicationForm() {
     if (department) {
       setFormData(prev => ({
         ...prev,
-        department: department
+        department: department,
+        departmentId: departmentId || null
       }));
     }
     
@@ -1234,20 +1251,20 @@ export default function ApplicationForm() {
       });
   }, [formData.workExperience.length]);
 
-  // ฟังก์ชันดึงข้อมูลจาก profile
+  // ฟังก์ชันดึงข้อมูลจาก ResumeDeposit
   const fetchProfileData = async () => {
     if (status === 'loading') return;
     
-    console.log('🔍 fetchProfileData - Starting to fetch profile data...');
+    console.log('🔍 fetchProfileData - Starting to fetch profile data from ResumeDeposit...');
     console.log('🔍 fetchProfileData - Session:', session);
     console.log('🔍 fetchProfileData - User:', session?.user);
     
     try {
-      // ดึงข้อมูลจาก profile API
-      const lineId = session?.user?.id || 'unknown';
-      console.log('🔍 fetchProfileData - LineId:', lineId);
-      console.log('🔍 fetchProfileData - API URL:', `/api/prisma/users?lineId=${lineId}`);
-      const response = await fetch(`/api/prisma/users?lineId=${lineId}`);
+      // ดึงข้อมูลจาก ResumeDeposit API
+      const userEmail = (session?.user as any)?.email || '';
+      console.log('🔍 fetchProfileData - UserEmail:', userEmail);
+      console.log('🔍 fetchProfileData - API URL:', `/api/resume-deposit?email=${encodeURIComponent(userEmail)}`);
+      const response = await fetch(`/api/resume-deposit?email=${encodeURIComponent(userEmail)}`);
       
       if (response.ok) {
         const result = await response.json();
@@ -1255,16 +1272,21 @@ export default function ApplicationForm() {
         console.log('🔍 fetchProfileData - Response success:', result.success);
         console.log('🔍 fetchProfileData - Data length:', result.data?.length);
         
-        if (result.success && result.data.length > 0) {
-          const user = result.data[0]; // Get first user (should be unique by lineId)
+        const list = (result?.data || result || []) as any[];
+        const filtered = Array.isArray(list)
+          ? (userEmail ? list.filter((r) => (r?.email || '').toLowerCase() === userEmail.toLowerCase()) : list)
+          : [];
+        
+        if (filtered.length > 0) {
+          const user = filtered[0]; // Get first resume (should be unique by email)
           
-          console.log('Profile data loaded from register:', user);
-          console.log('🔍 fetchProfileData - User ID:', user.id);
+          console.log('Profile data loaded from ResumeDeposit:', user);
+          console.log('🔍 fetchProfileData - Resume ID:', user.id);
           
           setProfileData(user);
           setIsProfileLoaded(true);
             
-            // เติมข้อมูลจาก profile ลงใน form
+            // เติมข้อมูลจาก ResumeDeposit ลงใน form
             setFormData(prev => ({
               ...prev,
             prefix: user.prefix || '',
@@ -1272,10 +1294,10 @@ export default function ApplicationForm() {
             lastName: user.lastName || '',
             idNumber: user.idNumber || '',
             idCardIssuedAt: user.idCardIssuedAt || '',
-            idCardIssueDate: user.idCardIssueDate || '',
-            idCardExpiryDate: user.idCardExpiryDate || '',
+            idCardIssueDate: user.idCardIssueDate ? new Date(user.idCardIssueDate).toISOString().split('T')[0] : '',
+            idCardExpiryDate: user.idCardExpiryDate ? new Date(user.idCardExpiryDate).toISOString().split('T')[0] : '',
             birthDate: user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : '',
-            age: user.age || '',
+            age: user.age ? String(user.age) : '',
             race: user.race || '',
             placeOfBirth: user.placeOfBirth || '',
             placeOfBirthProvince: user.placeOfBirthProvince || '',
@@ -1296,15 +1318,15 @@ export default function ApplicationForm() {
             emergencyPhone: user.emergencyPhone || '',
             emergencyRelationship: user.emergencyRelationship || '',
               emergencyAddress: {
-              houseNumber: user.emergencyAddress?.houseNumber || '',
-              villageNumber: user.emergencyAddress?.villageNumber || '',
-              alley: user.emergencyAddress?.alley || '',
-              road: user.emergencyAddress?.road || '',
-              subDistrict: user.emergencyAddress?.subDistrict || '',
-              district: user.emergencyAddress?.district || '',
-              province: user.emergencyAddress?.province || '',
-              postalCode: user.emergencyAddress?.postalCode || '',
-              phone: user.emergencyAddress?.phone || '',
+              houseNumber: user.emergency_address_house_number || '',
+              villageNumber: user.emergency_address_village_number || '',
+              alley: user.emergency_address_alley || '',
+              road: user.emergency_address_road || '',
+              subDistrict: user.emergency_address_sub_district || '',
+              district: user.emergency_address_district || '',
+              province: user.emergency_address_province || '',
+              postalCode: user.emergency_address_postal_code || '',
+              phone: user.emergency_address_phone || '',
               },
               emergencyWorkplace: {
               name: user.emergencyWorkplace?.name || '',
@@ -1314,7 +1336,7 @@ export default function ApplicationForm() {
             },
             education: user.education?.map((edu: any) => ({
               level: edu.level || '',
-              institution: edu.school || '',
+              institution: edu.institution || '',
               major: edu.major || '',
               year: edu.endYear?.toString() || edu.year?.toString() || '',
               gpa: edu.gpa?.toString() || ''
@@ -1334,25 +1356,65 @@ export default function ApplicationForm() {
             references: user.references || '',
             appliedPosition: user.appliedPosition || '',
             expectedSalary: user.expectedSalary || '',
-            availableStartDate: user.availableStartDate || '',
-            reasonForLeaving: user.reasonForLeaving || '',
-            additionalInfo: user.additionalInfo || '',
+            availableDate: user.availableDate ? new Date(user.availableDate).toISOString().split('T')[0] : '',
+            currentWork: user.currentWork || false,
+            department: user.department || '',
+            // ที่อยู่ทะเบียนบ้าน
+            registeredAddress: {
+              houseNumber: user.house_registration_house_number || '',
+              villageNumber: user.house_registration_village_number || '',
+              alley: user.house_registration_alley || '',
+              road: user.house_registration_road || '',
+              subDistrict: user.house_registration_sub_district || '',
+              district: user.house_registration_district || '',
+              province: user.house_registration_province || '',
+              postalCode: user.house_registration_postal_code || '',
+              phone: user.house_registration_phone || '',
+              mobile: user.house_registration_mobile || ''
+            },
+            // ที่อยู่ปัจจุบัน
+            currentAddressDetail: {
+              houseNumber: user.current_address_house_number || '',
+              villageNumber: user.current_address_village_number || '',
+              alley: user.current_address_alley || '',
+              road: user.current_address_road || '',
+              subDistrict: user.current_address_sub_district || '',
+              district: user.current_address_district || '',
+              province: user.current_address_province || '',
+              postalCode: user.current_address_postal_code || '',
+              homePhone: user.current_address_phone || '',
+              mobilePhone: user.current_address_mobile || ''
+            },
               spouseInfo: {
-              firstName: user.spouseInfo?.firstName || '',
-              lastName: user.spouseInfo?.lastName || '',
+              firstName: user.spouse_first_name || '',
+              lastName: user.spouse_last_name || '',
               },
-              currentWorkplace: {
-              name: user.currentWorkplace?.name || '',
-              position: user.currentWorkplace?.position || '',
-              department: user.currentWorkplace?.department || '',
-              startWork: user.currentWorkplace?.startWork || '',
+              // ข้อมูลสิทธิการรักษา
+              medicalRights: {
+                hasUniversalHealthcare: user.medical_rights_has_universal_healthcare || false,
+                universalHealthcareHospital: user.medical_rights_universal_healthcare_hospital || '',
+                hasSocialSecurity: user.medical_rights_has_social_security || false,
+                socialSecurityHospital: user.medical_rights_social_security_hospital || '',
+                dontWantToChangeHospital: user.medical_rights_dont_want_to_change_hospital || false,
+                wantToChangeHospital: user.medical_rights_want_to_change_hospital || false,
+                newHospital: user.medical_rights_new_hospital || '',
+                hasCivilServantRights: user.medical_rights_has_civil_servant_rights || false,
+                otherRights: user.medical_rights_other_rights || ''
+              },
+              // ข้อมูลนายจ้างหลายราย
+              multipleEmployers: user.multiple_employers ? JSON.parse(user.multiple_employers) : [],
+              // ข้อมูลสถานที่ทำงานปัจจุบัน
+              staffInfo: {
+                position: user.staff_position || '',
+                department: user.staff_department || '',
+                startWork: user.staff_start_work || '',
               }
             }));
             
-            // เติมข้อมูลรูปภาพ
-          console.log('🔍 fetchProfileData - User data:', user);
-          console.log('🔍 fetchProfileData - User profileImageUrl:', user.profileImageUrl);
-          console.log('🔍 fetchProfileData - User ID:', user.id);
+            // เติมข้อมูลรูปภาพจาก ResumeDeposit
+          console.log('🔍 fetchProfileData - Resume data:', user);
+          console.log('🔍 fetchProfileData - Resume profileImageUrl:', user.profileImageUrl);
+          console.log('🔍 fetchProfileData - Resume ID:', user.id);
           
           if (user.profileImageUrl) {
             console.log('✅ fetchProfileData - Using profileImageUrl:', user.profileImageUrl);
@@ -1362,8 +1424,8 @@ export default function ApplicationForm() {
             setProfileImage(imagePath);
             
             // อัปเดต formData.profileImage ด้วย
-              setFormData(prev => ({
-                ...prev,
+            setFormData(prev => ({
+              ...prev,
               profileImage: new File([], user.profileImageUrl, { type: 'image/jpeg' })
             }));
           } else if (user.id) {
@@ -1402,16 +1464,16 @@ export default function ApplicationForm() {
           }
           
           // ไม่ต้องเรียก loadProfileData เพราะได้เติมข้อมูลลงในฟอร์มแล้ว
-          console.log('🔍 fetchProfileData - Profile data loaded and form filled');
+          console.log('🔍 fetchProfileData - Resume data loaded and form filled');
         } else {
-          console.log('🔍 fetchProfileData - No profile data found');
+          console.log('🔍 fetchProfileData - No resume data found');
           console.log('🔍 fetchProfileData - Result:', result);
         }
       } else {
         console.log('🔍 fetchProfileData - API response not ok:', response.status, response.statusText);
       }
     } catch (error) {
-      console.error('Error fetching profile data:', error);
+      console.error('Error fetching resume data:', error);
     } finally {
       setIsLoading(false);
     }
@@ -1432,6 +1494,7 @@ export default function ApplicationForm() {
   // ฟังก์ชันดึงข้อมูลฝากประวัติตาม resumeId
   const loadResumeById = async (id: string) => {
     console.log('🔄 ดึงข้อมูลฝากประวัติตาม ID:', id);
+    console.log('🔍 โหมด: ดึงข้อมูลจากฝากประวัติ (ResumeDeposit)');
     setIsLoading(true);
     
     try {
@@ -1453,6 +1516,16 @@ export default function ApplicationForm() {
           setSavedResume(resumeData);
           applyResumeToFormInputs(resumeData);
           
+          // ตั้งค่า department จาก URL parameter (ถ้ามี)
+          if (departmentName) {
+            setFormData(prev => ({
+              ...prev,
+              department: departmentName,
+              appliedPosition: departmentName
+            }));
+            console.log('✅ ตั้งค่า department จาก URL parameter:', departmentName);
+          }
+          
           // โหลดรูปภาพโปรไฟล์
           if (resumeData.profileImageUrl) {
             console.log('🔍 โหลดรูปภาพโปรไฟล์:', resumeData.profileImageUrl);
@@ -1472,10 +1545,257 @@ export default function ApplicationForm() {
           }
           
           console.log('✅ ดึงข้อมูลฝากประวัติตาม ID สำเร็จ');
-          alert(`โหลดข้อมูลฝากประวัติของ ${resumeData.firstName} ${resumeData.lastName} เรียบร้อยแล้ว`);
+          if (departmentName) {
+            console.log('✅ ตั้งค่า department:', departmentName);
+          }
+          // ไม่แสดง alert สำหรับ resumeId เพื่อให้ UX ดีขึ้น
         } else {
           console.log('❌ ไม่พบข้อมูลฝากประวัติสำหรับ ID นี้');
-          alert('ไม่พบข้อมูลฝากประวัติสำหรับ ID นี้');
+          // ไม่แสดง alert เพื่อให้ UX ดีขึ้น
+        }
+      } else {
+        console.log('❌ ไม่สามารถดึงข้อมูลฝากประวัติได้:', res.status);
+        // ไม่แสดง alert เพื่อให้ UX ดีขึ้น
+      }
+    } catch (error) {
+      console.error('❌ เกิดข้อผิดพลาดในการดึงข้อมูลฝากประวัติ:', error);
+      // ไม่แสดง alert เพื่อให้ UX ดีขึ้น
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ฟังก์ชันโหลดข้อมูลฝากประวัติตาม department (ค้นหาตามหลายวิธี)
+  const loadResumeByDepartment = async () => {
+    console.log('🔄 loadResumeByDepartment เริ่มทำงาน');
+    console.log('🔍 status:', status);
+    console.log('🔍 departmentName:', departmentName);
+    console.log('🔍 departmentId:', departmentId);
+    
+    if (status !== 'authenticated') {
+      console.log('❌ ไม่ได้ authenticate');
+      return;
+    }
+    
+    console.log('🔄 ดึงข้อมูลฝากประวัติสำหรับ department:', departmentName);
+    console.log('🔍 โหมด: ค้นหาตามหลายวิธี - ID, ชื่อ, นามสกุล, อีเมล, เบอร์โทร');
+    setIsLoading(true);
+    
+    try {
+      // ดึงข้อมูลผู้ใช้จาก session
+      const user = session?.user as any;
+      const userEmail = user?.email || '';
+      const userName = user?.name || '';
+      
+      console.log('🔍 ข้อมูลผู้ใช้:', {
+        email: userEmail,
+        name: userName,
+        departmentName: departmentName,
+        departmentId: departmentId
+      });
+      
+      if (!userEmail && !userName) {
+        console.log('❌ ไม่พบข้อมูลผู้ใช้ใน session');
+        alert('ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
+      
+      // แยกชื่อและนามสกุลจาก name
+      let firstName = '';
+      let lastName = '';
+      if (userName) {
+        const nameParts = userName.trim().split(' ');
+        firstName = nameParts[0] || '';
+        lastName = nameParts.slice(1).join(' ') || '';
+      }
+      
+      console.log('🔍 ชื่อที่แยกแล้ว:', { firstName, lastName });
+      
+      // ดึงข้อมูลฝากประวัติทั้งหมด
+      console.log('🔍 เรียก API: /api/resume-deposit');
+      const res = await fetch('/api/resume-deposit');
+      console.log('🔍 API Response status:', res.status);
+      
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        console.log('🔍 API Response data:', json);
+        const list = (json?.data || json || []) as any[];
+        console.log('🔍 ข้อมูลที่ได้รับ:', list.length, 'รายการ');
+        console.log('🔍 ตัวอย่างข้อมูล:', list.slice(0, 2).map(r => ({
+          id: r.id,
+          firstName: r.firstName,
+          lastName: r.lastName,
+          email: r.email,
+          department: r.department,
+          appliedPosition: r.appliedPosition
+        })));
+        
+        let found = null;
+        
+        // วิธีที่ 1: ค้นหาตาม departmentId (ถ้ามี) - departmentId อาจเป็น resumeId
+        if (departmentId) {
+          const idMatch = list.find(r => r.id === departmentId);
+          if (idMatch) {
+            found = idMatch;
+            console.log('✅ พบข้อมูลตาม departmentId (resumeId):', found.id);
+          }
+        }
+        
+        // วิธีที่ 2: ค้นหาตาม departmentName เป็น resumeId (ถ้าไม่มี departmentId)
+        if (!found && departmentName) {
+          const idMatch = list.find(r => r.id === departmentName);
+          if (idMatch) {
+            found = idMatch;
+            console.log('✅ พบข้อมูลตาม departmentName (resumeId):', found.id);
+          }
+        }
+        
+        // วิธีที่ 3: ค้นหาตามอีเมล
+        if (!found && userEmail) {
+          const emailMatch = list.find(r => 
+            (r?.email || '').toLowerCase() === userEmail.toLowerCase()
+          );
+          if (emailMatch) {
+            found = emailMatch;
+            console.log('✅ พบข้อมูลตามอีเมล:', found.id);
+          }
+        }
+        
+        // วิธีที่ 4: ค้นหาตามชื่อและนามสกุล
+        if (!found && firstName && lastName) {
+          const nameMatch = list.find(r => {
+            const rFirstName = (r?.firstName || '').trim();
+            const rLastName = (r?.lastName || '').trim();
+            return rFirstName.toLowerCase() === firstName.toLowerCase() && 
+                   rLastName.toLowerCase() === lastName.toLowerCase();
+          });
+          if (nameMatch) {
+            found = nameMatch;
+            console.log('✅ พบข้อมูลตามชื่อและนามสกุล:', found.id);
+          }
+        }
+        
+        // วิธีที่ 5: ค้นหาตามชื่อเท่านั้น
+        if (!found && firstName) {
+          const firstNameMatch = list.find(r => {
+            const rFirstName = (r?.firstName || '').trim();
+            return rFirstName.toLowerCase() === firstName.toLowerCase();
+          });
+          if (firstNameMatch) {
+            found = firstNameMatch;
+            console.log('✅ พบข้อมูลตามชื่อเท่านั้น:', found.id);
+          }
+        }
+        
+        // วิธีที่ 6: ค้นหาตาม department ในข้อมูล (ปรับปรุงให้ค้นหาได้ดีขึ้น)
+        if (!found && departmentName) {
+          const deptMatch = list.find(r => {
+            const rDept = (r?.department || '').toLowerCase().trim();
+            const rAppliedPos = (r?.appliedPosition || '').toLowerCase().trim();
+            const searchDept = departmentName.toLowerCase().trim();
+            
+            return rDept === searchDept || 
+                   rAppliedPos === searchDept ||
+                   rDept.includes(searchDept) ||
+                   rAppliedPos.includes(searchDept) ||
+                   searchDept.includes(rDept) ||
+                   searchDept.includes(rAppliedPos);
+          });
+          if (deptMatch) {
+            found = deptMatch;
+            console.log('✅ พบข้อมูลตาม department:', found.id, 'department:', found.department, 'appliedPosition:', found.appliedPosition);
+          }
+        }
+        
+        // วิธีที่ 7: ค้นหาตามเบอร์โทร (ถ้ามี)
+        if (!found && userEmail) {
+          // ลองดึงเบอร์โทรจากอีเมล (ถ้าเป็นรูปแบบ phone@domain.com)
+          const phoneFromEmail = userEmail.split('@')[0];
+          if (phoneFromEmail && phoneFromEmail.length >= 10) {
+            const phoneMatch = list.find(r => 
+              (r?.phone || '').includes(phoneFromEmail) ||
+              (r?.phone || '').replace(/[-\s]/g, '') === phoneFromEmail.replace(/[-\s]/g, '')
+            );
+            if (phoneMatch) {
+              found = phoneMatch;
+              console.log('✅ พบข้อมูลตามเบอร์โทร:', found.id);
+            }
+          }
+        }
+          
+        if (found) {
+          console.log('✅ พบข้อมูลฝากประวัติ:', {
+            id: found.id,
+            name: `${found.firstName} ${found.lastName}`,
+            email: found.email,
+            phone: found.phone,
+            department: found.department
+          });
+          
+          // นำข้อมูลมาแสดงในฟอร์ม
+          setSavedResume(found);
+          applyResumeToFormInputs(found);
+          
+          // ตั้งค่า department จาก URL parameter
+          if (departmentName) {
+            setFormData(prev => ({
+              ...prev,
+              department: departmentName,
+              appliedPosition: departmentName,
+              departmentId: departmentId || null
+            }));
+            console.log('✅ ตั้งค่า department จาก URL parameter:', departmentName);
+          }
+          
+          // โหลดรูปภาพโปรไฟล์
+          if (found.profileImageUrl) {
+            console.log('🔍 โหลดรูปภาพโปรไฟล์:', found.profileImageUrl);
+            const imagePath = `/api/image?file=${found.profileImageUrl}`;
+            setProfileImage(imagePath);
+            console.log('✅ โหลดรูปภาพโปรไฟล์สำเร็จ');
+          }
+          
+          // โหลดเอกสารแนบ
+          console.log('🔍 โหลดข้อมูลเอกสารแนบ...');
+          try {
+            const documents = await fetchUploadedDocuments(found.id);
+            setUploadedDocuments(documents);
+            console.log('✅ โหลดข้อมูลเอกสารแนบสำเร็จ:', documents.length, 'ไฟล์');
+          } catch (error) {
+            console.error('❌ เกิดข้อผิดพลาดในการโหลดเอกสารแนบ:', error);
+          }
+          
+          console.log('✅ ดึงข้อมูลฝากประวัติสำหรับ department สำเร็จ');
+          alert(`โหลดข้อมูลฝากประวัติของ ${found.firstName} ${found.lastName} เรียบร้อยแล้ว`);
+        } else {
+          console.log('ℹ️ ไม่พบข้อมูลฝากประวัติสำหรับผู้ใช้ปัจจุบัน');
+          console.log('🔍 ข้อมูลที่ค้นหา:', {
+            departmentName,
+            departmentId,
+            userEmail,
+            firstName,
+            lastName
+          });
+          console.log('🔍 ข้อมูลที่มีในระบบ:', list.map(r => ({
+            id: r.id,
+            firstName: r.firstName,
+            lastName: r.lastName,
+            email: r.email,
+            department: r.department,
+            appliedPosition: r.appliedPosition
+          })));
+          
+          // ตั้งค่า department จาก URL parameter แม้ว่าจะไม่มีข้อมูลฝากประวัติ
+          if (departmentName) {
+            setFormData(prev => ({
+              ...prev,
+              department: departmentName,
+              appliedPosition: departmentName,
+              departmentId: departmentId || null
+            }));
+            console.log('✅ ตั้งค่า department จาก URL parameter:', departmentName);
+          }
+          // ไม่แสดง alert เพราะอาจเป็นผู้ใช้ใหม่ที่ยังไม่เคยฝากประวัติ
         }
       } else {
         console.log('❌ ไม่สามารถดึงข้อมูลฝากประวัติได้:', res.status);
@@ -2461,54 +2781,144 @@ export default function ApplicationForm() {
     try {
       const timestamp = new Date().toISOString();
 
-      // ตรวจสอบโหมดการบันทึก: ถ้ามี departmentId หรือ departmentName = โหมดสมัครงาน
-      const isApplicationMode = departmentId || departmentName;
-      console.log('🔍 Mode:', isApplicationMode ? 'APPLICATION (สมัครงาน)' : 'RESUME (ฝากประวัติ)');
+      // บันทึกข้อมูลไปที่ ResumeDeposit เสมอ (ไม่ว่าจะเป็นโหมดสมัครงานหรือฝากประวัติ)
+      console.log('🔍 Mode: RESUME DEPOSIT (ฝากประวัติ) - ดึงข้อมูลจากฝากประวัติเสมอ');
       console.log('🔍 departmentId:', departmentId);
       console.log('🔍 departmentName:', departmentName);
 
-      // ========== โหมดสมัครงาน: บันทึกไปที่ ApplicationForm ==========
-      if (isApplicationMode) {
-        console.log('📝 Saving to ApplicationForm...');
+      // ========== บันทึกไปที่ ResumeDeposit เสมอ ==========
+      {
+        console.log('📝 Saving to ResumeDeposit...');
         
-        // 1. สร้าง ApplicationForm record ก่อน
-        const initialPayload = {
-          firstName: formData.firstName || 'ไม่ระบุ',
-          lastName: formData.lastName || 'ไม่ระบุ',
-          email: formData.email || 'ไม่ระบุ@example.com',
-          department: departmentName || formData.department || null,
-          departmentId: departmentId || null,
-          appliedPosition: formData.appliedPosition || departmentName || null,
+        // สร้าง ResumeDeposit payload
+        const resumePayload = {
+          firstName: formData.firstName || '',
+          lastName: formData.lastName || '',
+          email: formData.email || '',
+          phone: formData.phone || '',
+          idNumber: formData.idNumber || '',
+          prefix: formData.prefix || '',
           gender: formData.gender || 'UNKNOWN',
           maritalStatus: formData.maritalStatus || 'UNKNOWN',
-          status: 'PENDING'
+          birthDate: formData.birthDate ? new Date(formData.birthDate) : null,
+          idCardIssueDate: formData.idCardIssueDate ? new Date(formData.idCardIssueDate) : null,
+          idCardExpiryDate: formData.idCardExpiryDate ? new Date(formData.idCardExpiryDate) : null,
+          availableDate: formData.availableDate ? new Date(formData.availableDate) : null,
+          expectedSalary: formData.expectedSalary || '',
+          department: departmentName || formData.department || '',
+          appliedPosition: formData.appliedPosition || departmentName || '',
+          // ที่อยู่ปัจจุบัน
+          currentAddress: {
+            houseNumber: formData.currentAddress?.houseNumber || '',
+            village: formData.currentAddress?.village || '',
+            soi: formData.currentAddress?.soi || '',
+            road: formData.currentAddress?.road || '',
+            subDistrict: formData.currentAddress?.subDistrict || '',
+            district: formData.currentAddress?.district || '',
+            province: formData.currentAddress?.province || '',
+            postalCode: formData.currentAddress?.postalCode || '',
+            phone: formData.currentAddress?.phone || ''
+          },
+          // ที่อยู่ตามทะเบียนบ้าน
+          registeredAddress: {
+            houseNumber: formData.registeredAddress?.houseNumber || '',
+            village: formData.registeredAddress?.village || '',
+            soi: formData.registeredAddress?.soi || '',
+            road: formData.registeredAddress?.road || '',
+            subDistrict: formData.registeredAddress?.subDistrict || '',
+            district: formData.registeredAddress?.district || '',
+            province: formData.registeredAddress?.province || '',
+            postalCode: formData.registeredAddress?.postalCode || '',
+            phone: formData.registeredAddress?.phone || ''
+          },
+          // ที่อยู่ฉุกเฉิน
+          emergencyAddress: {
+            houseNumber: formData.emergencyAddress?.houseNumber || '',
+            village: formData.emergencyAddress?.village || '',
+            soi: formData.emergencyAddress?.soi || '',
+            road: formData.emergencyAddress?.road || '',
+            subDistrict: formData.emergencyAddress?.subDistrict || '',
+            district: formData.emergencyAddress?.district || '',
+            province: formData.emergencyAddress?.province || '',
+            postalCode: formData.emergencyAddress?.postalCode || '',
+            phone: formData.emergencyAddress?.phone || ''
+          },
+          // ข้อมูลคู่สมรส
+          spouseInfo: {
+            firstName: formData.spouseInfo?.firstName || '',
+            lastName: formData.spouseInfo?.lastName || '',
+            phone: formData.spouseInfo?.phone || '',
+            occupation: formData.spouseInfo?.occupation || '',
+            workplace: formData.spouseInfo?.workplace || ''
+          },
+          // การศึกษา
+          education: formData.education?.map(e => ({
+            level: e.level || '',
+            institution: e.institution || '',
+            major: e.major || '',
+            startYear: e.startYear || null,
+            endYear: e.endYear || null,
+            gpa: e.gpa ? parseFloat(e.gpa) : null
+          })) || [],
+          // ประสบการณ์ทำงาน
+          workExperience: formData.workExperience?.map(w => ({
+            position: w.position || '',
+            company: w.company || '',
+            startDate: w.startDate ? new Date(w.startDate) : null,
+            endDate: w.endDate ? new Date(w.endDate) : null,
+            isCurrent: w.isCurrent || false,
+            description: w.description || '',
+            salary: w.salary || ''
+          })) || [],
+          // ประวัติการรับราชการ
+          previousGovernmentService: formData.previousGovernmentService?.map(g => ({
+            position: g.position || '',
+            department: g.department || '',
+            reason: g.reason || '',
+            date: g.date || ''
+          })) || [],
+          // ข้อมูลเพิ่มเติม
+          additionalInfo: {
+            skills: formData.additionalInfo?.skills || '',
+            languages: formData.additionalInfo?.languages || '',
+            certifications: formData.additionalInfo?.certifications || '',
+            interests: formData.additionalInfo?.interests || '',
+            references: formData.additionalInfo?.references || ''
+          },
+          // ข้อมูลเจ้าหน้าที่
+          staffInfo: formData.staffInfo ? {
+            employeeId: formData.staffInfo.employeeId || '',
+            position: formData.staffInfo.position || '',
+            department: formData.staffInfo.department || '',
+            startDate: formData.staffInfo.startDate ? new Date(formData.staffInfo.startDate) : null,
+            salary: formData.staffInfo.salary || ''
+          } : undefined
         };
 
-        const appRes = await fetch('/api/prisma/applications', {
+        const rdRes = await fetch('/api/resume-deposit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(initialPayload)
+          body: JSON.stringify(resumePayload)
         });
-
-        const appJson = await appRes.json().catch(() => ({}));
-        if (!appRes.ok) {
-          console.error('❌ ApplicationForm create failed:', appRes.status, appJson);
-          alert(appJson?.message || 'ไม่สามารถบันทึกข้อมูลสมัครงานได้');
+        const rdJson = await rdRes.json().catch(() => ({}));
+        if (!rdRes.ok) {
+          console.error('❌ ResumeDeposit create failed:', rdRes.status, rdJson);
+          alert(rdJson?.message || 'ไม่สามารถบันทึกข้อมูลฝากประวัติได้');
           setIsSaving(false);
           return;
         }
 
-        const applicationId = appJson?.data?.id;
-        console.log('✅ ApplicationForm created:', applicationId);
+        const resumeId = rdJson?.data?.id;
+        console.log('✅ ResumeDeposit created:', resumeId);
 
         // 2. อัปโหลดรูปโปรไฟล์ (ถ้ามี)
         if (formData.profileImage && formData.profileImage instanceof File) {
           try {
             const imgFd = new FormData();
             imgFd.append('profileImage', formData.profileImage);
-            imgFd.append('personalInfoId', applicationId);
+            imgFd.append('resumeId', resumeId);
 
-            const imgRes = await fetch('/api/upload-image', {
+            const imgRes = await fetch('/api/profile-image/upload', {
               method: 'POST',
               body: imgFd
             });
@@ -2540,11 +2950,11 @@ export default function ApplicationForm() {
             if (doc && doc instanceof File) {
               try {
                 const docFd = new FormData();
-                docFd.append('document', doc);
-                docFd.append('personalInfoId', applicationId);
+                docFd.append('file', doc);
+                docFd.append('resumeId', resumeId);
                 docFd.append('documentType', docType);
 
-                const docRes = await fetch('/api/documents/upload', {
+                const docRes = await fetch('/api/documents', {
                   method: 'POST',
                   body: docFd
                 });
@@ -2648,8 +3058,8 @@ export default function ApplicationForm() {
           })),
         };
 
-        const updateRes = await fetch(`/api/prisma/applications/${applicationId}`, {
-          method: 'PUT',
+        const updateRes = await fetch(`/api/resume-deposit/${resumeId}`, {
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(fullPayload)
         });
@@ -2662,19 +3072,17 @@ export default function ApplicationForm() {
           return;
         }
 
-        console.log('✅ ApplicationForm updated successfully');
-        alert('บันทึกใบสมัครงานสำเร็จ!');
+        console.log('✅ ResumeDeposit updated successfully');
+        alert('บันทึกข้อมูลฝากประวัติเรียบร้อยแล้ว!');
         
         // รีเฟรชหน้า หรือนำทางไปหน้าอื่น
         setTimeout(() => {
-          window.location.href = '/application-form';
+          window.location.href = '/dashboard';
         }, 1500);
         
         setIsSaving(false);
         return;
       }
-
-      // ========== โหมดฝากประวัติ: บันทึกไปที่ ResumeDeposit (เดิม) ==========
       console.log('📝 Saving to ResumeDeposit...');
       const resumePayload = {
         // บุคคล
@@ -6540,7 +6948,7 @@ export default function ApplicationForm() {
                 onClick={() => saveCurrentTab()}
                 disabled={isSaving}
               >
-                {isSaving ? 'กำลังบันทึกข้อมูล...' : 'บันทึกแท็บนี้ และไปแท็บถัดไป'}
+                {isSaving ? 'กำลังบันทึกข้อมูล...' : (activeTab === 'documents' ? 'บันทึกแท็บนี้' : 'บันทึกแท็บนี้ และไปแท็บถัดไป')}
                 
             </Button>
           </div>

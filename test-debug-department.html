@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Debug Department - ตรวจสอบปัญหา</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        .warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+        .debug { background: #e2e3e5; border: 1px solid #d6d8db; color: #383d41; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>Test Debug Department - ตรวจสอบปัญหา</h1>
+    
+    <div class="test-section">
+        <h2>ปัญหาที่พบ</h2>
+        <p><strong>register?resumeId</strong> ดึงข้อมูลได้ ✅</p>
+        <p><strong>register?department</strong> ดึงข้อมูลไม่ได้ ❌</p>
+        
+        <h3>สาเหตุที่เป็นไปได้:</h3>
+        <ul>
+            <li>1. เงื่อนไข <code>!resumeId</code> ใน useEffect</li>
+            <li>2. API /api/resume-deposit ไม่ทำงาน</li>
+            <li>3. การค้นหาใน client-side ไม่ถูกต้อง</li>
+            <li>4. ข้อมูลในฐานข้อมูลไม่ตรงกับที่ค้นหา</li>
+        </ul>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 1: Check API Endpoints</h2>
+        <button onclick="testAPIEndpoints()">Test All API Endpoints</button>
+        <div id="result1" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 2: Simulate register?resumeId</h2>
+        <input type="text" id="resumeIdInput" placeholder="Enter Resume ID" value="test123">
+        <button onclick="simulateResumeId()">Simulate register?resumeId</button>
+        <div id="result2" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 3: Simulate register?department</h2>
+        <input type="text" id="departmentInput" placeholder="Enter Department" value="IT">
+        <button onclick="simulateDepartment()">Simulate register?department</button>
+        <div id="result3" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 4: Debug Department Search Process</h2>
+        <p>จำลองการทำงานของ loadResumeByDepartment ทีละขั้นตอน</p>
+        <button onclick="debugDepartmentSearch()">Debug Department Search</button>
+        <div id="result4" class="result"></div>
+    </div>
+
+    <script>
+        let allResumeData = [];
+        
+        async function testAPIEndpoints() {
+            try {
+                console.log('🔍 Testing API endpoints...');
+                
+                // Test 1: Get all resume deposits
+                const allResponse = await fetch('/api/resume-deposit');
+                const allData = await allResponse.json();
+                
+                allResumeData = allData.data || allData || [];
+                
+                // Test 2: Get specific resume (if any data exists)
+                let specificResponse = null;
+                let specificData = null;
+                if (allResumeData.length > 0) {
+                    const firstId = allResumeData[0].id;
+                    specificResponse = await fetch(`/api/resume-deposit/${firstId}`);
+                    specificData = await specificResponse.json();
+                }
+                
+                let resultHTML = '<h3>API Test Results:</h3>';
+                
+                // All data test
+                resultHTML += '<h4>1. /api/resume-deposit (All Data)</h4>';
+                resultHTML += `<p>Status: ${allResponse.status}</p>`;
+                resultHTML += `<p>Records: ${allResumeData.length}</p>`;
+                if (allResponse.ok) {
+                    resultHTML += '<p class="success">✅ SUCCESS</p>';
+                } else {
+                    resultHTML += '<p class="error">❌ FAILED</p>';
+                }
+                
+                // Specific data test
+                if (specificResponse) {
+                    resultHTML += '<h4>2. /api/resume-deposit/{id} (Specific Data)</h4>';
+                    resultHTML += `<p>Status: ${specificResponse.status}</p>`;
+                    resultHTML += `<p>ID: ${allResumeData[0].id}</p>`;
+                    if (specificResponse.ok) {
+                        resultHTML += '<p class="success">✅ SUCCESS</p>';
+                    } else {
+                        resultHTML += '<p class="error">❌ FAILED</p>';
+                    }
+                }
+                
+                // Sample data
+                resultHTML += '<h4>3. Sample Data</h4>';
+                resultHTML += `<pre class="debug">${JSON.stringify(allResumeData.slice(0, 2), null, 2)}</pre>`;
+                
+                document.getElementById('result1').innerHTML = resultHTML;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result1').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function simulateResumeId() {
+            try {
+                const resumeId = document.getElementById('resumeIdInput').value;
+                console.log('🔍 Simulating register?resumeId:', resumeId);
+                
+                const response = await fetch(`/api/resume-deposit/${resumeId}`);
+                const data = await response.json();
+                
+                let resultHTML = `<h3>Simulate register?resumeId=${resumeId}</h3>`;
+                resultHTML += `<p><strong>API:</strong> /api/resume-deposit/${resumeId}</p>`;
+                resultHTML += `<p><strong>Status:</strong> ${response.status}</p>`;
+                
+                if (response.ok && data.success) {
+                    resultHTML += '<p class="success">✅ SUCCESS - Found data</p>';
+                    resultHTML += `<p><strong>Name:</strong> ${data.data.firstName} ${data.data.lastName}</p>`;
+                    resultHTML += `<p><strong>Email:</strong> ${data.data.email}</p>`;
+                    resultHTML += `<p><strong>ID:</strong> ${data.data.id}</p>`;
+                } else {
+                    resultHTML += '<p class="error">❌ FAILED - No data found</p>';
+                    resultHTML += `<p><strong>Message:</strong> ${data.message || 'Unknown error'}</p>`;
+                }
+                
+                resultHTML += `<pre class="debug">${JSON.stringify(data, null, 2)}</pre>`;
+                
+                document.getElementById('result2').innerHTML = resultHTML;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result2').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function simulateDepartment() {
+            try {
+                const departmentName = document.getElementById('departmentInput').value;
+                console.log('🔍 Simulating register?department:', departmentName);
+                
+                // Load all data first
+                if (allResumeData.length === 0) {
+                    await testAPIEndpoints();
+                }
+                
+                const list = allResumeData;
+                let found = null;
+                let searchMethod = '';
+                let searchSteps = [];
+                
+                // Step 1: Search by ID
+                searchSteps.push('1. ค้นหาตาม ID...');
+                if (departmentName) {
+                    const idMatch = list.find(r => r.id === departmentName);
+                    if (idMatch) {
+                        found = idMatch;
+                        searchMethod = 'ID';
+                        searchSteps.push(`   ✅ พบตาม ID: ${idMatch.id}`);
+                    } else {
+                        searchSteps.push(`   ❌ ไม่พบตาม ID: ${departmentName}`);
+                    }
+                }
+                
+                // Step 2: Search by department
+                if (!found) {
+                    searchSteps.push('2. ค้นหาตาม department...');
+                    const deptMatch = list.find(r => 
+                        (r?.department || '').toLowerCase() === departmentName.toLowerCase() ||
+                        (r?.appliedPosition || '').toLowerCase() === departmentName.toLowerCase()
+                    );
+                    if (deptMatch) {
+                        found = deptMatch;
+                        searchMethod = 'Department';
+                        searchSteps.push(`   ✅ พบตาม department: ${deptMatch.department}`);
+                    } else {
+                        searchSteps.push(`   ❌ ไม่พบตาม department: ${departmentName}`);
+                    }
+                }
+                
+                // Step 3: Search by first name
+                if (!found) {
+                    searchSteps.push('3. ค้นหาตามชื่อ...');
+                    const nameMatch = list.find(r => {
+                        const rFirstName = (r?.firstName || '').trim();
+                        return rFirstName.toLowerCase() === departmentName.toLowerCase();
+                    });
+                    if (nameMatch) {
+                        found = nameMatch;
+                        searchMethod = 'First Name';
+                        searchSteps.push(`   ✅ พบตามชื่อ: ${nameMatch.firstName}`);
+                    } else {
+                        searchSteps.push(`   ❌ ไม่พบตามชื่อ: ${departmentName}`);
+                    }
+                }
+                
+                let resultHTML = `<h3>Simulate register?department=${departmentName}</h3>`;
+                resultHTML += `<p><strong>API:</strong> /api/resume-deposit (ทั้งหมด)</p>`;
+                resultHTML += `<p><strong>Total records:</strong> ${list.length}</p>`;
+                
+                resultHTML += '<h4>Search Steps:</h4>';
+                resultHTML += `<pre class="debug">${searchSteps.join('\n')}</pre>`;
+                
+                if (found) {
+                    resultHTML += '<p class="success">✅ SUCCESS - Found data</p>';
+                    resultHTML += `<p><strong>Method:</strong> ${searchMethod}</p>`;
+                    resultHTML += `<p><strong>Name:</strong> ${found.firstName} ${found.lastName}</p>`;
+                    resultHTML += `<p><strong>Email:</strong> ${found.email}</p>`;
+                    resultHTML += `<p><strong>ID:</strong> ${found.id}</p>`;
+                } else {
+                    resultHTML += '<p class="error">❌ FAILED - No data found</p>';
+                    resultHTML += '<p><strong>Available IDs:</strong> ' + list.map(r => r.id).join(', ') + '</p>';
+                    resultHTML += '<p><strong>Available Departments:</strong> ' + list.map(r => r.department).filter(d => d).join(', ') + '</p>';
+                }
+                
+                document.getElementById('result3').innerHTML = resultHTML;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result3').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function debugDepartmentSearch() {
+            try {
+                console.log('🔍 Debugging department search process...');
+                
+                // Load all data first
+                if (allResumeData.length === 0) {
+                    await testAPIEndpoints();
+                }
+                
+                const departmentName = 'IT';
+                const list = allResumeData;
+                
+                let resultHTML = '<h3>Debug Department Search Process</h3>';
+                resultHTML += `<p><strong>Department Name:</strong> ${departmentName}</p>`;
+                resultHTML += `<p><strong>Total Records:</strong> ${list.length}</p>`;
+                
+                // Show all available data
+                resultHTML += '<h4>Available Data:</h4>';
+                resultHTML += '<table border="1" style="border-collapse: collapse; width: 100%;">';
+                resultHTML += '<tr><th>ID</th><th>Name</th><th>Email</th><th>Department</th><th>Applied Position</th></tr>';
+                list.forEach(r => {
+                    resultHTML += `<tr>`;
+                    resultHTML += `<td>${r.id || 'N/A'}</td>`;
+                    resultHTML += `<td>${r.firstName || ''} ${r.lastName || ''}</td>`;
+                    resultHTML += `<td>${r.email || 'N/A'}</td>`;
+                    resultHTML += `<td>${r.department || 'N/A'}</td>`;
+                    resultHTML += `<td>${r.appliedPosition || 'N/A'}</td>`;
+                    resultHTML += `</tr>`;
+                });
+                resultHTML += '</table>';
+                
+                // Test each search method
+                resultHTML += '<h4>Search Method Tests:</h4>';
+                
+                // Method 1: ID
+                const idMatch = list.find(r => r.id === departmentName);
+                resultHTML += `<p><strong>1. ID Match:</strong> ${idMatch ? '✅ Found' : '❌ Not Found'}</p>`;
+                if (idMatch) {
+                    resultHTML += `<p>   Found: ${idMatch.firstName} ${idMatch.lastName}</p>`;
+                }
+                
+                // Method 2: Department
+                const deptMatch = list.find(r => 
+                    (r?.department || '').toLowerCase() === departmentName.toLowerCase() ||
+                    (r?.appliedPosition || '').toLowerCase() === departmentName.toLowerCase()
+                );
+                resultHTML += `<p><strong>2. Department Match:</strong> ${deptMatch ? '✅ Found' : '❌ Not Found'}</p>`;
+                if (deptMatch) {
+                    resultHTML += `<p>   Found: ${deptMatch.firstName} ${deptMatch.lastName} (${deptMatch.department})</p>`;
+                }
+                
+                // Method 3: First Name
+                const nameMatch = list.find(r => {
+                    const rFirstName = (r?.firstName || '').trim();
+                    return rFirstName.toLowerCase() === departmentName.toLowerCase();
+                });
+                resultHTML += `<p><strong>3. Name Match:</strong> ${nameMatch ? '✅ Found' : '❌ Not Found'}</p>`;
+                if (nameMatch) {
+                    resultHTML += `<p>   Found: ${nameMatch.firstName} ${nameMatch.lastName}</p>`;
+                }
+                
+                // Summary
+                const found = idMatch || deptMatch || nameMatch;
+                resultHTML += '<h4>Summary:</h4>';
+                if (found) {
+                    resultHTML += '<p class="success">✅ Data found - Department search should work</p>';
+                } else {
+                    resultHTML += '<p class="error">❌ No data found - Department search will fail</p>';
+                    resultHTML += '<p class="warning">💡 Try using an existing ID or department name from the table above</p>';
+                }
+                
+                document.getElementById('result4').innerHTML = resultHTML;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result4').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

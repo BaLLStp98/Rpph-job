@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Department Search - ค้นหาตามหลายวิธี</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        .warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+        .search-method { margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+    <h1>Test Department Search - ค้นหาตามหลายวิธี</h1>
+    
+    <div class="test-section">
+        <h2>วิธีการค้นหาของ register?department</h2>
+        <p>ระบบจะค้นหาตามลำดับความสำคัญ:</p>
+        
+        <div class="search-method">
+            <h3>วิธีที่ 1: ค้นหาตาม ID</h3>
+            <p>ค้นหา ResumeDeposit ที่มี ID = departmentName</p>
+            <code>list.find(r => r.id === departmentName)</code>
+        </div>
+        
+        <div class="search-method">
+            <h3>วิธีที่ 2: ค้นหาตามอีเมล</h3>
+            <p>ค้นหาตามอีเมลของผู้ใช้จาก session</p>
+            <code>list.find(r => r.email === userEmail)</code>
+        </div>
+        
+        <div class="search-method">
+            <h3>วิธีที่ 3: ค้นหาตามชื่อและนามสกุล</h3>
+            <p>ค้นหาตามชื่อและนามสกุลจาก session</p>
+            <code>list.find(r => r.firstName === firstName && r.lastName === lastName)</code>
+        </div>
+        
+        <div class="search-method">
+            <h3>วิธีที่ 4: ค้นหาตามชื่อเท่านั้น</h3>
+            <p>ค้นหาตามชื่อเท่านั้น (ถ้าไม่พบตามชื่อและนามสกุล)</p>
+            <code>list.find(r => r.firstName === firstName)</code>
+        </div>
+        
+        <div class="search-method">
+            <h3>วิธีที่ 5: ค้นหาตาม department</h3>
+            <p>ค้นหาตาม department หรือ appliedPosition ในข้อมูล</p>
+            <code>list.find(r => r.department === departmentName || r.appliedPosition === departmentName)</code>
+        </div>
+        
+        <div class="search-method">
+            <h3>วิธีที่ 6: ค้นหาตามเบอร์โทร</h3>
+            <p>ค้นหาตามเบอร์โทร (ถ้าอีเมลเป็นรูปแบบ phone@domain.com)</p>
+            <code>list.find(r => r.phone.includes(phoneFromEmail))</code>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test API Data</h2>
+        <button onclick="testResumeDepositAPI()">Load ResumeDeposit Data</button>
+        <div id="result1" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Search Methods</h2>
+        <p>ทดสอบการค้นหาตามแต่ละวิธี</p>
+        
+        <h3>Mock User Data:</h3>
+        <input type="email" id="userEmail" placeholder="User Email" value="john.doe@example.com">
+        <input type="text" id="userName" placeholder="User Name" value="John Doe">
+        <input type="text" id="departmentName" placeholder="Department Name" value="IT">
+        
+        <button onclick="testAllSearchMethods()">Test All Search Methods</button>
+        <div id="result2" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Simulate register?department</h2>
+        <p>จำลองการทำงานของ register?department=IT</p>
+        <button onclick="simulateRegisterDepartment()">Simulate register?department=IT</button>
+        <div id="result3" class="result"></div>
+    </div>
+
+    <script>
+        let resumeData = [];
+        
+        async function testResumeDepositAPI() {
+            try {
+                console.log('🔍 Loading ResumeDeposit data...');
+                const response = await fetch('/api/resume-deposit');
+                const data = await response.json();
+                
+                resumeData = data.data || data || [];
+                console.log('Resume data loaded:', resumeData);
+                
+                document.getElementById('result1').innerHTML = `
+                    <h3>API Status: ${response.status}</h3>
+                    <p>Total records: ${resumeData.length}</p>
+                    <p class="success">✅ ข้อมูลโหลดสำเร็จ</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result1').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function testAllSearchMethods() {
+            try {
+                const userEmail = document.getElementById('userEmail').value;
+                const userName = document.getElementById('userName').value;
+                const departmentName = document.getElementById('departmentName').value;
+                
+                console.log('🔍 Testing search methods...');
+                console.log('User data:', { userEmail, userName, departmentName });
+                
+                if (resumeData.length === 0) {
+                    await testResumeDepositAPI();
+                }
+                
+                const list = resumeData;
+                let found = null;
+                let searchResults = [];
+                
+                // แยกชื่อและนามสกุล
+                const nameParts = userName.trim().split(' ');
+                const firstName = nameParts[0] || '';
+                const lastName = nameParts.slice(1).join(' ') || '';
+                
+                // วิธีที่ 1: ค้นหาตาม ID
+                if (departmentName) {
+                    const idMatch = list.find(r => r.id === departmentName);
+                    searchResults.push({
+                        method: '1. ค้นหาตาม ID',
+                        found: !!idMatch,
+                        data: idMatch
+                    });
+                    if (idMatch) found = idMatch;
+                }
+                
+                // วิธีที่ 2: ค้นหาตามอีเมล
+                if (!found && userEmail) {
+                    const emailMatch = list.find(r => 
+                        (r?.email || '').toLowerCase() === userEmail.toLowerCase()
+                    );
+                    searchResults.push({
+                        method: '2. ค้นหาตามอีเมล',
+                        found: !!emailMatch,
+                        data: emailMatch
+                    });
+                    if (emailMatch) found = emailMatch;
+                }
+                
+                // วิธีที่ 3: ค้นหาตามชื่อและนามสกุล
+                if (!found && firstName && lastName) {
+                    const nameMatch = list.find(r => {
+                        const rFirstName = (r?.firstName || '').trim();
+                        const rLastName = (r?.lastName || '').trim();
+                        return rFirstName.toLowerCase() === firstName.toLowerCase() && 
+                               rLastName.toLowerCase() === lastName.toLowerCase();
+                    });
+                    searchResults.push({
+                        method: '3. ค้นหาตามชื่อและนามสกุล',
+                        found: !!nameMatch,
+                        data: nameMatch
+                    });
+                    if (nameMatch) found = nameMatch;
+                }
+                
+                // วิธีที่ 4: ค้นหาตามชื่อเท่านั้น
+                if (!found && firstName) {
+                    const firstNameMatch = list.find(r => {
+                        const rFirstName = (r?.firstName || '').trim();
+                        return rFirstName.toLowerCase() === firstName.toLowerCase();
+                    });
+                    searchResults.push({
+                        method: '4. ค้นหาตามชื่อเท่านั้น',
+                        found: !!firstNameMatch,
+                        data: firstNameMatch
+                    });
+                    if (firstNameMatch) found = firstNameMatch;
+                }
+                
+                // วิธีที่ 5: ค้นหาตาม department
+                if (!found && departmentName) {
+                    const deptMatch = list.find(r => 
+                        (r?.department || '').toLowerCase() === departmentName.toLowerCase() ||
+                        (r?.appliedPosition || '').toLowerCase() === departmentName.toLowerCase()
+                    );
+                    searchResults.push({
+                        method: '5. ค้นหาตาม department',
+                        found: !!deptMatch,
+                        data: deptMatch
+                    });
+                    if (deptMatch) found = deptMatch;
+                }
+                
+                // วิธีที่ 6: ค้นหาตามเบอร์โทร
+                if (!found && userEmail) {
+                    const phoneFromEmail = userEmail.split('@')[0];
+                    if (phoneFromEmail && phoneFromEmail.length >= 10) {
+                        const phoneMatch = list.find(r => 
+                            (r?.phone || '').includes(phoneFromEmail) ||
+                            (r?.phone || '').replace(/[-\s]/g, '') === phoneFromEmail.replace(/[-\s]/g, '')
+                        );
+                        searchResults.push({
+                            method: '6. ค้นหาตามเบอร์โทร',
+                            found: !!phoneMatch,
+                            data: phoneMatch
+                        });
+                        if (phoneMatch) found = phoneMatch;
+                    }
+                }
+                
+                // แสดงผลลัพธ์
+                let resultHTML = '<h3>ผลการค้นหา:</h3>';
+                searchResults.forEach(result => {
+                    const status = result.found ? '✅' : '❌';
+                    resultHTML += `<p>${status} ${result.method}: ${result.found ? 'พบข้อมูล' : 'ไม่พบข้อมูล'}</p>`;
+                    if (result.found && result.data) {
+                        resultHTML += `<p style="margin-left: 20px;">ID: ${result.data.id}, Name: ${result.data.firstName} ${result.data.lastName}</p>`;
+                    }
+                });
+                
+                if (found) {
+                    resultHTML += `<p class="success">🎉 พบข้อมูลสำเร็จ! ใช้วิธี: ${searchResults.find(r => r.found)?.method}</p>`;
+                    resultHTML += `<pre>${JSON.stringify(found, null, 2)}</pre>`;
+                } else {
+                    resultHTML += `<p class="warning">⚠️ ไม่พบข้อมูลในทุกวิธี</p>`;
+                }
+                
+                document.getElementById('result2').innerHTML = resultHTML;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result2').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function simulateRegisterDepartment() {
+            try {
+                console.log('🔍 Simulating register?department=IT...');
+                
+                // Mock session data
+                const mockSession = {
+                    user: {
+                        email: 'john.doe@example.com',
+                        name: 'John Doe'
+                    }
+                };
+                
+                const userEmail = mockSession.user.email;
+                const userName = mockSession.user.name;
+                const departmentName = 'IT';
+                
+                console.log('Mock data:', { userEmail, userName, departmentName });
+                
+                // Load resume data
+                if (resumeData.length === 0) {
+                    await testResumeDepositAPI();
+                }
+                
+                const list = resumeData;
+                let found = null;
+                let searchMethod = '';
+                
+                // Simulate the search process
+                const nameParts = userName.trim().split(' ');
+                const firstName = nameParts[0] || '';
+                const lastName = nameParts.slice(1).join(' ') || '';
+                
+                // Method 1: ID
+                if (departmentName) {
+                    const idMatch = list.find(r => r.id === departmentName);
+                    if (idMatch) {
+                        found = idMatch;
+                        searchMethod = 'ID';
+                    }
+                }
+                
+                // Method 2: Email
+                if (!found && userEmail) {
+                    const emailMatch = list.find(r => 
+                        (r?.email || '').toLowerCase() === userEmail.toLowerCase()
+                    );
+                    if (emailMatch) {
+                        found = emailMatch;
+                        searchMethod = 'อีเมล';
+                    }
+                }
+                
+                // Method 3: Name
+                if (!found && firstName && lastName) {
+                    const nameMatch = list.find(r => {
+                        const rFirstName = (r?.firstName || '').trim();
+                        const rLastName = (r?.lastName || '').trim();
+                        return rFirstName.toLowerCase() === firstName.toLowerCase() && 
+                               rLastName.toLowerCase() === lastName.toLowerCase();
+                    });
+                    if (nameMatch) {
+                        found = nameMatch;
+                        searchMethod = 'ชื่อและนามสกุล';
+                    }
+                }
+                
+                // Method 4: First name only
+                if (!found && firstName) {
+                    const firstNameMatch = list.find(r => {
+                        const rFirstName = (r?.firstName || '').trim();
+                        return rFirstName.toLowerCase() === firstName.toLowerCase();
+                    });
+                    if (firstNameMatch) {
+                        found = firstNameMatch;
+                        searchMethod = 'ชื่อเท่านั้น';
+                    }
+                }
+                
+                // Method 5: Department
+                if (!found && departmentName) {
+                    const deptMatch = list.find(r => 
+                        (r?.department || '').toLowerCase() === departmentName.toLowerCase() ||
+                        (r?.appliedPosition || '').toLowerCase() === departmentName.toLowerCase()
+                    );
+                    if (deptMatch) {
+                        found = deptMatch;
+                        searchMethod = 'department';
+                    }
+                }
+                
+                if (found) {
+                    document.getElementById('result3').innerHTML = `
+                        <h3>✅ register?department สำเร็จ</h3>
+                        <p class="success">พบข้อมูลฝากประวัติโดยใช้วิธี: ${searchMethod}</p>
+                        <p><strong>Department:</strong> ${departmentName}</p>
+                        <p><strong>Resume ID:</strong> ${found.id}</p>
+                        <p><strong>Name:</strong> ${found.firstName} ${found.lastName}</p>
+                        <p><strong>Email:</strong> ${found.email}</p>
+                        <p><strong>Phone:</strong> ${found.phone || 'N/A'}</p>
+                        <p><strong>Department in Data:</strong> ${found.department || 'N/A'}</p>
+                        <p><strong>Applied Position:</strong> ${found.appliedPosition || 'N/A'}</p>
+                        <pre>${JSON.stringify(found, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('result3').innerHTML = `
+                        <h3>ℹ️ ไม่พบข้อมูลฝากประวัติ</h3>
+                        <p class="info">ไม่พบข้อมูลในทุกวิธี แต่จะตั้งค่า department = "${departmentName}" ในฟอร์ม</p>
+                        <p>ผู้ใช้อาจเป็นผู้ใช้ใหม่ที่ยังไม่เคยฝากประวัติ</p>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result3').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

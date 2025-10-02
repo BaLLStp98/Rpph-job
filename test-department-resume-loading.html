@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบการโหลดข้อมูลฝากประวัติผ่าน Department</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+        .test-section h3 {
+            color: #34495e;
+            margin-top: 0;
+        }
+        .test-link {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 5px;
+            transition: background-color 0.3s;
+        }
+        .test-link:hover {
+            background-color: #2980b9;
+        }
+        .test-link.department {
+            background-color: #e74c3c;
+        }
+        .test-link.department:hover {
+            background-color: #c0392b;
+        }
+        .test-link.resume {
+            background-color: #27ae60;
+        }
+        .test-link.resume:hover {
+            background-color: #229954;
+        }
+        .description {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .code {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .note {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 ทดสอบการโหลดข้อมูลฝากประวัติผ่าน Department</h1>
+        
+        <div class="description">
+            <strong>📋 วัตถุประสงค์:</strong> ทดสอบการทำงานของระบบ register?department ให้สามารถดึงข้อมูลฝากประวัติเหมือนกับ register?resumeId
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 การแก้ไขที่ทำ</h3>
+            <ul>
+                <li>✅ เพิ่มการตรวจสอบ <code>departmentId</code> ใน URL parameters</li>
+                <li>✅ ปรับปรุงฟังก์ชัน <code>loadResumeByDepartment</code> ให้ใช้ <code>departmentId</code> เป็นหลัก</li>
+                <li>✅ เพิ่มการตั้งค่า <code>departmentId</code> ใน form data</li>
+                <li>✅ ปรับปรุงตรรกะการค้นหาข้อมูลให้มีประสิทธิภาพมากขึ้น</li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 ทดสอบการโหลดข้อมูลฝากประวัติ</h3>
+            <p>คลิกที่ลิงก์ด้านล่างเพื่อทดสอบการโหลดข้อมูลฝากประวัติผ่าน URL parameters ต่างๆ:</p>
+            
+            <div class="note">
+                <strong>⚠️ หมายเหตุ:</strong> ต้องเข้าสู่ระบบก่อนทดสอบ และต้องมีข้อมูลฝากประวัติในระบบ
+            </div>
+
+            <h4>1. ทดสอบด้วย Department Name</h4>
+            <a href="/register?department=แผนกเทคโนโลยี" class="test-link department">
+                ทดสอบ: ?department=แผนกเทคโนโลยี
+            </a>
+            <a href="/register?department=แผนกการเงิน" class="test-link department">
+                ทดสอบ: ?department=แผนกการเงิน
+            </a>
+
+            <h4>2. ทดสอบด้วย Department ID</h4>
+            <a href="/register?departmentId=cm123456789" class="test-link department">
+                ทดสอบ: ?departmentId=cm123456789
+            </a>
+            <a href="/register?departmentId=cm987654321" class="test-link department">
+                ทดสอบ: ?departmentId=cm987654321
+            </a>
+
+            <h4>3. ทดสอบด้วยทั้ง Department Name และ ID</h4>
+            <a href="/register?department=แผนกทรัพยากรบุคคล&departmentId=cm123456789" class="test-link department">
+                ทดสอบ: ?department=แผนกทรัพยากรบุคคล&departmentId=cm123456789
+            </a>
+
+            <h4>4. ทดสอบด้วย Resume ID (เปรียบเทียบ)</h4>
+            <a href="/register?resumeId=cm123456789" class="test-link resume">
+                ทดสอบ: ?resumeId=cm123456789
+            </a>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 วิธีการทดสอบ</h3>
+            <ol>
+                <li><strong>เข้าสู่ระบบ:</strong> ต้องเข้าสู่ระบบก่อนทดสอบ</li>
+                <li><strong>คลิกลิงก์ทดสอบ:</strong> คลิกที่ลิงก์ทดสอบด้านบน</li>
+                <li><strong>ตรวจสอบ Console:</strong> เปิด Developer Tools (F12) และดู Console logs</li>
+                <li><strong>ตรวจสอบข้อมูล:</strong> ดูว่าข้อมูลฝากประวัติถูกโหลดและแสดงในฟอร์มหรือไม่</li>
+                <li><strong>ตรวจสอบ Department:</strong> ดูว่า department ถูกตั้งค่าจาก URL parameter หรือไม่</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 ข้อมูลที่ควรเห็นใน Console</h3>
+            <div class="code">
+🔍 พบ department ใน URL: { departmentName: "แผนกเทคโนโลยี", departmentId: "cm123456789" }
+🔄 loadResumeByDepartment เริ่มทำงาน
+🔍 ข้อมูลผู้ใช้: { email: "user@example.com", name: "John Doe", departmentName: "แผนกเทคโนโลยี", departmentId: "cm123456789" }
+🔍 ข้อมูลที่ได้รับ: 5 รายการ
+✅ พบข้อมูลตาม departmentId: cm123456789
+✅ พบข้อมูลฝากประวัติ: { id: "cm123456789", name: "John Doe", email: "user@example.com" }
+✅ ตั้งค่า department จาก URL parameter: แผนกเทคโนโลยี
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>✅ เกณฑ์การผ่านการทดสอบ</h3>
+            <ul>
+                <li>✅ ระบบสามารถดึงข้อมูลฝากประวัติตาม <code>departmentId</code> ได้</li>
+                <li>✅ ระบบสามารถดึงข้อมูลฝากประวัติตาม <code>departmentName</code> ได้</li>
+                <li>✅ ข้อมูลฝากประวัติถูกแสดงในฟอร์มอย่างถูกต้อง</li>
+                <li>✅ Department ถูกตั้งค่าจาก URL parameter</li>
+                <li>✅ ไม่มี error ใน Console</li>
+                <li>✅ ระบบทำงานเหมือนกับ <code>?resumeId</code></li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h3>🐛 การแก้ไขปัญหา</h3>
+            <p>หากพบปัญหา ให้ตรวจสอบ:</p>
+            <ul>
+                <li>🔍 <strong>Console Logs:</strong> ดู error messages ใน Console</li>
+                <li>🔍 <strong>Network Tab:</strong> ตรวจสอบ API calls ใน Developer Tools</li>
+                <li>🔍 <strong>Database:</strong> ตรวจสอบว่ามีข้อมูลฝากประวัติในระบบหรือไม่</li>
+                <li>🔍 <strong>Authentication:</strong> ตรวจสอบว่าผู้ใช้เข้าสู่ระบบแล้วหรือไม่</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Compare Methods - resumeId vs department</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        .method { margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+    <h1>Test Compare Methods - resumeId vs department</h1>
+    
+    <div class="test-section">
+        <h2>เปรียบเทียบวิธีการทำงาน</h2>
+        
+        <div class="method">
+            <h3>register?resumeId=123 (ทำงานได้)</h3>
+            <p><strong>API:</strong> /api/resume-deposit/123</p>
+            <p><strong>วิธี:</strong> เรียก API โดยตรงด้วย ID</p>
+            <p><strong>ข้อดี:</strong> เร็ว, ตรงไปตรงมา</p>
+            <p><strong>ข้อเสีย:</strong> ต้องรู้ ID ที่ถูกต้อง</p>
+        </div>
+        
+        <div class="method">
+            <h3>register?department=IT (ไม่ทำงาน)</h3>
+            <p><strong>API:</strong> /api/resume-deposit (ดึงทั้งหมด)</p>
+            <p><strong>วิธี:</strong> ค้นหาใน client-side</p>
+            <p><strong>ข้อดี:</strong> ยืดหยุ่น, ค้นหาได้หลายวิธี</p>
+            <p><strong>ข้อเสีย:</strong> ช้า, ต้องโหลดข้อมูลทั้งหมด</p>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test API Endpoints</h2>
+        <button onclick="testAllResumeDeposits()">Load All Resume Deposits</button>
+        <div id="result1" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Specific Resume ID</h2>
+        <input type="text" id="resumeIdInput" placeholder="Enter Resume ID" value="test123">
+        <button onclick="testSpecificResumeId()">Test Specific Resume ID</button>
+        <div id="result2" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Department Search</h2>
+        <input type="text" id="departmentInput" placeholder="Enter Department" value="IT">
+        <button onclick="testDepartmentSearch()">Test Department Search</button>
+        <div id="result3" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Compare Both Methods</h2>
+        <p>เปรียบเทียบการทำงานของทั้งสองวิธี</p>
+        <button onclick="compareBothMethods()">Compare Both Methods</button>
+        <div id="result4" class="result"></div>
+    </div>
+
+    <script>
+        let allResumeData = [];
+        
+        async function testAllResumeDeposits() {
+            try {
+                console.log('🔍 Loading all resume deposits...');
+                const response = await fetch('/api/resume-deposit');
+                const data = await response.json();
+                
+                allResumeData = data.data || data || [];
+                console.log('All resume data loaded:', allResumeData);
+                
+                document.getElementById('result1').innerHTML = `
+                    <h3>API Status: ${response.status}</h3>
+                    <p>Total records: ${allResumeData.length}</p>
+                    <p class="success">✅ ข้อมูลโหลดสำเร็จ</p>
+                    <p><strong>Sample data:</strong></p>
+                    <pre>${JSON.stringify(allResumeData.slice(0, 3), null, 2)}</pre>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result1').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function testSpecificResumeId() {
+            try {
+                const resumeId = document.getElementById('resumeIdInput').value;
+                console.log('🔍 Testing specific resume ID:', resumeId);
+                
+                const response = await fetch(`/api/resume-deposit/${resumeId}`);
+                const data = await response.json();
+                
+                console.log('Specific resume response:', data);
+                
+                if (response.ok && data.success) {
+                    document.getElementById('result2').innerHTML = `
+                        <h3>✅ register?resumeId=${resumeId} - SUCCESS</h3>
+                        <p class="success">พบข้อมูลฝากประวัติ</p>
+                        <p><strong>API:</strong> /api/resume-deposit/${resumeId}</p>
+                        <p><strong>Name:</strong> ${data.data.firstName} ${data.data.lastName}</p>
+                        <p><strong>Email:</strong> ${data.data.email}</p>
+                        <p><strong>ID:</strong> ${data.data.id}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('result2').innerHTML = `
+                        <h3>❌ register?resumeId=${resumeId} - FAILED</h3>
+                        <p class="error">ไม่พบข้อมูลฝากประวัติสำหรับ ID นี้</p>
+                        <p><strong>API:</strong> /api/resume-deposit/${resumeId}</p>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>Message:</strong> ${data.message || 'Unknown error'}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result2').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function testDepartmentSearch() {
+            try {
+                const departmentName = document.getElementById('departmentInput').value;
+                console.log('🔍 Testing department search:', departmentName);
+                
+                // Load all data first
+                if (allResumeData.length === 0) {
+                    await testAllResumeDeposits();
+                }
+                
+                const list = allResumeData;
+                let found = null;
+                let searchMethod = '';
+                
+                // Method 1: Search by ID
+                const idMatch = list.find(r => r.id === departmentName);
+                if (idMatch) {
+                    found = idMatch;
+                    searchMethod = 'ID';
+                }
+                
+                // Method 2: Search by department
+                if (!found) {
+                    const deptMatch = list.find(r => 
+                        (r?.department || '').toLowerCase() === departmentName.toLowerCase() ||
+                        (r?.appliedPosition || '').toLowerCase() === departmentName.toLowerCase()
+                    );
+                    if (deptMatch) {
+                        found = deptMatch;
+                        searchMethod = 'Department';
+                    }
+                }
+                
+                // Method 3: Search by first name
+                if (!found) {
+                    const nameMatch = list.find(r => {
+                        const rFirstName = (r?.firstName || '').trim();
+                        return rFirstName.toLowerCase() === departmentName.toLowerCase();
+                    });
+                    if (nameMatch) {
+                        found = nameMatch;
+                        searchMethod = 'First Name';
+                    }
+                }
+                
+                if (found) {
+                    document.getElementById('result3').innerHTML = `
+                        <h3>✅ register?department=${departmentName} - SUCCESS</h3>
+                        <p class="success">พบข้อมูลฝากประวัติโดยใช้วิธี: ${searchMethod}</p>
+                        <p><strong>API:</strong> /api/resume-deposit (ทั้งหมด)</p>
+                        <p><strong>Search Method:</strong> ${searchMethod}</p>
+                        <p><strong>Name:</strong> ${found.firstName} ${found.lastName}</p>
+                        <p><strong>Email:</strong> ${found.email}</p>
+                        <p><strong>ID:</strong> ${found.id}</p>
+                        <p><strong>Department:</strong> ${found.department || 'N/A'}</p>
+                        <pre>${JSON.stringify(found, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('result3').innerHTML = `
+                        <h3>❌ register?department=${departmentName} - FAILED</h3>
+                        <p class="error">ไม่พบข้อมูลฝากประวัติสำหรับ department นี้</p>
+                        <p><strong>API:</strong> /api/resume-deposit (ทั้งหมด)</p>
+                        <p><strong>Total records searched:</strong> ${list.length}</p>
+                        <p><strong>Available IDs:</strong> ${list.map(r => r.id).join(', ')}</p>
+                        <p><strong>Available Departments:</strong> ${list.map(r => r.department).filter(d => d).join(', ')}</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result3').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function compareBothMethods() {
+            try {
+                console.log('🔍 Comparing both methods...');
+                
+                // Load all data first
+                if (allResumeData.length === 0) {
+                    await testAllResumeDeposits();
+                }
+                
+                const list = allResumeData;
+                const resumeId = 'test123';
+                const departmentName = 'IT';
+                
+                let resultHTML = '<h3>Comparison Results:</h3>';
+                
+                // Test resumeId method
+                resultHTML += '<h4>1. register?resumeId=test123</h4>';
+                try {
+                    const resumeResponse = await fetch(`/api/resume-deposit/${resumeId}`);
+                    const resumeData = await resumeResponse.json();
+                    
+                    if (resumeResponse.ok && resumeData.success) {
+                        resultHTML += `<p class="success">✅ SUCCESS - Found by ID</p>`;
+                        resultHTML += `<p>Name: ${resumeData.data.firstName} ${resumeData.data.lastName}</p>`;
+                    } else {
+                        resultHTML += `<p class="error">❌ FAILED - ID not found</p>`;
+                        resultHTML += `<p>Status: ${resumeResponse.status}, Message: ${resumeData.message}</p>`;
+                    }
+                } catch (error) {
+                    resultHTML += `<p class="error">❌ ERROR - ${error.message}</p>`;
+                }
+                
+                // Test department method
+                resultHTML += '<h4>2. register?department=IT</h4>';
+                let found = null;
+                let searchMethod = '';
+                
+                // Search by ID
+                const idMatch = list.find(r => r.id === departmentName);
+                if (idMatch) {
+                    found = idMatch;
+                    searchMethod = 'ID';
+                }
+                
+                // Search by department
+                if (!found) {
+                    const deptMatch = list.find(r => 
+                        (r?.department || '').toLowerCase() === departmentName.toLowerCase() ||
+                        (r?.appliedPosition || '').toLowerCase() === departmentName.toLowerCase()
+                    );
+                    if (deptMatch) {
+                        found = deptMatch;
+                        searchMethod = 'Department';
+                    }
+                }
+                
+                if (found) {
+                    resultHTML += `<p class="success">✅ SUCCESS - Found by ${searchMethod}</p>`;
+                    resultHTML += `<p>Name: ${found.firstName} ${found.lastName}</p>`;
+                } else {
+                    resultHTML += `<p class="error">❌ FAILED - No match found</p>`;
+                    resultHTML += `<p>Available IDs: ${list.map(r => r.id).join(', ')}</p>`;
+                    resultHTML += `<p>Available Departments: ${list.map(r => r.department).filter(d => d).join(', ')}</p>`;
+                }
+                
+                // Summary
+                resultHTML += '<h4>Summary</h4>';
+                resultHTML += '<p><strong>register?resumeId:</strong> ใช้ API โดยตรง, เร็ว, แต่ต้องรู้ ID ที่ถูกต้อง</p>';
+                resultHTML += '<p><strong>register?department:</strong> ใช้ API ทั้งหมด, ช้า, แต่ยืดหยุ่น</p>';
+                resultHTML += '<p class="info">💡 <strong>Recommendation:</strong> ใช้ register?resumeId สำหรับ ID ที่รู้แน่นอน, ใช้ register?department สำหรับการค้นหาทั่วไป</p>';
+                
+                document.getElementById('result4').innerHTML = resultHTML;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result4').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
