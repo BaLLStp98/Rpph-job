@@ -1,0 +1,5 @@
+export { default as ProfileImageSection } from './ProfileImageSection'
+export { default as PersonalInfoSection } from './PersonalInfoSection'
+export { default as EducationSection } from './EducationSection'
+export { default as WorkExperienceSection } from './WorkExperienceSection'
+export { default as DocumentsSection } from './DocumentsSection'

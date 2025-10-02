@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Card,
   CardHeader,
@@ -566,7 +567,7 @@ const ApplicationFormView = ({
                )}
              </div>
              
-             <div>
+             {/* <div>
                <p className="text-sm font-medium text-gray-600 mb-1">อีเมล</p>
                {isEditing ? (
                  <input
@@ -578,7 +579,7 @@ const ApplicationFormView = ({
                ) : (
                  <p className="text-gray-800">{application.email}</p>
                )}
-             </div>
+             </div> */}
              
              <div>
                <p className="text-sm font-medium text-gray-600 mb-1">เบอร์โทรศัพท์</p>
@@ -1152,6 +1153,8 @@ export default function ApplicationData() {
   const [applications, setApplications] = useState<ApplicationData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const departmentName = searchParams.get('department');
   const [selectedApplication, setSelectedApplication] = useState<ApplicationData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -1260,130 +1263,141 @@ export default function ApplicationData() {
     try {
       setLoading(true);
       setError(null);
-      // ลองดึงจาก /api/register ก่อน (applications.json)
-      let response = await fetch('/api/register');
-      let data;
-      
-      if (response.ok) {
-        data = await response.json();
-        if (data && data.length > 0) {
-          // แปลงข้อมูลจาก applications.json ให้ตรงกับ interface
-          const applicationsData = data.map((app: any) => ({
-            id: app.id,
-            submittedAt: app.createdAt,
-            status: app.status,
-            prefix: app.prefix,
-            firstName: app.firstName,
-            lastName: app.lastName,
-            appliedPosition: app.workList?.[0]?.position || 'ไม่ระบุ',
-            expectedSalary: app.workList?.[0]?.salary || 'ไม่ระบุ',
-            email: app.email,
-            phone: app.phone,
-            currentAddress: `${app.address} ${app.subDistrict} ${app.district} ${app.province} ${app.postalCode}`,
-            birthDate: app.birthDate,
-            gender: app.gender,
-            education: app.educationList || [],
-            workExperience: app.workList || [],
-            profileImage: app.profileImageUrl || app.profileImage, // ใช้ profileImageUrl ก่อน แล้วจึงใช้ profileImage
-            documents: {}
-          }));
-          
-          console.log('🔄 Converted applications data:', applicationsData);
-          console.log('📸 Profile images found:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage, profileImageUrl: app.profileImageUrl })));
-          console.log('🔍 Original data profileImageUrl:', data.map((app: any) => ({ id: app.id, profileImageUrl: app.profileImageUrl })));
-          console.log('🔍 Mapped profileImage:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-          
-          setApplications(applicationsData);
-          
-          // โหลดรูปภาพทันทีหลังจากได้ข้อมูล
-          if (applicationsData.length > 0) {
-            console.log('🔍 Found applications with profile images:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-            
-            const profileImages = applicationsData
-              .filter((app: any) => app.profileImage)
-              .map((app: any) => app.profileImage!);
-            
-            console.log('📸 Profile images to load:', profileImages);
-            
-            if (profileImages.length > 0) {
-              // เรียก API รูปภาพเพื่อตรวจสอบ - ใช้ /api/image เท่านั้น
-              const imagePromises = profileImages.map(async (imageName: string) => {
-                try {
-                  console.log(`🔄 Testing image from /api/image: ${imageName}`);
-                  const response = await fetch(`/api/image?file=${imageName}&t=${Date.now()}`);
-                  console.log(`📡 /api/image response for ${imageName}:`, response.status, response.ok);
-                  
-                  if (response.ok) {
-                    return { success: true, imageName, source: 'image' };
-                  }
-                  
-                  return { success: false, imageName, source: 'image-failed' };
-                } catch (error) {
-                  console.error(`❌ Error testing image ${imageName}:`, error);
-                  return { success: false, imageName, source: 'error' };
-                }
-              });
-              
-              Promise.all(imagePromises).then((results) => {
-                console.log('📊 Image test results:', results);
-                results.forEach((result) => {
-                  const app = applicationsData.find((app: any) => app.profileImage === result.imageName);
-                  if (app) {
-                    if (result.success) {
-                      setImageLoadStatus(prev => ({ ...prev, [`card-${app.id}`]: true }));
-                      setImageErrorStatus(prev => ({ ...prev, [`card-${app.id}`]: false }));
-                      console.log(`✅ Image status updated for ${app.id}: ${result.imageName} (source: ${result.source})`);
-                    } else {
-                      setImageLoadStatus(prev => ({ ...prev, [`card-${app.id}`]: false }));
-                      setImageErrorStatus(prev => ({ ...prev, [`card-${app.id}`]: true }));
-                      console.log(`❌ Image failed for ${app.id}: ${result.imageName} (source: ${result.source})`);
-                    }
-                  }
-                });
-                
-                // บังคับแสดงรูปภาพหลังจากโหลดเสร็จ
-                setTimeout(() => {
-                  console.log('🚀 Force showing images...');
-                  forceShowImages();
-                  
-                  // บังคับแสดงรูปภาพทันทีสำหรับแต่ละ application
-                  applicationsData.forEach((app: any) => {
-                    if (app.profileImage) {
-                      const cardImg = document.querySelector(`[data-image-id="card-${app.id}"]`) as HTMLImageElement;
-                      const fallback = document.querySelector(`[data-fallback-id="card-${app.id}"]`) as HTMLElement;
-                      
-                      if (cardImg) {
-                        cardImg.style.display = 'block';
-                        cardImg.style.visibility = 'visible';
-                        cardImg.style.opacity = '1';
-                        console.log(`🎯 Forced show image for ${app.id}: ${app.profileImage}`);
-                      }
-                      
-                      if (fallback) {
-                        fallback.style.display = 'none';
-                      }
-                    }
-                  });
-                }, 100);
-              });
-            }
-          }
-          return;
-        }
+      // สร้าง URL สำหรับดึงข้อมูลตาม department
+      let apiUrl = '/api/prisma/applications';
+      if (departmentName) {
+        apiUrl += `?department=${encodeURIComponent(departmentName)}`;
       }
       
-      // ถ้าไม่มีข้อมูลใน applications.json ให้ดึงจาก application-form
-      response = await fetch('/api/application-form');
+      console.log('🔄 Fetching data from:', apiUrl);
+      
+      const response = await fetch(apiUrl);
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
-      data = await response.json();
+      const data = await response.json();
       
-      if (data.applications && data.applications.length > 0) {
-        console.log('📋 Found data in application-forms.json:', data.applications.length, 'applications');
+      if (data && data.data && data.data.length > 0) {
+        console.log('📋 Found data from /api/prisma/applications:', data.data.length, 'applications');
         
-        const applicationsData = data.applications.map((app: any) => ({
+        // แปลงข้อมูลจาก prisma applications API ให้ตรงกับ interface
+        const applicationsData = data.data.map((app: any) => ({
+          id: app.id,
+          submittedAt: app.createdAt,
+          status: app.status || 'pending',
+          prefix: app.prefix || '',
+          firstName: app.firstName || '',
+          lastName: app.lastName || '',
+          appliedPosition: app.appliedPosition || 'ไม่ระบุ',
+          expectedSalary: app.expectedSalary || 'ไม่ระบุ',
+          email: app.email || '',
+          phone: app.phone || '',
+          currentAddress: app.currentAddress || '',
+          birthDate: app.birthDate || '',
+          gender: app.gender || '',
+          education: app.education || [],
+          workExperience: app.workExperience || [],
+          profileImage: app.profileImage || '',
+          documents: app.documents || {}
+        }));
+        
+        console.log('🔄 Converted applications data:', applicationsData);
+        console.log('📸 Profile images found:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
+        console.log('🔍 Original prisma data:', data.data.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
+        console.log('🔍 Mapped profileImage:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
+        
+        setApplications(applicationsData);
+        
+        // โหลดรูปภาพทันทีหลังจากได้ข้อมูล
+        if (applicationsData.length > 0) {
+          console.log('🔍 Found applications with profile images:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
+          
+          const profileImages = applicationsData
+            .filter((app: any) => app.profileImage)
+            .map((app: any) => app.profileImage!);
+          
+          console.log('📸 Profile images to load:', profileImages);
+          
+          if (profileImages.length > 0) {
+            // เรียก API รูปภาพเพื่อตรวจสอบ - ใช้ /api/image เท่านั้น
+            const imagePromises = profileImages.map(async (imageName: string) => {
+              try {
+                console.log(`🔄 Testing image from /api/image: ${imageName}`);
+                const response = await fetch(`/api/image?file=${imageName}&t=${Date.now()}`);
+                console.log(`📡 /api/image response for ${imageName}:`, response.status, response.ok);
+                
+                if (response.ok) {
+                  return { success: true, imageName, source: 'image' };
+                }
+                
+                return { success: false, imageName, source: 'image-failed' };
+              } catch (error) {
+                console.error(`❌ Error testing image ${imageName}:`, error);
+                return { success: false, imageName, source: 'error' };
+              }
+            });
+            
+            Promise.all(imagePromises).then((results) => {
+              console.log('📊 Image test results:', results);
+              results.forEach((result) => {
+                const app = applicationsData.find((app: any) => app.profileImage === result.imageName);
+                if (app) {
+                  if (result.success) {
+                    setImageLoadStatus(prev => ({ ...prev, [`card-${app.id}`]: true }));
+                    setImageErrorStatus(prev => ({ ...prev, [`card-${app.id}`]: false }));
+                    console.log(`✅ Image status updated for ${app.id}: ${result.imageName} (source: ${result.source})`);
+                  } else {
+                    setImageLoadStatus(prev => ({ ...prev, [`card-${app.id}`]: false }));
+                    setImageErrorStatus(prev => ({ ...prev, [`card-${app.id}`]: true }));
+                    console.log(`❌ Image failed for ${app.id}: ${result.imageName} (source: ${result.source})`);
+                  }
+                }
+              });
+              
+              // บังคับแสดงรูปภาพหลังจากโหลดเสร็จ
+              setTimeout(() => {
+                console.log('🚀 Force showing images...');
+                forceShowImages();
+                
+                // บังคับแสดงรูปภาพทันทีสำหรับแต่ละ application
+                applicationsData.forEach((app: any) => {
+                  if (app.profileImage) {
+                    const cardImg = document.querySelector(`[data-image-id="card-${app.id}"]`) as HTMLImageElement;
+                    const fallback = document.querySelector(`[data-fallback-id="card-${app.id}"]`) as HTMLElement;
+                    
+                    if (cardImg) {
+                      cardImg.style.display = 'block';
+                      cardImg.style.visibility = 'visible';
+                      cardImg.style.opacity = '1';
+                      console.log(`🎯 Forced show image for ${app.id}: ${app.profileImage}`);
+                    }
+                    
+                    if (fallback) {
+                      fallback.style.display = 'none';
+                    }
+                  }
+                });
+              }, 100);
+            });
+          }
+        }
+        return;
+      }
+      
+      // ถ้าไม่มีข้อมูลใน applications.json ให้ดึงจาก application-form
+      const applicationFormResponse = await fetch('/api/application-form');
+      if (!applicationFormResponse.ok) {
+        throw new Error(`HTTP error! status: ${applicationFormResponse.status}`);
+      }
+      
+      const applicationFormData = await applicationFormResponse.json();
+      
+      if (applicationFormData.applications && applicationFormData.applications.length > 0) {
+        console.log('📋 Found data in application-forms.json:', applicationFormData.applications.length, 'applications');
+        
+        const applicationsData = applicationFormData.applications.map((app: any) => ({
           id: app.id,
           submittedAt: app.submittedAt || app.createdAt || new Date().toISOString(),
           status: app.status || 'pending',
@@ -1405,7 +1419,7 @@ export default function ApplicationData() {
         
         console.log('🔄 Converted application-forms data:', applicationsData);
         console.log('📸 Profile images found:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-        console.log('🔍 Original application-forms data:', data.applications.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
+        console.log('🔍 Original application-forms data:', applicationFormData.applications.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
         
         setApplications(applicationsData);
         
@@ -1808,13 +1822,8 @@ export default function ApplicationData() {
               <DocumentTextIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-600 mb-2">ยังไม่มีข้อมูลใบสมัครงาน</h3>
               <p className="text-gray-500 mb-4">คุณยังไม่ได้ส่งใบสมัครงานใดๆ</p>
-              <Button
-                color="primary"
-                onClick={() => window.location.href = '/application-form'}
-                className="bg-gradient-to-r from-blue-500 to-purple-600"
-              >
-                สมัครงาน
-              </Button>
+              
+              
             </CardBody>
           </Card>
         ) : (
@@ -2148,10 +2157,10 @@ export default function ApplicationData() {
                         <span className="font-medium text-gray-700">ตำแหน่ง:</span>
                         <span className="ml-2 text-gray-600">{documentsView.application.appliedPosition}</span>
                       </div>
-                      <div>
+                      {/* <div>
                         <span className="font-medium text-gray-700">อีเมล:</span>
                         <span className="ml-2 text-gray-600">{documentsView.application.email}</span>
-                      </div>
+                      </div> */}
                       <div>
                         <span className="font-medium text-gray-700">เบอร์โทร:</span>
                         <span className="ml-2 text-gray-600">{documentsView.application.phone}</span>
@@ -2355,4 +2364,6 @@ export default function ApplicationData() {
       </div>
     </div>
   );
+  
 } 
+

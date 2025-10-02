@@ -13,32 +13,34 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // สร้าง connection ไปยัง MySQL
-    const connection = await mysql.createConnection({
-      host: 'localhost',
-      user: 'root',
-      password: '',
-      database: 'mydata'
-    });
+    // ใช้ DATABASE_URL จาก .env (ให้สอดคล้องกับ Prisma/ระบบ)
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      return NextResponse.json(
+        { success: false, message: 'ไม่ได้ตั้งค่า DATABASE_URL' },
+        { status: 500 }
+      );
+    }
 
-    // ดึงรายการเอกสาร
+    const connection = await mysql.createConnection(databaseUrl);
+
+    // ดึงรายการเอกสาร โดยอิงตาม schema: application_id, created_at
     const [documentRows] = await connection.execute(
-      'SELECT * FROM application_documents WHERE personal_info_id = ? ORDER BY upload_date DESC',
+      'SELECT id, application_id, document_type, file_name, file_path, file_size, mime_type, created_at FROM application_documents WHERE application_id = ? ORDER BY created_at DESC',
       [personalInfoId]
     );
 
     await connection.end();
 
-    // จัดรูปแบบข้อมูล
     const documents = (documentRows as any[]).map(doc => ({
       id: doc.id,
+      applicationId: doc.application_id,
       documentType: doc.document_type,
       fileName: doc.file_name,
       filePath: doc.file_path,
       fileSize: doc.file_size,
-      uploadDate: doc.upload_date,
-      status: doc.status,
-      notes: doc.notes
+      mimeType: doc.mime_type,
+      createdAt: doc.created_at,
     }));
 
     return NextResponse.json({

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   CardHeader,
@@ -20,8 +20,7 @@ import {
   ModalContent,
   ModalHeader,
   ModalBody,
-  ModalFooter,
-  Pagination
+  ModalFooter
 } from '@heroui/react';
 import {
   BuildingOfficeIcon,
@@ -33,7 +32,8 @@ import {
   ArrowLeftIcon,
   PlusIcon,
   PencilIcon,
-  TrashIcon
+  TrashIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 
 interface Department {
@@ -53,16 +53,202 @@ interface Department {
   education: string;
   gender: 'male' | 'female' | 'any';
   positions: string;
+  createdAt?: string;
+  updatedAt?: string;
+  missionGroupId?: string | null;
+  missionGroupName?: string | null;
+  // แนบไฟล์ของฝ่าย (ออปชัน) ใช้โครงสร้างให้สอดคล้องกับ API departments attachments
+  attachments?: { id?: number; fileName: string; filePath: string; originalName?: string; fileSize?: number; createdAt?: string }[];
 }
 
 const mockDepartments: Department[] = [
   {
     id: '1',
-    name: 'แผนกเทคโนโลยีสารสนเทศ',
+    name: 'ฝ่ายอายุรกรรม',
+    code: 'MED',
+    description: 'ให้บริการรักษาผู้ป่วยโรคภายใน ตรวจวินิจฉัย และให้คำปรึกษาทางการแพทย์',
+    manager: 'นพ.สมชาย ใจดี',
+    managerEmail: 'somchai.med@hospital.com',
+    managerPhone: '081-234-5678',
+    location: 'ชั้น 2 อาคารผู้ป่วยนอก',
+    employeeCount: 25,
+    status: 'active',
+    salary: '3,500,000 บาท',
+    applicationStartDate: '2024-01-15',
+    applicationEndDate: '2024-02-15',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือปริญญาตรี สาขาพยาบาลศาสตร์',
+    gender: 'any',
+    positions: 'แพทย์ผู้เชี่ยวชาญ, พยาบาลวิชาชีพ, เจ้าหน้าที่เทคนิคการแพทย์'
+  },
+  {
+    id: '2',
+    name: 'ฝ่ายศัลยกรรม',
+    code: 'SURG',
+    description: 'ให้บริการผ่าตัดรักษาโรคต่างๆ และการดูแลผู้ป่วยหลังผ่าตัด',
+    manager: 'นพ.สมหญิง รักดี',
+    managerEmail: 'somying.surg@hospital.com',
+    managerPhone: '082-345-6789',
+    location: 'ชั้น 3 อาคารผ่าตัด',
+    employeeCount: 30,
+    status: 'active',
+    salary: '4,000,000 บาท',
+    applicationStartDate: '2024-01-10',
+    applicationEndDate: '2024-02-10',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือปริญญาตรี สาขาพยาบาลศาสตร์',
+    gender: 'any',
+    positions: 'ศัลยแพทย์, พยาบาลผ่าตัด, เจ้าหน้าที่ห้องผ่าตัด'
+  },
+  {
+    id: '3',
+    name: 'ฝ่ายกุมารเวชกรรม',
+    code: 'PED',
+    description: 'ให้บริการรักษาและดูแลสุขภาพเด็กตั้งแต่แรกเกิดจนถึงวัยรุ่น',
+    manager: 'นพ.สมศักดิ์ ใจงาม',
+    managerEmail: 'somsak.ped@hospital.com',
+    managerPhone: '083-456-7890',
+    location: 'ชั้น 1 อาคารกุมารเวชกรรม',
+    employeeCount: 20,
+    status: 'active',
+    salary: '3,200,000 บาท',
+    applicationStartDate: '2024-01-20',
+    applicationEndDate: '2024-02-20',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือปริญญาตรี สาขาพยาบาลศาสตร์',
+    gender: 'any',
+    positions: 'กุมารแพทย์, พยาบาลกุมารเวช, เจ้าหน้าที่ดูแลเด็ก'
+  },
+  {
+    id: '4',
+    name: 'ฝ่ายสูติ-นรีเวชกรรม',
+    code: 'OBGYN',
+    description: 'ให้บริการดูแลสุขภาพสตรี ตั้งครรภ์ และการคลอดบุตร',
+    manager: 'นพ.สมพร ใจดี',
+    managerEmail: 'somporn.obgyn@hospital.com',
+    managerPhone: '084-567-8901',
+    location: 'ชั้น 2 อาคารสูติกรรม',
+    employeeCount: 18,
+    status: 'active',
+    salary: '3,800,000 บาท',
+    applicationStartDate: '2024-01-25',
+    applicationEndDate: '2024-02-25',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือปริญญาตรี สาขาพยาบาลศาสตร์',
+    gender: 'female',
+    positions: 'สูติ-นรีแพทย์, พยาบาลสูติกรรม, เจ้าหน้าที่ห้องคลอด'
+  },
+  {
+    id: '5',
+    name: 'ฝ่ายวิสัญญีวิทยา',
+    code: 'ANES',
+    description: 'ให้บริการการวางยาสลบและการดูแลผู้ป่วยระหว่างการผ่าตัด',
+    manager: 'นพ.สมหมาย ใจดี',
+    managerEmail: 'sommai.anes@hospital.com',
+    managerPhone: '085-678-9012',
+    location: 'ชั้น 3 อาคารผ่าตัด',
+    employeeCount: 12,
+    status: 'active',
+    salary: '4,500,000 บาท',
+    applicationStartDate: '2024-02-01',
+    applicationEndDate: '2024-03-01',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือปริญญาตรี สาขาพยาบาลศาสตร์',
+    gender: 'any',
+    positions: 'วิสัญญีแพทย์, พยาบาลวิสัญญี, เจ้าหน้าที่วิสัญญี'
+  },
+  {
+    id: '6',
+    name: 'ฝ่ายรังสีวิทยา',
+    code: 'RAD',
+    description: 'ให้บริการตรวจวินิจฉัยด้วยรังสี X-ray, CT, MRI และการรักษาด้วยรังสี',
+    manager: 'นพ.สมศักดิ์ ใจงาม',
+    managerEmail: 'somsak.rad@hospital.com',
+    managerPhone: '086-789-0123',
+    location: 'ชั้น 1 อาคารรังสีวิทยา',
+    employeeCount: 15,
+    status: 'active',
+    salary: '3,000,000 บาท',
+    applicationStartDate: '2024-02-05',
+    applicationEndDate: '2024-03-05',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือปริญญาตรี สาขาเทคนิคการแพทย์',
+    gender: 'any',
+    positions: 'รังสีแพทย์, เทคนิคการแพทย์รังสี, เจ้าหน้าที่รังสี'
+  },
+  {
+    id: '7',
+    name: 'ฝ่ายห้องปฏิบัติการ',
+    code: 'LAB',
+    description: 'ให้บริการตรวจวิเคราะห์ตัวอย่างเลือด ปัสสาวะ และตัวอย่างอื่นๆ',
+    manager: 'นพ.สมพร ใจดี',
+    managerEmail: 'somporn.lab@hospital.com',
+    managerPhone: '087-890-1234',
+    location: 'ชั้น 1 อาคารห้องปฏิบัติการ',
+    employeeCount: 22,
+    status: 'active',
+    salary: '2,800,000 บาท',
+    applicationStartDate: '2024-02-10',
+    applicationEndDate: '2024-03-10',
+    education: 'ปริญญาตรี สาขาเทคนิคการแพทย์ หรือสาขาที่เกี่ยวข้อง',
+    gender: 'any',
+    positions: 'เทคนิคการแพทย์, เจ้าหน้าที่ห้องปฏิบัติการ, นักวิทยาศาสตร์'
+  },
+  {
+    id: '8',
+    name: 'ฝ่ายเภสัชกรรม',
+    code: 'PHARM',
+    description: 'ให้บริการจัดยา ให้คำปรึกษาการใช้ยา และการตรวจสอบยาคุณภาพ',
+    manager: 'ภก.สมชาย ใจดี',
+    managerEmail: 'somchai.pharm@hospital.com',
+    managerPhone: '088-901-2345',
+    location: 'ชั้น 1 อาคารเภสัชกรรม',
+    employeeCount: 16,
+    status: 'active',
+    salary: '2,500,000 บาท',
+    applicationStartDate: '2024-02-15',
+    applicationEndDate: '2024-03-15',
+    education: 'ปริญญาตรี สาขาเภสัชศาสตร์ หรือสาขาที่เกี่ยวข้อง',
+    gender: 'any',
+    positions: 'เภสัชกร, เจ้าหน้าที่เภสัชกรรม, เจ้าหน้าที่จัดยา'
+  },
+  {
+    id: '9',
+    name: 'ฝ่ายพยาบาล',
+    code: 'NURSE',
+    description: 'ให้บริการดูแลผู้ป่วย ให้การพยาบาล และประสานงานกับทีมแพทย์',
+    manager: 'นางสาวสมหญิง รักดี',
+    managerEmail: 'somying.nurse@hospital.com',
+    managerPhone: '089-012-3456',
+    location: 'ทุกชั้นอาคารผู้ป่วย',
+    employeeCount: 80,
+    status: 'active',
+    salary: '1,800,000 บาท',
+    applicationStartDate: '2024-02-20',
+    applicationEndDate: '2024-03-20',
+    education: 'ปริญญาตรี สาขาพยาบาลศาสตร์ หรือประกาศนียบัตรพยาบาล',
+    gender: 'any',
+    positions: 'พยาบาลวิชาชีพ, พยาบาลผู้ช่วย, เจ้าหน้าที่พยาบาล'
+  },
+  {
+    id: '10',
+    name: 'ฝ่ายบริหาร',
+    code: 'ADMIN',
+    description: 'จัดการงานบริหาร งบประมาณ และการประสานงานระหว่างฝ่ายต่างๆ',
+    manager: 'นางสมพร ใจดี',
+    managerEmail: 'somporn.admin@hospital.com',
+    managerPhone: '090-123-4567',
+    location: 'ชั้น 4 อาคารบริหาร',
+    employeeCount: 12,
+    status: 'active',
+    salary: '2,200,000 บาท',
+    applicationStartDate: '2024-02-25',
+    applicationEndDate: '2024-03-25',
+    education: 'ปริญญาตรี สาขาบริหารธุรกิจ หรือสาขาที่เกี่ยวข้อง',
+    gender: 'any',
+    positions: 'เจ้าหน้าที่บริหาร, เจ้าหน้าที่งบประมาณ, เจ้าหน้าที่ประสานงาน'
+  },
+  {
+    id: '11',
+    name: 'ฝ่ายเทคโนโลยีสารสนเทศ',
     code: 'IT',
-    description: 'ดูแลระบบเทคโนโลยีสารสนเทศและการพัฒนาซอฟต์แวร์',
+    description: 'ดูแลระบบเทคโนโลยีสารสนเทศและการพัฒนาซอฟต์แวร์ของโรงพยาบาล',
     manager: 'นายสมชาย ใจดี',
-    managerEmail: 'somchai@company.com',
+    managerEmail: 'somchai.it@hospital.com',
     managerPhone: '081-234-5678',
     location: 'ชั้น 3 อาคาร A',
     employeeCount: 15,
@@ -75,12 +261,12 @@ const mockDepartments: Department[] = [
     positions: 'โปรแกรมเมอร์, นักวิเคราะห์ระบบ, ผู้ดูแลระบบ'
   },
   {
-    id: '2',
-    name: 'แผนกทรัพยากรบุคคล',
+    id: '12',
+    name: 'ฝ่ายทรัพยากรบุคคล',
     code: 'HR',
-    description: 'จัดการทรัพยากรบุคคล การสรรหา และการพัฒนาพนักงาน',
+    description: 'จัดการทรัพยากรบุคคล การสรรหา และการพัฒนาพนักงานของโรงพยาบาล',
     manager: 'นางสาวสมหญิง รักดี',
-    managerEmail: 'somying@company.com',
+    managerEmail: 'somying.hr@hospital.com',
     managerPhone: '082-345-6789',
     location: 'ชั้น 2 อาคาร B',
     employeeCount: 8,
@@ -93,136 +279,154 @@ const mockDepartments: Department[] = [
     positions: 'เจ้าหน้าที่ทรัพยากรบุคคล, นักสรรหาพนักงาน, ผู้ฝึกอบรม'
   },
   {
-    id: '3',
-    name: 'แผนกการเงินและบัญชี',
+    id: '13',
+    name: 'ฝ่ายการเงินและบัญชี',
     code: 'FIN',
-    description: 'จัดการด้านการเงิน การบัญชี และการวางแผนงบประมาณ',
-    manager: 'นายสมศักดิ์ เงินดี',
-    managerEmail: 'somsak@company.com',
-    managerPhone: '083-456-7890',
-    location: 'ชั้น 1 อาคาร A',
-    employeeCount: 12,
-    status: 'active',
-    salary: '1,800,000 บาท',
-    applicationStartDate: '2024-01-05',
-    applicationEndDate: '2024-02-05',
-    education: 'ปริญญาตรี สาขาบัญชีหรือการเงิน',
-    gender: 'any',
-    positions: 'นักบัญชี, นักวิเคราะห์การเงิน, เจ้าหน้าที่การเงิน'
-  },
-  {
-    id: '4',
-    name: 'แผนกการตลาด',
-    code: 'MKT',
-    description: 'วางแผนและดำเนินการด้านการตลาด การประชาสัมพันธ์',
-    manager: 'นางสาวสมปอง ดีใจ',
-    managerEmail: 'sompong@company.com',
-    managerPhone: '084-567-8901',
-    location: 'ชั้น 4 อาคาร B',
+    description: 'จัดการด้านการเงิน การบัญชี และการวางแผนงบประมาณของโรงพยาบาล',
+    manager: 'นางสมศักดิ์ เงินดี',
+    managerEmail: 'somsak.fin@hospital.com',
+    managerPhone: '091-234-5678',
+    location: 'ชั้น 4 อาคารบริหาร',
     employeeCount: 10,
     status: 'active',
     salary: '2,000,000 บาท',
-    applicationStartDate: '2024-01-20',
-    applicationEndDate: '2024-02-20',
-    education: 'ปริญญาตรี สาขาการตลาดหรือสาขาที่เกี่ยวข้อง',
+    applicationStartDate: '2024-03-01',
+    applicationEndDate: '2024-04-01',
+    education: 'ปริญญาตรี สาขาบัญชี หรือสาขาการเงิน',
     gender: 'any',
-    positions: 'นักการตลาด, นักประชาสัมพันธ์, นักออกแบบสื่อ'
+    positions: 'นักบัญชี, เจ้าหน้าที่การเงิน, เจ้าหน้าที่งบประมาณ'
   },
   {
-    id: '5',
-    name: 'แผนกผลิต',
-    code: 'PROD',
-    description: 'ดูแลกระบวนการผลิต การควบคุมคุณภาพ และการจัดการคลังสินค้า',
-    manager: 'นายสมพร ผลิตดี',
-    managerEmail: 'somporn@company.com',
-    managerPhone: '085-678-9012',
-    location: 'โรงงาน 1',
-    employeeCount: 45,
+    id: '14',
+    name: 'ฝ่ายโภชนาการ',
+    code: 'NUTRI',
+    description: 'ให้บริการอาหารและโภชนาการสำหรับผู้ป่วย และให้คำปรึกษาด้านโภชนาการ',
+    manager: 'นางสาวสมพร ใจดี',
+    managerEmail: 'somporn.nutri@hospital.com',
+    managerPhone: '092-345-6789',
+    location: 'ชั้น 1 อาคารโภชนาการ',
+    employeeCount: 14,
     status: 'active',
-    salary: '5,000,000 บาท',
-    applicationStartDate: '2024-01-08',
-    applicationEndDate: '2024-02-08',
-    education: 'ปริญญาตรี สาขาวิศวกรรมศาสตร์หรือสาขาที่เกี่ยวข้อง',
-    gender: 'male',
-    positions: 'วิศวกรผลิต, เจ้าหน้าที่ควบคุมคุณภาพ, พนักงานผลิต'
+    salary: '1,800,000 บาท',
+    applicationStartDate: '2024-03-05',
+    applicationEndDate: '2024-04-05',
+    education: 'ปริญญาตรี สาขาโภชนาการ หรือสาขาที่เกี่ยวข้อง',
+    gender: 'any',
+    positions: 'นักโภชนาการ, เจ้าหน้าที่โภชนาการ, พ่อครัว-แม่ครัว'
   },
   {
-    id: '6',
-    name: 'แผนกวิจัยและพัฒนา',
-    code: 'R&D',
-    description: 'วิจัยและพัฒนาผลิตภัณฑ์ใหม่ เทคโนโลยี และนวัตกรรม',
-    manager: 'ดร.สมคิด คิดดี',
-    managerEmail: 'somkid@company.com',
-    managerPhone: '086-789-0123',
-    location: 'ชั้น 5 อาคาร A',
-    employeeCount: 20,
+    id: '15',
+    name: 'ฝ่ายกายภาพบำบัด',
+    code: 'PT',
+    description: 'ให้บริการกายภาพบำบัด การฟื้นฟูสมรรถภาพ และการออกกำลังกายบำบัด',
+    manager: 'นพ.สมชาย ใจดี',
+    managerEmail: 'somchai.pt@hospital.com',
+    managerPhone: '093-456-7890',
+    location: 'ชั้น 1 อาคารกายภาพบำบัด',
+    employeeCount: 12,
+    status: 'active',
+    salary: '2,200,000 บาท',
+    applicationStartDate: '2024-03-10',
+    applicationEndDate: '2024-04-10',
+    education: 'ปริญญาตรี สาขากายภาพบำบัด หรือสาขาที่เกี่ยวข้อง',
+    gender: 'any',
+    positions: 'นักกายภาพบำบัด, เจ้าหน้าที่กายภาพบำบัด, ผู้ช่วยกายภาพบำบัด'
+  },
+  {
+    id: '16',
+    name: 'ฝ่ายจิตเวช',
+    code: 'PSYCH',
+    description: 'ให้บริการรักษาและดูแลผู้ป่วยทางจิตเวช และให้คำปรึกษาด้านสุขภาพจิต',
+    manager: 'นพ.สมหญิง รักดี',
+    managerEmail: 'somying.psych@hospital.com',
+    managerPhone: '094-567-8901',
+    location: 'ชั้น 2 อาคารจิตเวช',
+    employeeCount: 16,
+    status: 'active',
+    salary: '3,000,000 บาท',
+    applicationStartDate: '2024-03-15',
+    applicationEndDate: '2024-04-15',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือสาขาจิตวิทยา',
+    gender: 'any',
+    positions: 'จิตแพทย์, นักจิตวิทยา, เจ้าหน้าที่จิตเวช'
+  },
+  {
+    id: '17',
+    name: 'ฝ่ายทันตกรรม',
+    code: 'DENT',
+    description: 'ให้บริการรักษาและดูแลสุขภาพช่องปากและฟัน',
+    manager: 'ทพ.สมศักดิ์ ใจงาม',
+    managerEmail: 'somsak.dent@hospital.com',
+    managerPhone: '095-678-9012',
+    location: 'ชั้น 1 อาคารทันตกรรม',
+    employeeCount: 8,
+    status: 'active',
+    salary: '2,800,000 บาท',
+    applicationStartDate: '2024-03-20',
+    applicationEndDate: '2024-04-20',
+    education: 'ปริญญาตรี สาขาทันตแพทยศาสตร์ หรือสาขาที่เกี่ยวข้อง',
+    gender: 'any',
+    positions: 'ทันตแพทย์, ผู้ช่วยทันตแพทย์, เจ้าหน้าที่ทันตกรรม'
+  },
+  {
+    id: '18',
+    name: 'ฝ่ายจักษุวิทยา',
+    code: 'EYE',
+    description: 'ให้บริการรักษาและดูแลสุขภาพตา และการผ่าตัดตา',
+    manager: 'นพ.สมพร ใจดี',
+    managerEmail: 'somporn.eye@hospital.com',
+    managerPhone: '096-789-0123',
+    location: 'ชั้น 2 อาคารจักษุวิทยา',
+    employeeCount: 6,
     status: 'active',
     salary: '3,500,000 บาท',
-    applicationStartDate: '2024-01-12',
-    applicationEndDate: '2024-02-12',
-    education: 'ปริญญาโท สาขาวิทยาศาสตร์หรือเทคโนโลยี',
+    applicationStartDate: '2024-03-25',
+    applicationEndDate: '2024-04-25',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือสาขาที่เกี่ยวข้อง',
     gender: 'any',
-    positions: 'นักวิจัย, นักพัฒนาผลิตภัณฑ์, นักวิเคราะห์ข้อมูล'
+    positions: 'จักษุแพทย์, ผู้ช่วยจักษุแพทย์, เจ้าหน้าที่จักษุ'
   },
   {
-    id: '7',
-    name: 'แผนกบริการลูกค้า',
-    code: 'CS',
-    description: 'ให้บริการลูกค้า การสนับสนุน และการแก้ไขปัญหา',
-    manager: 'นางสาวสมศรี บริการดี',
-    managerEmail: 'somsri@company.com',
-    managerPhone: '087-890-1234',
-    location: 'ชั้น 1 อาคาร B',
-    employeeCount: 18,
+    id: '19',
+    name: 'ฝ่ายหู คอ จมูก',
+    code: 'ENT',
+    description: 'ให้บริการรักษาและดูแลโรคหู คอ จมูก และการผ่าตัด',
+    manager: 'นพ.สมหมาย ใจดี',
+    managerEmail: 'sommai.ent@hospital.com',
+    managerPhone: '097-890-1234',
+    location: 'ชั้น 2 อาคารหู คอ จมูก',
+    employeeCount: 8,
     status: 'active',
-    salary: '1,500,000 บาท',
-    applicationStartDate: '2024-01-18',
-    applicationEndDate: '2024-02-18',
-    education: 'ปริญญาตรี สาขาบริการลูกค้าหรือสาขาที่เกี่ยวข้อง',
-    gender: 'female',
-    positions: 'เจ้าหน้าที่บริการลูกค้า, นักสนับสนุนเทคนิค, ผู้จัดการลูกค้า'
+    salary: '3,200,000 บาท',
+    applicationStartDate: '2024-04-01',
+    applicationEndDate: '2024-05-01',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือสาขาที่เกี่ยวข้อง',
+    gender: 'any',
+    positions: 'แพทย์หู คอ จมูก, ผู้ช่วยแพทย์, เจ้าหน้าที่หู คอ จมูก'
   },
   {
-    id: '8',
-    name: 'แผนกจัดซื้อจัดจ้าง',
-    code: 'PROC',
-    description: 'จัดการการจัดซื้อจัดจ้าง การเจรจาต่อรอง และการจัดการซัพพลายเออร์',
-    manager: 'นายสมชาติ จัดซื้อดี',
-    managerEmail: 'somchat@company.com',
-    managerPhone: '088-901-2345',
-    location: 'ชั้น 2 อาคาร A',
-    employeeCount: 7,
+    id: '20',
+    name: 'ฝ่ายศัลยกรรมกระดูก',
+    code: 'ORTHO',
+    description: 'ให้บริการรักษาและผ่าตัดโรคกระดูก ข้อต่อ และกล้ามเนื้อ',
+    manager: 'นพ.สมศักดิ์ ใจงาม',
+    managerEmail: 'somsak.ortho@hospital.com',
+    managerPhone: '098-901-2345',
+    location: 'ชั้น 3 อาคารศัลยกรรม',
+    employeeCount: 10,
     status: 'active',
-    salary: '800,000 บาท',
-    applicationStartDate: '2024-01-22',
-    applicationEndDate: '2024-02-22',
-    education: 'ปริญญาตรี สาขาบริหารธุรกิจหรือสาขาที่เกี่ยวข้อง',
+    salary: '4,200,000 บาท',
+    applicationStartDate: '2024-04-05',
+    applicationEndDate: '2024-05-05',
+    education: 'ปริญญาตรี สาขาแพทยศาสตร์ หรือสาขาที่เกี่ยวข้อง',
     gender: 'any',
-    positions: 'เจ้าหน้าที่จัดซื้อ, นักเจรจาต่อรอง, ผู้จัดการซัพพลายเออร์'
-  },
-  {
-    id: '9',
-    name: 'แผนกกฎหมายและธุรการ',
-    code: 'LEGAL',
-    description: 'ดูแลด้านกฎหมาย เอกสารสัญญา และการปฏิบัติตามกฎระเบียบ',
-    manager: 'นางสาวสมใจ กฎหมายดี',
-    managerEmail: 'somjai@company.com',
-    managerPhone: '089-012-3456',
-    location: 'ชั้น 3 อาคาร B',
-    employeeCount: 9,
-    status: 'active',
-    salary: '1,300,000 บาท',
-    applicationStartDate: '2024-01-25',
-    applicationEndDate: '2024-02-25',
-    education: 'ปริญญาตรี สาขานิติศาสตร์หรือสาขาที่เกี่ยวข้อง',
-    gender: 'any',
-    positions: 'นักกฎหมาย, เจ้าหน้าที่ธุรการ, ผู้จัดการเอกสาร'
+    positions: 'ศัลยแพทย์กระดูก, พยาบาลผ่าตัด, เจ้าหน้าที่ศัลยกรรม'
   }
 ];
 
 export default function Departments() {
-  const [departments, setDepartments] = useState<Department[]>(mockDepartments);
-  const [loading, setLoading] = useState(false);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [newDepartment, setNewDepartment] = useState<Partial<Department>>({
@@ -242,11 +446,39 @@ export default function Departments() {
     gender: 'any',
     positions: ''
   });
+  
+  // File upload states for new department
+  const [newDepartmentFiles, setNewDepartmentFiles] = useState<File[]>([]);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  
+  // File upload states for editing department
+  const [editingDepartmentFiles, setEditingDepartmentFiles] = useState<File[]>([]);
+  const [isUploadingEditFiles, setIsUploadingEditFiles] = useState(false);
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   const { isOpen: isAddOpen, onOpen: onAddOpen, onClose: onAddClose } = useDisclosure();
+  // Mission groups (derived from departments.missionGroupName to avoid backend dependency)
+  const [missionGroups, setMissionGroups] = useState<Array<{ id: string; name: string }>>([]);
+  const [newMissionGroupId, setNewMissionGroupId] = useState<string>(''); // store group name as key
+  const [editMissionGroupId, setEditMissionGroupId] = useState<string>(''); // store group name as key
+  const [departmentsByGroup, setDepartmentsByGroup] = useState<Record<string, Array<{ id: string; name: string; code: string }>>>({});
+
+  // Rebuild mission groups and mapping from loaded departments
+  useEffect(() => {
+    const groupMap: Record<string, Array<{ id: string; name: string; code: string }>> = {};
+    const nameSet = new Set<string>();
+    departments.forEach((d: any) => {
+      const groupName: string = d?.missionGroupName || '';
+      const key = groupName || 'ไม่ระบุกลุ่มงาน';
+      nameSet.add(key);
+      if (!groupMap[key]) groupMap[key] = [];
+      groupMap[key].push({ id: d.id, name: d.name, code: (d as any).code || '' });
+    });
+    setDepartmentsByGroup(groupMap);
+    setMissionGroups(Array.from(nameSet).map(n => ({ id: n, name: n })));
+  }, [departments]);
   
   // Date picker states
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -259,6 +491,38 @@ export default function Departments() {
   const [showNewEndDatePicker, setShowNewEndDatePicker] = useState(false);
   const [currentNewStartMonth, setCurrentNewStartMonth] = useState(new Date());
   const [currentNewEndMonth, setCurrentNewEndMonth] = useState(new Date());
+
+  // Fetch departments data
+  const fetchDepartments = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/prisma/departments?limit=1000');
+      if (response.ok) {
+        const data = await response.json();
+        const list = (data.data || []).map((d: any) => ({
+          ...d,
+          status: (d.status || 'ACTIVE').toString().toLowerCase()
+        }));
+        setDepartments(list);
+        console.log('📊 Loaded departments:', list.length, 'total');
+      } else {
+        console.error('Failed to fetch departments');
+        // Fallback to mock data if API fails
+        setDepartments(mockDepartments);
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+      // Fallback to mock data if API fails
+      setDepartments(mockDepartments);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load departments on component mount
+  useEffect(() => {
+    fetchDepartments();
+  }, []);
 
 
   const getStatusColor = (status: string) => {
@@ -282,9 +546,83 @@ export default function Departments() {
     }
   };
 
-  const handleViewDetails = (department: Department) => {
-    setSelectedDepartment(department);
-    onOpen();
+  // Add debouncing to prevent rapid consecutive calls
+  const [updatingDepartments, setUpdatingDepartments] = useState<Set<string>>(new Set());
+  
+  const handleToggleStatus = async (department: Department) => {
+    // Prevent multiple simultaneous updates for the same department
+    if (updatingDepartments.has(department.id)) {
+      console.log('Department update already in progress, skipping...');
+      return;
+    }
+    
+    const newStatus = department.status === 'active' ? 'inactive' : 'active';
+    
+    // Mark as updating
+    setUpdatingDepartments(prev => new Set(prev).add(department.id));
+    
+    // Optimistic update - update UI immediately
+    setDepartments(prev => 
+      prev.map(d => 
+        d.id === department.id 
+          ? { ...d, status: newStatus }
+          : d
+      )
+    );
+    
+    try {
+      const response = await fetch(`/api/prisma/departments/${department.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: newStatus
+        }),
+      });
+
+      if (response.ok) {
+        // Sync modal states (if open) so EyeIcon and dropdown stay consistent
+        setEditingDepartment(prev => prev && prev.id === department.id ? { ...prev, status: newStatus } as Department : prev);
+        setSelectedDepartment(prev => prev && (prev as Department).id === department.id ? { ...(prev as Department), status: newStatus } as any : prev);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to update department status:', errorData);
+        
+        // Show specific error message
+        if (response.status === 404) {
+          alert('ไม่พบฝ่ายที่ต้องการอัปเดต กรุณารีเฟรชหน้า');
+        } else {
+          alert('เกิดข้อผิดพลาดในการอัปเดตสถานะฝ่าย');
+        }
+        
+        // Revert optimistic update on failure
+        setDepartments(prev => 
+          prev.map(d => 
+            d.id === department.id 
+              ? { ...d, status: department.status }
+              : d
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error updating department status:', error);
+      // Revert optimistic update on failure
+      setDepartments(prev => 
+        prev.map(d => 
+          d.id === department.id 
+            ? { ...d, status: department.status }
+            : d
+        )
+      );
+    } finally {
+      // Remove from updating set
+      setUpdatingDepartments(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(department.id);
+        return newSet;
+      });
+    }
   };
 
   const handleCloseDetails = () => {
@@ -292,14 +630,30 @@ export default function Departments() {
     onClose();
   };
 
-  const handleDeleteDepartment = (departmentId: string) => {
-    if (confirm('คุณแน่ใจหรือไม่ที่จะลบแผนกนี้?')) {
-      setDepartments(prev => prev.filter(d => d.id !== departmentId));
+  const handleDeleteDepartment = async (departmentId: string) => {
+    if (confirm('คุณแน่ใจหรือไม่ที่จะลบฝ่ายนี้?')) {
+      try {
+        const response = await fetch(`/api/prisma/departments/${departmentId}`, {
+          method: 'DELETE',
+        });
+        
+        if (response.ok) {
+          setDepartments(prev => prev.filter(d => d.id !== departmentId));
+        } else {
+          alert('เกิดข้อผิดพลาดในการลบฝ่าย');
+        }
+      } catch (error) {
+        console.error('Error deleting department:', error);
+        alert('เกิดข้อผิดพลาดในการลบฝ่าย');
+      }
     }
   };
 
   const handleEditDepartment = (department: Department) => {
     setEditingDepartment(department);
+    // ตั้งค่า mission group จากชื่อกลุ่มงาน (ใช้ชื่อเป็น key)
+    setEditMissionGroupId((department as any).missionGroupName || '');
+    // mapping ถูกสร้างจาก departments อยู่แล้ว
     onEditOpen();
     
     // Initialize date picker months based on current dates
@@ -313,20 +667,72 @@ export default function Departments() {
     }
   };
 
-  const handleSaveEdit = () => {
+  const handleOpenPreview = (department: Department) => {
+    setSelectedDepartment(department);
+    onOpen();
+  };
+
+  const handleSaveEdit = async () => {
     if (editingDepartment) {
-      setDepartments(prev => 
-        prev.map(d => d.id === editingDepartment.id ? editingDepartment : d)
-      );
-      setEditingDepartment(null);
-      onEditClose();
-      setShowStartDatePicker(false);
-      setShowEndDatePicker(false);
+      try {
+        // ตัด attachments ออกจาก payload ไม่ส่งให้ API อัปเดตข้อมูลฝ่าย
+        const { attachments: _omitAttachments, ...payload } = editingDepartment as any
+        // missionGroupName ใช้ฝั่งแสดงผลเท่านั้น ในที่นี้เลี่ยงไม่ส่งค่าที่ backend ไม่รองรับ
+        const response = await fetch(`/api/prisma/departments/${editingDepartment.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          let updatedDepartment = result.data;
+
+          // Normalize enum-like fields from API (e.g., 'ACTIVE' -> 'active') to match UI expectations
+          if (updatedDepartment?.status) {
+            updatedDepartment.status = String(updatedDepartment.status).toLowerCase();
+          }
+          if (updatedDepartment?.gender) {
+            updatedDepartment.gender = String(updatedDepartment.gender).toLowerCase();
+          }
+          
+          // อัปโหลดไฟล์ใหม่ถ้ามี
+          if (editingDepartmentFiles.length > 0) {
+            const uploadedFiles = await uploadEditFiles(editingDepartment.id);
+            console.log('📎 Uploaded new files:', uploadedFiles);
+            
+            // อัปเดต attachments ใน updatedDepartment
+            updatedDepartment.attachments = [
+              ...(updatedDepartment.attachments || []),
+              ...uploadedFiles
+            ];
+          }
+          
+          setDepartments(prev => 
+            prev.map(d => d.id === updatedDepartment.id ? { ...d, ...updatedDepartment } : d)
+          );
+          // sync dropdown state
+          setEditMissionGroupId('')
+          setEditingDepartment(null);
+          setEditingDepartmentFiles([]);
+          onEditClose();
+          setShowStartDatePicker(false);
+          setShowEndDatePicker(false);
+        } else {
+          alert('เกิดข้อผิดพลาดในการบันทึกการเปลี่ยนแปลง');
+        }
+      } catch (error) {
+        console.error('Error updating department:', error);
+        alert('เกิดข้อผิดพลาดในการบันทึกการเปลี่ยนแปลง');
+      }
     }
   };
 
   const handleCancelEdit = () => {
     setEditingDepartment(null);
+    setEditingDepartmentFiles([]);
     onEditClose();
     setShowStartDatePicker(false);
     setShowEndDatePicker(false);
@@ -351,53 +757,165 @@ export default function Departments() {
       gender: 'any',
       positions: ''
     });
+    setNewMissionGroupId('');
+    setNewDepartmentFiles([]);
     setCurrentNewStartMonth(new Date());
     setCurrentNewEndMonth(new Date());
     onAddOpen();
   };
 
-  const handleSaveNewDepartment = () => {
-    if (newDepartment.name && newDepartment.code) {
-      const newDept: Department = {
-        id: (departments.length + 1).toString(),
-        name: newDepartment.name || '',
-        code: newDepartment.code || '',
-        description: newDepartment.description || '',
-        manager: newDepartment.manager || '',
-        managerEmail: newDepartment.managerEmail || '',
-        managerPhone: newDepartment.managerPhone || '',
-        location: newDepartment.location || '',
-        employeeCount: newDepartment.employeeCount || 0,
-        status: newDepartment.status || 'active',
-        salary: newDepartment.salary || '',
-        applicationStartDate: newDepartment.applicationStartDate || '',
-        applicationEndDate: newDepartment.applicationEndDate || '',
-        education: newDepartment.education || '',
-        gender: newDepartment.gender || 'any',
-        positions: newDepartment.positions || ''
-      };
-      
-      setDepartments(prev => [...prev, newDept]);
-      setNewDepartment({
-        name: '',
-        code: '',
-        description: '',
-        manager: '',
-        managerEmail: '',
-        managerPhone: '',
-        location: '',
-        employeeCount: 0,
-        status: 'active',
-        salary: '',
-        applicationStartDate: '',
-        applicationEndDate: '',
-        education: '',
-        gender: 'any',
-        positions: ''
-      });
-      onAddClose();
-      setShowNewStartDatePicker(false);
-      setShowNewEndDatePicker(false);
+  // File handling functions
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setNewDepartmentFiles(prev => [...prev, ...files]);
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setNewDepartmentFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFiles = async (departmentId: string) => {
+    if (newDepartmentFiles.length === 0) return [];
+
+    setIsUploadingFiles(true);
+    const uploadedFiles = [];
+
+    try {
+      for (const file of newDepartmentFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('departmentId', departmentId);
+
+        const response = await fetch('/api/departments/upload-attachment', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          uploadedFiles.push({
+            fileName: result.data?.fileName || file.name,
+            filePath: result.data?.filePath || result.filePath || result.fileName,
+            originalName: result.data?.fileName || file.name,
+            id: result.data?.id,
+            fileSize: result.data?.fileSize,
+            createdAt: result.data?.createdAt
+          });
+        } else {
+          console.error('Failed to upload file:', file.name);
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading files:', error);
+    } finally {
+      setIsUploadingFiles(false);
+    }
+
+    return uploadedFiles;
+  };
+
+  // File handling functions for editing department
+  const handleEditFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    setEditingDepartmentFiles(prev => [...prev, ...files]);
+  };
+
+  const handleRemoveEditFile = (index: number) => {
+    setEditingDepartmentFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadEditFiles = async (departmentId: string) => {
+    if (editingDepartmentFiles.length === 0) return [];
+
+    setIsUploadingEditFiles(true);
+    const uploadedFiles = [];
+
+    try {
+      for (const file of editingDepartmentFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('departmentId', departmentId);
+
+        const response = await fetch('/api/departments/upload-attachment', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          uploadedFiles.push({
+            fileName: result.data?.fileName || file.name,
+            filePath: result.data?.filePath || result.filePath || result.fileName,
+            originalName: result.data?.fileName || file.name,
+            id: result.data?.id,
+            fileSize: result.data?.fileSize,
+            createdAt: result.data?.createdAt
+          });
+        } else {
+          console.error('Failed to upload file:', file.name);
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading files:', error);
+    } finally {
+      setIsUploadingEditFiles(false);
+    }
+
+    return uploadedFiles;
+  };
+
+  const handleSaveNewDepartment = async () => {
+    if (newDepartment.name && newMissionGroupId) {
+      try {
+        // สร้างฝ่ายใหม่ก่อน
+        const response = await fetch('/api/prisma/departments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ...newDepartment }),
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          const newDept = result.data;
+          
+          // อัปโหลดไฟล์ถ้ามี
+          if (newDepartmentFiles.length > 0) {
+            const uploadedFiles = await uploadFiles(newDept.id);
+            console.log('📎 Uploaded files:', uploadedFiles);
+          }
+          
+          setDepartments(prev => [...prev, newDept]);
+          setNewDepartment({
+            name: '',
+            code: '',
+            description: '',
+            manager: '',
+            managerEmail: '',
+            managerPhone: '',
+            location: '',
+            employeeCount: 0,
+            status: 'active',
+            salary: '',
+            applicationStartDate: '',
+            applicationEndDate: '',
+            education: '',
+            gender: 'any',
+            positions: ''
+          });
+          setNewMissionGroupId('');
+          setNewDepartmentFiles([]);
+          onAddClose();
+          setShowNewStartDatePicker(false);
+          setShowNewEndDatePicker(false);
+        } else {
+          alert('เกิดข้อผิดพลาดในการเพิ่มฝ่ายใหม่');
+        }
+      } catch (error) {
+        console.error('Error adding new department:', error);
+        alert('เกิดข้อผิดพลาดในการเพิ่มฝ่ายใหม่');
+      }
     }
   };
 
@@ -425,11 +943,40 @@ export default function Departments() {
   };
 
   const pages = Math.ceil(departments.length / rowsPerPage);
-  const items = React.useMemo(() => {
+  const items = useMemo(() => {
+    // เรียงลำดับฝ่ายจากวันที่สร้างใหม่ไปเก่า
+    const sortedDepartments = [...departments].sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.updatedAt || '2024-01-01').getTime();
+      const dateB = new Date(b.createdAt || b.updatedAt || '2024-01-01').getTime();
+      return dateB - dateA; // เรียงจากใหม่ไปเก่า
+    });
+    
     const start = (page - 1) * rowsPerPage;
     const end = start + rowsPerPage;
-    return departments.slice(start, end);
+    return sortedDepartments.slice(start, end);
   }, [page, departments, rowsPerPage]);
+
+  // ตัวกรองกลุ่มงาน/ฝ่าย เหนือ table
+  const [filterMissionGroupId, setFilterMissionGroupId] = useState<string>('');
+  const [filterDepartmentName, setFilterDepartmentName] = useState<string>('');
+
+  const filteredDepartments = useMemo(() => {
+    let data = departments;
+    if (filterMissionGroupId) {
+      data = data.filter(d => (d as any).missionGroupId === filterMissionGroupId);
+    }
+    if (filterDepartmentName) {
+      data = data.filter(d => d.name === filterDepartmentName);
+    }
+    return data;
+  }, [departments, filterMissionGroupId, filterDepartmentName]);
+
+  const filteredPages = Math.ceil(filteredDepartments.length / rowsPerPage);
+  const filteredItems = useMemo(() => {
+    const start = (page - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+    return filteredDepartments.slice(start, end);
+  }, [filteredDepartments, page, rowsPerPage]);
 
   const formatDate = (dateString: string) => {
     try {
@@ -640,7 +1187,7 @@ export default function Departments() {
           <div className="flex items-center justify-center min-h-screen">
             <div className="text-center">
               <Spinner size="lg" color="primary" className="mb-4" />
-              <p className="text-gray-600">กำลังโหลดข้อมูลแผนก...</p>
+              <p className="text-gray-600">กำลังโหลดข้อมูลฝ่าย...</p>
             </div>
           </div>
         </div>
@@ -649,20 +1196,20 @@ export default function Departments() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
+    <div className="min-h-screen bg-white p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl">
-                <BuildingOfficeIcon className="w-8 h-8 text-white" />
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl">
+                <BuildingOfficeIcon className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                  แผนกต่างๆ
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                ประกาศรับสมัคร
                 </h1>
-                <p className="text-gray-600">จัดการและดูข้อมูลแผนกทั้งหมดในองค์กร</p>
+                <p className="text-sm sm:text-base text-gray-600">จัดการและดูข้อมูลฝ่ายและกลุ่มงานทั้งหมดในองค์กร</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -673,16 +1220,16 @@ export default function Departments() {
                 className="bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700"
                 onClick={handleAddNewDepartment}
               >
-                เพิ่มแผนกใหม่
+                เพิ่มประกาศรับสมัครใหม่
               </Button>
               <Button
                 color="primary"
                 variant="ghost"
                 startContent={<ArrowLeftIcon className="w-5 h-5" />}
-                onClick={() => window.location.href = '/dashboard'}
+                onClick={() => window.location.href = '/admin'}
                 className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700"
               >
-                กลับไปหน้า Dashboard
+                กลับไปหน้า Dashboard Admin
               </Button>
             </div>
           </div>
@@ -690,11 +1237,11 @@ export default function Departments() {
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="shadow-lg border-0">
-            <CardBody className="p-6">
+          <Card className="shadow-lg border-0 rounded-xl">
+            <CardBody className="p-6 ">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">แผนกทั้งหมด</p>
+                  <p className="text-sm text-gray-600">ฝ่ายทั้งหมด</p>
                   <p className="text-2xl font-bold text-gray-800">{departments.length}</p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
@@ -704,11 +1251,11 @@ export default function Departments() {
             </CardBody>
           </Card>
 
-          <Card className="shadow-lg border-0">
+          <Card className="shadow-lg border-0 rounded-xl">
             <CardBody className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">แผนกที่เปิดใช้งาน</p>
+                  <p className="text-sm text-gray-600">ฝ่ายที่เปิดใช้งาน</p>
                   <p className="text-2xl font-bold text-green-600">
                     {departments.filter(d => d.status === 'active').length}
                   </p>
@@ -720,11 +1267,11 @@ export default function Departments() {
             </CardBody>
           </Card>
 
-          <Card className="shadow-lg border-0">
+          <Card className="shadow-lg border-0 rounded-xl">
             <CardBody className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">พนักงานทั้งหมด</p>
+                  <p className="text-sm text-gray-600">จำนวนตำแหน่งที่เปิดรับสมัคร</p>
                   <p className="text-2xl font-bold text-purple-600">
                     {departments.reduce((sum, d) => sum + d.employeeCount, 0)}
                   </p>
@@ -738,12 +1285,63 @@ export default function Departments() {
         </div>
 
         {/* Departments Table */}
-        <Card className="shadow-lg border-0">
+        <Card className="shadow-lg border-0 rounded-xl">
           <CardHeader className="pb-3">
+            <div className="flex flex-col gap-4 w-full">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-gray-800">รายการแผนกทั้งหมด</h2>
-                <p className="text-sm text-gray-600">แสดงข้อมูลแผนกทั้งหมดในระบบ</p>
+                  <h2 className="text-xl font-semibold text-gray-800">รายการฝ่ายทั้งหมด</h2>
+                  <p className="text-sm text-gray-600">แสดงข้อมูลฝ่ายทั้งหมดในระบบ</p>
+                </div>
+              </div>
+              {/* Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-700">กลุ่มงาน</label>
+                  <select
+                    value={filterMissionGroupId}
+                    onChange={async (e) => {
+                      const val = e.target.value;
+                      setFilterMissionGroupId(val);
+                      setFilterDepartmentName('');
+                      if (val && !departmentsByGroup[val]) {
+                        try {
+                          const res = await fetch(`/api/prisma/departments/by-mission-group?missionGroupId=${val}`);
+                          const json = await res.json();
+                          if (json.success) setDepartmentsByGroup(prev => ({ ...prev, [val]: json.data }));
+                        } catch (err) {
+                          console.error('Error fetching departments by group:', err);
+                        }
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  >
+                    <option value="">ทั้งหมด</option>
+                    {missionGroups.map(g => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-700">ฝ่าย</label>
+                  <select
+                    value={filterDepartmentName}
+                    onChange={(e) => setFilterDepartmentName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  >
+                    <option value="">ทั้งหมด</option>
+                    {(departmentsByGroup[filterMissionGroupId] || [])
+                      .map(dep => (<option key={dep.id} value={dep.name}>{dep.name}</option>))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={() => { setFilterMissionGroupId(''); setFilterDepartmentName(''); }}
+                    className="px-4 py-2 border rounded-md text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    รีเซ็ตตัวกรอง
+                  </button>
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -756,28 +1354,35 @@ export default function Departments() {
               }}
             >
               <TableHeader>
-                <TableColumn>รหัสแผนก</TableColumn>
-                <TableColumn>ชื่อแผนก</TableColumn>
+                <TableColumn>ลำดับ</TableColumn>
+                <TableColumn>กลุ่มงาน</TableColumn>
+                <TableColumn>ฝ่าย</TableColumn>
                 <TableColumn>ตำแหน่งที่เปิดรับสมัคร</TableColumn>
-                <TableColumn>จำนวนพนักงาน</TableColumn>
-                <TableColumn>หัวหน้าแผนก</TableColumn>
+                <TableColumn>จำนวนที่เปิดรับ</TableColumn>
                 <TableColumn>สถานะ</TableColumn>
+                <TableColumn>วันที่สร้าง</TableColumn>
                 <TableColumn>การดำเนินการ</TableColumn>
               </TableHeader>
-              <TableBody emptyContent={"ไม่พบข้อมูลแผนก"}>
-                {items.map((department) => (
-                  <TableRow key={department.id}>
+              <TableBody emptyContent={"ไม่พบข้อมูลฝ่าย"}>
+                {(filteredItems as Department[]).map((department: Department, index: number) => {
+                  // คำนวณลำดับที่ต่อจากหน้าก่อนหน้า
+                  const sequenceNumber = (page - 1) * rowsPerPage + index + 1;
+                  
+                  return (
+                    <TableRow key={department.id} className="hover:bg-gray-100 transition-colors">
+                      <TableCell>
+                        <Chip color="primary" variant="flat" size="sm">
+                          {sequenceNumber}
+                        </Chip>
+                      </TableCell>
                     <TableCell>
-                      <Chip color="primary" variant="flat" size="sm">
-                        {department.code}
-                      </Chip>
-                    </TableCell>
+                      <div>
+                        <p className="text-gray-800">{department.missionGroupName || '-'}</p>
+                      </div>
+                      </TableCell>
                     <TableCell>
                       <div>
                         <p className="font-semibold text-gray-800">{department.name}</p>
-                        <p className="text-sm text-gray-600 truncate max-w-xs">
-                          {department.description}
-                        </p>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -785,15 +1390,6 @@ export default function Departments() {
                     </TableCell>
                     <TableCell>
                       <span className="font-medium text-gray-800">{department.employeeCount}</span>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-gray-800">{department.manager}</p>
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <EnvelopeIcon className="w-3 h-3" />
-                          <span className="truncate max-w-32">{department.managerEmail}</span>
-                        </div>
-                      </div>
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -804,17 +1400,26 @@ export default function Departments() {
                         {getStatusText(department.status)}
                       </Chip>
                     </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-gray-600">
+                        {department.createdAt ? new Date(department.createdAt).toLocaleDateString('th-TH') : 'ไม่ระบุ'}
+                      </div>
+                    </TableCell>
                                          <TableCell>
                        <div className="flex gap-2">
                          <Button
                            isIconOnly
                            size="sm"
                            variant="ghost"
-                           color="primary"
-                           className="bg-blue-100 text-blue-600 hover:bg-blue-200"
-                           onClick={() => handleViewDetails(department)}
+                           color={department.status === 'active' ? 'success' : 'default'}
+                           className={department.status === 'active' 
+                             ? 'bg-green-100 text-green-600 hover:bg-green-200' 
+                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                           }
+                          onClick={() => handleOpenPreview(department)}
+                          title={'ดูตัวอย่างข้อมูลหน่วยงาน'}
                          >
-                           <EyeIcon className="w-4 h-4" />
+                             <EyeIcon className="w-4 h-4" />
                          </Button>
                                                    <Button
                             isIconOnly
@@ -836,23 +1441,86 @@ export default function Departments() {
                          >
                            <TrashIcon className="w-4 h-4" />
                          </Button>
+                         
                        </div>
                      </TableCell>
-                  </TableRow>
-                ))}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
-            <div className="py-2 px-2 flex justify-center">
-              <Pagination
-                isCompact
-                showControls
-                showShadow
-                color="primary"
-                page={page}
-                total={pages}
-                onChange={(page) => setPage(page)}
-              />
-            </div>
+            {/* Custom Pagination */}
+            {(filteredPages > 1 ? filteredPages : pages) > 1 && (
+              <div className="flex justify-center items-center space-x-2 mt-8 py-4">
+                {/* Previous Button */}
+                <button
+                  onClick={() => setPage(page - 1)}
+                  disabled={page === 1}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    page === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  ‹
+                </button>
+
+                {/* Page Numbers */}
+                {Array.from({ length: filteredPages || pages }, (_, i) => i + 1).map((pageNum) => {
+                  // Show first page, last page, current page, and pages around current page
+                  const shouldShow = 
+                    pageNum === 1 || 
+                    pageNum === pages || 
+                    Math.abs(pageNum - page) <= 1
+
+                  if (!shouldShow) {
+                    // Show ellipsis
+                    if (pageNum === 2 && page > 4) {
+                      return (
+                        <span key={pageNum} className="px-3 py-2 text-gray-500">
+                          ...
+                        </span>
+                      )
+                    }
+                    if (pageNum === pages - 1 && page < pages - 3) {
+                      return (
+                        <span key={pageNum} className="px-3 py-2 text-gray-500">
+                          ...
+                        </span>
+                      )
+                    }
+                    return null
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setPage(pageNum)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        page === pageNum
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                })}
+
+                {/* Next Button */}
+                <button
+                  onClick={() => setPage(page + 1)}
+                  disabled={page === pages}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    page === pages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  ›
+                </button>
+              </div>
+            )}
           </CardBody>
         </Card>
 
@@ -886,98 +1554,147 @@ export default function Departments() {
               </ModalHeader>
               <ModalBody>
                 <div className="space-y-6">
-                  {/* Basic Information */}
+                  {/* Basic Information (เหมือน modal แก้ไข) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">รหัสแผนก</label>
-                        <p className="text-gray-800">{selectedDepartment.code}</p>
+                      <label className="text-sm font-medium text-gray-700">กลุ่มงาน</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={selectedDepartment.missionGroupName || ''}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">ชื่อแผนก</label>
-                        <p className="text-gray-800">{selectedDepartment.name}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">คำอธิบาย</label>
-                        <p className="text-gray-800">{selectedDepartment.description}</p>
+                      <label className="text-sm font-medium text-gray-700">ฝ่าย</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={selectedDepartment.name}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
                       </div>
                     </div>
 
-                    <div className="space-y-4">
+                  {/* Positions + Salary */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">ชื่อหัวหน้าแผนก</label>
-                        <p className="text-gray-800">{selectedDepartment.manager}</p>
+                      <label className="text-sm font-medium text-gray-700">ตำแหน่งที่เปิดรับสมัคร</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={selectedDepartment.positions}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">อีเมลหัวหน้าแผนก</label>
-                        <div className="flex items-center gap-2">
-                          <EnvelopeIcon className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-800">{selectedDepartment.managerEmail}</span>
+                      <label className="text-sm font-medium text-gray-700">เพศ</label>
+                      <select
+                        disabled
+                        value={selectedDepartment.gender}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
+                      >
+                        <option value="male">ชาย</option>
+                        <option value="female">หญิง</option>
+                        <option value="any">ไม่จำกัดเพศ</option>
+                      </select>
                         </div>
+                    
+                      </div>
+
+                  {/* Coordinator + Phone */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">ชื่อผู้ประสานงาน</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={selectedDepartment.manager}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">เบอร์โทรศัพท์หัวหน้าแผนก</label>
-                        <div className="flex items-center gap-2">
-                          <PhoneIcon className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-800">{selectedDepartment.managerPhone}</span>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">จำนวนพนักงาน</label>
-                        <p className="text-gray-800">{selectedDepartment.employeeCount}</p>
-                      </div>
+                      <label className="text-sm font-medium text-gray-700">เบอร์โทรศัพท์</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={selectedDepartment.managerPhone}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
                     </div>
                   </div>
 
-                  {/* Additional Information */}
+                  {/* Headcount + Status */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">อัตราค่าจ้าง</label>
-                      <p className="text-gray-800">{selectedDepartment.salary}</p>
+                      <label className="text-sm font-medium text-gray-700">จำนวนที่เปิดรับ</label>
+                      <input
+                        type="number"
+                        readOnly
+                        value={selectedDepartment.employeeCount}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">สถานะ</label>
-                      <Chip
-                        color={getStatusColor(selectedDepartment.status)}
-                        variant="flat"
-                        size="sm"
+                      <select
+                        disabled
+                        value={selectedDepartment.status}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700"
                       >
-                        {getStatusText(selectedDepartment.status)}
-                      </Chip>
+                        <option value="active">เปิดใช้งาน</option>
+                        <option value="inactive">ปิดใช้งาน</option>
+                      </select>
                     </div>
                   </div>
 
-                  {/* Application Requirements */}
+                  {/* Dates */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">วันที่เปิดรับสมัคร</label>
-                      <p className="text-gray-800">{formatDate(selectedDepartment.applicationStartDate)}</p>
+                      <input
+                        type="text"
+                        readOnly
+                        value={formatDate(selectedDepartment.applicationStartDate)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">วันที่สิ้นสุดการรับสมัคร</label>
-                      <p className="text-gray-800">{formatDate(selectedDepartment.applicationEndDate)}</p>
+                      <input
+                        type="text"
+                        readOnly
+                        value={formatDate(selectedDepartment.applicationEndDate)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
                     </div>
                   </div>
 
-                  {/* Education and Gender Requirements */}
+                  {/* Education + Gender */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">วุฒิการศึกษา</label>
-                      <p className="text-gray-800">{selectedDepartment.education}</p>
+                      <textarea
+                        readOnly
+                        value={selectedDepartment.education}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-white"
+                        rows={2}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">เพศที่ต้องการ</label>
-                      <p className="text-gray-800">{getGenderText(selectedDepartment.gender)}</p>
+                    <label className="text-sm font-medium text-gray-700">คำอธิบาย</label>
+                    <textarea
+                      readOnly
+                      value={selectedDepartment.description}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-white"
+                      rows={3}
+                    />
                     </div>
+                    
                   </div>
 
-                  {/* Positions */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">ตำแหน่งที่เปิดรับสมัคร</label>
-                      <p className="text-gray-800">{selectedDepartment.positions}</p>
-                    </div>
-                  </div>
+                  {/* Description */}
+                  
                 </div>
               </ModalBody>
               <ModalFooter>
@@ -1012,7 +1729,7 @@ export default function Departments() {
                     <PencilIcon className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold">แก้ไขข้อมูลแผนก</h2>
+                    <h2 className="text-xl font-semibold">แก้ไขข้อมูลประกาศรับสมัคร</h2>
                     <p className="text-sm text-gray-600">{editingDepartment.name}</p>
                   </div>
                 </div>
@@ -1021,9 +1738,8 @@ export default function Departments() {
                 <div className="space-y-6">
                   {/* Basic Information */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">รหัสแผนก</label>
+                      {/* <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">รหัสฝ่าย</label>
                         <input
                           type="text"
                           placeholder="เช่น IT, HR, FIN"
@@ -1031,52 +1747,87 @@ export default function Departments() {
                           onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, code: e.target.value } : null)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
-                      </div>
+                      </div> */}
+                      {/* กลุ่มงาน (dropdown) */}
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">ชื่อแผนก</label>
-                        <input
-                          type="text"
-                          placeholder="ชื่อแผนก"
+                        <label className="text-sm font-medium text-gray-700">กลุ่มงาน</label>
+                        <select
+                          value={editMissionGroupId}
+                          onChange={async (e) => {
+                            const val = e.target.value;
+                            setEditMissionGroupId(val);
+                            // reset department name when group changes
+                            setEditingDepartment(prev => prev ? { ...prev, name: '' } : prev);
+                            if (val && !departmentsByGroup[val]) {
+                              try {
+                                const res = await fetch(`/api/prisma/departments/by-mission-group?missionGroupId=${val}`);
+                                const json = await res.json();
+                                if (json.success) setDepartmentsByGroup(prev => ({ ...prev, [val]: json.data }));
+                              } catch (err) {
+                                console.error('Error fetching departments by group:', err);
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        >
+                          <option value="">เลือกกลุ่มงาน</option>
+                          {missionGroups.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">ฝ่าย</label>
+                        <select
                           value={editingDepartment.name}
                           onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, name: e.target.value } : null)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        >
+                          <option value="">เลือกฝ่าย</option>
+                          {(departmentsByGroup[editMissionGroupId] || []).map(dep => (
+                            <option key={dep.id} value={dep.name}>{dep.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">ตำแหน่งที่เปิดรับสมัคร</label>
+                      <input
+                        type="text"
+                        placeholder="เช่น โปรแกรมเมอร์, นักวิเคราะห์ระบบ, ผู้ดูแลระบบ"
+                        value={editingDepartment.positions}
+                        onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, positions: e.target.value } : null)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
                                              <div className="space-y-2">
-                         <label className="text-sm font-medium text-gray-700">คำอธิบาย</label>
-                         <textarea
-                           placeholder="คำอธิบายแผนก"
-                           value={editingDepartment.description}
-                           onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, description: e.target.value } : null)}
-                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                           rows={3}
-                         />
+                      <label className="text-sm font-medium text-gray-700">เพศ</label>
+                      <select
+                        value={editingDepartment.gender}
+                        onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, gender: e.target.value as 'male' | 'female' | 'any' } : null)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="male">ชาย</option>
+                        <option value="female">หญิง</option>
+                        <option value="any">ไม่จำกัดเพศ</option>
+                      </select>
                        </div>
                     </div>
 
-                    <div className="space-y-4">
+                    {/* Coordinator name + phone in the same row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">ชื่อหัวหน้าแผนก</label>
+                        <label className="text-sm font-medium text-gray-700">ชื่อผู้ประสานงาน</label>
                         <input
                           type="text"
-                          placeholder="ชื่อหัวหน้าแผนก"
+                          placeholder="ชื่อหัวหน้าฝ่าย"
                           value={editingDepartment.manager}
                           onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, manager: e.target.value } : null)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">อีเมลหัวหน้าแผนก</label>
-                        <input
-                          type="email"
-                          placeholder="manager@company.com"
-                          value={editingDepartment.managerEmail}
-                          onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, managerEmail: e.target.value } : null)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">เบอร์โทรศัพท์หัวหน้าแผนก</label>
+                        <label className="text-sm font-medium text-gray-700">เบอร์โทรศัพท์</label>
                         <input
                           type="text"
                           placeholder="081-234-5678"
@@ -1085,8 +1836,12 @@ export default function Departments() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
+                    </div>
+
+                    {/* Headcount + status in the same row */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">จำนวนพนักงาน</label>
+                        <label className="text-sm font-medium text-gray-700">จำนวนที่เปิดรับ</label>
                         <input
                           type="number"
                           placeholder="0"
@@ -1095,32 +1850,42 @@ export default function Departments() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Additional Information */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">อัตราค่าจ้าง</label>
-                      <input
-                        type="text"
-                        placeholder="เช่น 2,500,000 บาท"
-                        value={editingDepartment.salary}
-                        onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, salary: e.target.value } : null)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">สถานะ</label>
                       <select
                         value={editingDepartment.status}
-                        onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, status: e.target.value as 'active' | 'inactive' } : null)}
+                        onChange={async (e) => {
+                          const newStatus = e.target.value as 'active' | 'inactive'
+                          setEditingDepartment(prev => prev ? { ...prev, status: newStatus } : null)
+                          try {
+                            const response = await fetch(`/api/prisma/departments/${editingDepartment.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ status: newStatus })
+                            })
+                            if (response.ok) {
+                              const result = await response.json()
+                              const updated = result.data
+                              setDepartments(prev => prev.map(d => d.id === updated.id ? { ...d, status: updated.status } : d))
+                            } else {
+                              console.error('Failed to update status from dropdown')
+                            }
+                          } catch (err) {
+                            console.error('Error updating status from dropdown:', err)
+                          }
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="active">เปิดใช้งาน</option>
                         <option value="inactive">ปิดใช้งาน</option>
                       </select>
+                      </div>
                     </div>
+                    </div>
+                    
+                  {/* Additional Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
                   </div>
 
                                                        {/* Application Requirements */}
@@ -1302,36 +2067,183 @@ export default function Departments() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                         rows={2}
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">เพศที่ต้องการ</label>
-                      <select
-                        value={editingDepartment.gender}
-                        onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, gender: e.target.value as 'male' | 'female' | 'any' } : null)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="male">ชาย</option>
-                        <option value="female">หญิง</option>
-                        <option value="any">ไม่จำกัดเพศ</option>
-                      </select>
-                    </div>
                   </div>
 
-                  {/* Positions */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">ตำแหน่งที่เปิดรับสมัคร</label>
+                         <label className="text-sm font-medium text-gray-700">คำอธิบาย</label>
                       <textarea
-                        placeholder="เช่น โปรแกรมเมอร์, นักวิเคราะห์ระบบ, ผู้ดูแลระบบ"
-                        value={editingDepartment.positions}
-                        onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, positions: e.target.value } : null)}
+                           placeholder="คำอธิบายการรับสมัคร"
+                           value={editingDepartment.description}
+                           onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, description: e.target.value } : null)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                         rows={3}
                       />
                     </div>
+                  
 
+                    
                   </div>
+
+                  {/* Positions */}
+
+                  {/* Attachments */}
+                  {/* File Attachments */}
+                  <div className="space-y-4">
+                    <div className="border-t pt-6">
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <DocumentTextIcon className="w-5 h-5 text-blue-600" />
+                        เอกสารแนบ (ถ้ามี)
+                      </h3>
+                      
+                      {/* File Upload Area */}
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                    <input
+                      type="file"
+                      multiple
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+                          onChange={handleEditFileSelect}
+                          className="hidden"
+                          id="edit-file-upload"
+                        />
+                        <label
+                          htmlFor="edit-file-upload"
+                          className="cursor-pointer flex flex-col items-center gap-2"
+                        >
+                          <div className="p-3 bg-blue-50 rounded-full">
+                            <DocumentTextIcon className="w-8 h-8 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-700">
+                              คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวางที่นี่
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              รองรับไฟล์: PDF, DOC, DOCX, JPG, PNG, TXT (ขนาดไม่เกิน 10MB)
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Selected Files List */}
+                      {editingDepartmentFiles.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <h4 className="text-sm font-medium text-gray-700">ไฟล์ที่เลือกใหม่:</h4>
+                          <div className="space-y-2">
+                            {editingDepartmentFiles.map((file, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <DocumentTextIcon className="w-5 h-5 text-gray-500" />
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-700">{file.name}</p>
+                                    <p className="text-xs text-gray-500">
+                                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleRemoveEditFile(index)}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                  title="ลบไฟล์"
+                                >
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Existing Files List */}
+                    {editingDepartment && (editingDepartment as any).attachments?.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <h4 className="text-sm font-medium text-gray-700">ไฟล์ที่แนบแล้ว:</h4>
+                      <div className="space-y-2">
+                          {((editingDepartment as any).attachments as any[]).map((att, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <DocumentTextIcon className="w-5 h-5 text-green-600" />
+                                  <div>
+                                    <a 
+                                      href={(typeof att === 'string' ? att : att.filePath)} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="text-sm font-medium text-green-700 hover:underline"
+                                    >
+                                      {(() => {
+                                        if (typeof att === 'string') {
+                                          return att.split('/').pop() || att;
+                                        } else if (att && typeof att === 'object') {
+                                          return att.originalName || att.fileName || att.filePath?.split('/').pop() || 'Unknown File';
+                                        }
+                                        return 'Unknown File';
+                                      })()}
+                                    </a>
+                                    <p className="text-xs text-green-600">ไฟล์เดิม</p>
+                                  </div>
+                                </div>
+                              <button
+                                  onClick={async () => {
+                                    if (!confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
+                                      return;
+                                    }
+                                    
+                                    try {
+                                      // ลบไฟล์จากฐานข้อมูลถ้าเป็น object ที่มี id
+                                      if (att && typeof att === 'object' && att.id) {
+                                        const response = await fetch(`/api/departments/upload-attachment?attachmentId=${att.id}`, {
+                                          method: 'DELETE'
+                                        });
+                                        
+                                        if (response.ok) {
+                                          console.log('✅ ไฟล์ถูกลบจากฐานข้อมูลแล้ว');
+                                          alert('ลบไฟล์สำเร็จ');
+                                        } else {
+                                          console.error('❌ เกิดข้อผิดพลาดในการลบไฟล์จากฐานข้อมูล');
+                                          alert('เกิดข้อผิดพลาดในการลบไฟล์');
+                                          return;
+                                        }
+                                      }
+                                      
+                                      // ลบไฟล์จาก state
+                                  setEditingDepartment(prev => prev ? {
+                                    ...prev,
+                                    attachments: (((prev as any).attachments as any[]) || []).filter((_: any, index: number) => index !== idx)
+                                  } : null)
+                                    } catch (error) {
+                                      console.error('❌ เกิดข้อผิดพลาดในการลบไฟล์:', error);
+                                      alert('เกิดข้อผิดพลาดในการลบไฟล์');
+                                    }
+                                }}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                  title="ลบไฟล์"
+                              >
+                                  <TrashIcon className="w-4 h-4" />
+                              </button>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+                      )}
+
+                      {/* Upload Progress */}
+                      {isUploadingEditFiles && (
+                        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Spinner size="sm" />
+                            <span className="text-sm text-blue-700">
+                              กำลังอัปโหลดไฟล์... ({editingDepartmentFiles.length} ไฟล์)
+                            </span>
                 </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                
               </ModalBody>
               <ModalFooter>
                 <Button color="danger" variant="light" onPress={handleCancelEdit}>
@@ -1368,8 +2280,8 @@ export default function Departments() {
                     <PlusIcon className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold">เพิ่มแผนกใหม่</h2>
-                    <p className="text-sm text-gray-600">กรอกข้อมูลแผนกใหม่</p>
+                    <h2 className="text-xl font-semibold">เพิ่มประกาศรับสมัครใหม่</h2>
+                    <p className="text-sm text-gray-600">กรอกข้อมูลฝ่ายและกลุ่มงานใหม่</p>
                   </div>
                 </div>
               </ModalHeader>
@@ -1377,9 +2289,8 @@ export default function Departments() {
                 <div className="space-y-6">
                   {/* Basic Information */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">รหัสแผนก *</label>
+                      {/* <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">รหัสฝ่ายและกลุ่มงาน *</label>
                         <input
                           type="text"
                           placeholder="เช่น IT, HR, FIN"
@@ -1387,52 +2298,98 @@ export default function Departments() {
                           onChange={(e) => setNewDepartment(prev => ({ ...prev, code: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
+                      </div> */}
+                      {/* กลุ่มงาน (dropdown) */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">กลุ่มงาน*</label>
+                        <select
+                          value={newMissionGroupId}
+                          onChange={async (e) => {
+                            const val = e.target.value;
+                            setNewMissionGroupId(val);
+                            // reset department name when group changes
+                            setNewDepartment(prev => ({ ...prev, name: '' }));
+                            if (val && !departmentsByGroup[val]) {
+                              try {
+                                const res = await fetch(`/api/prisma/departments/by-mission-group?missionGroupId=${val}`);
+                                const json = await res.json();
+                                if (json.success) setDepartmentsByGroup(prev => ({ ...prev, [val]: json.data }));
+                              } catch (err) {
+                                console.error('Error fetching departments by group:', err);
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        >
+                          <option value="">เลือกกลุ่มงาน</option>
+                          {missionGroups.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* ชื่อฝ่าย */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">ฝ่าย*</label>
+                        <select
+                          value={newDepartment.name || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const list = departmentsByGroup[newMissionGroupId] || [];
+                            const selected = list.find(d => d.name === value);
+                            setNewDepartment(prev => ({
+                              ...prev,
+                              name: value,
+                              code: selected?.code || prev.code || ''
+                            }));
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                        >
+                          <option value="">เลือกฝ่าย</option>
+                          {(departmentsByGroup[newMissionGroupId] || []).map(dep => (
+                            <option key={dep.id} value={dep.name}>{dep.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">ชื่อแผนก *</label>
+                        <label className="text-sm font-medium text-gray-700">ตำแหน่งที่เปิดรับสมัคร</label>
                         <input
                           type="text"
-                          placeholder="ชื่อแผนก"
-                          value={newDepartment.name}
-                          onChange={(e) => setNewDepartment(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="เช่น โปรแกรมเมอร์, นักวิเคราะห์ระบบ, ผู้ดูแลระบบ"
+                          value={newDepartment.positions}
+                          onChange={(e) => setNewDepartment(prev => ({ ...prev, positions: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">คำอธิบาย</label>
-                        <textarea
-                          placeholder="คำอธิบายแผนก"
-                          value={newDepartment.description}
-                          onChange={(e) => setNewDepartment(prev => ({ ...prev, description: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                          rows={3}
-                        />
+                       <label className="text-sm font-medium text-gray-700">เพศ</label>
+                       <select
+                         value={newDepartment.gender}
+                         onChange={(e) => setNewDepartment(prev => ({ ...prev, gender: e.target.value as 'male' | 'female' | 'any' }))}
+                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       >
+                         <option value="male">ชาย</option>
+                         <option value="female">หญิง</option>
+                         <option value="any">ไม่จำกัดเพศ</option>
+                       </select>
                       </div>
+                    
                     </div>
 
-                    <div className="space-y-4">
+                    {/* Coordinator + Phone */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">ชื่อหัวหน้าแผนก</label>
+                        <label className="text-sm font-medium text-gray-700">ชื่อผู้ประสานงาน</label>
                         <input
                           type="text"
-                          placeholder="ชื่อหัวหน้าแผนก"
+                          placeholder="ชื่อผู้ประสานงาน"
                           value={newDepartment.manager}
                           onChange={(e) => setNewDepartment(prev => ({ ...prev, manager: e.target.value }))}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">อีเมลหัวหน้าแผนก</label>
-                        <input
-                          type="email"
-                          placeholder="manager@company.com"
-                          value={newDepartment.managerEmail}
-                          onChange={(e) => setNewDepartment(prev => ({ ...prev, managerEmail: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">เบอร์โทรศัพท์หัวหน้าแผนก</label>
+                        <label className="text-sm font-medium text-gray-700">เบอร์โทรศัพท์</label>
                         <input
                           type="text"
                           placeholder="081-234-5678"
@@ -1441,8 +2398,14 @@ export default function Departments() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
+                    </div>
+
+                   
+
+                    {/* Headcount + Status */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">จำนวนพนักงาน</label>
+                        <label className="text-sm font-medium text-gray-700">จำนวนที่เปิดรับ</label>
                         <input
                           type="number"
                           placeholder="0"
@@ -1451,21 +2414,6 @@ export default function Departments() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Additional Information */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">อัตราค่าจ้าง</label>
-                      <input
-                        type="text"
-                        placeholder="เช่น 2,500,000 บาท"
-                        value={newDepartment.salary}
-                        onChange={(e) => setNewDepartment(prev => ({ ...prev, salary: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">สถานะ</label>
                       <select
@@ -1476,8 +2424,11 @@ export default function Departments() {
                         <option value="active">เปิดใช้งาน</option>
                         <option value="inactive">ปิดใช้งาน</option>
                       </select>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Additional Information (optional fields can go here) */}
 
                   {/* Application Requirements */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1659,34 +2610,89 @@ export default function Departments() {
                         rows={2}
                       />
                     </div>
+                     {/* คำอธิบายการรับสมัคร */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">เพศที่ต้องการ</label>
-                      <select
-                        value={newDepartment.gender}
-                        onChange={(e) => setNewDepartment(prev => ({ ...prev, gender: e.target.value as 'male' | 'female' | 'any' }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="male">ชาย</option>
-                        <option value="female">หญิง</option>
-                        <option value="any">ไม่จำกัดเพศ</option>
-                      </select>
-                    </div>
+                       <label className="text-sm font-medium text-gray-700">คำอธิบาย</label>
+                       <textarea
+                         placeholder="คำอธิบายการรับสมัคร"
+                         value={newDepartment.description || ''}
+                         onChange={(e) => setNewDepartment(prev => ({ ...prev, description: e.target.value }))}
+                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                         rows={3}
+                       />
+                     </div>
+                    
                   </div>
 
-                  {/* Positions */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+
+                  {/* File Attachments */}
+                  <div className="space-y-4">
+                    <div className="border-t pt-6">
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                        <DocumentTextIcon className="w-5 h-5 text-blue-600" />
+                        เอกสารแนบ (ถ้ามี)
+                      </h3>
+
+                      {/* File Upload Area */}
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                          id="file-upload"
+                        />
+                        <label
+                          htmlFor="file-upload"
+                          className="cursor-pointer flex flex-col items-center gap-2"
+                        >
+                          <div className="p-3 bg-blue-50 rounded-full">
+                            <DocumentTextIcon className="w-8 h-8 text-blue-600" />
+                    </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-700">คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวางที่นี่</p>
+                            <p className="text-xs text-gray-500 mt-1">รองรับไฟล์: PDF, DOC, DOCX, JPG, PNG, TXT (ขนาดไม่เกิน 10MB)</p>
+                          </div>
+                        </label>
+                  </div>
+
+                      {/* Selected Files List */}
+                      {newDepartmentFiles.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          <h4 className="text-sm font-medium text-gray-700">ไฟล์ที่เลือก:</h4>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">ตำแหน่งที่เปิดรับสมัคร</label>
-                      <textarea
-                        placeholder="เช่น โปรแกรมเมอร์, นักวิเคราะห์ระบบ, ผู้ดูแลระบบ"
-                        value={newDepartment.positions}
-                        onChange={(e) => setNewDepartment(prev => ({ ...prev, positions: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                        rows={3}
-                      />
+                            {newDepartmentFiles.map((file, index) => (
+                              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                                <div className="flex items-center gap-3">
+                                  <DocumentTextIcon className="w-5 h-5 text-gray-500" />
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-700">{file.name}</p>
+                                    <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                     </div>
                   </div>
+                                <button onClick={() => handleRemoveFile(index)} className="p-1 text-red-500 hover:bg-red-50 rounded-full transition-colors" title="ลบไฟล์">
+                                  <TrashIcon className="w-4 h-4" />
+                                </button>
                 </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Upload Progress */}
+                      {isUploadingFiles && (
+                        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Spinner size="sm" />
+                            <span className="text-sm text-blue-700">กำลังอัปโหลดไฟล์... ({newDepartmentFiles.length} ไฟล์)</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                
               </ModalBody>
               <ModalFooter>
                 <Button color="danger" variant="light" onPress={handleCancelNewDepartment}>
@@ -1695,9 +2701,9 @@ export default function Departments() {
                 <Button 
                   color="primary" 
                   onPress={handleSaveNewDepartment}
-                  isDisabled={!newDepartment.name || !newDepartment.code}
+                  isDisabled={!newMissionGroupId || !newDepartment.name}
                 >
-                  เพิ่มแผนกใหม่
+                  บันทึก
                 </Button>
               </ModalFooter>
             </ModalContent>

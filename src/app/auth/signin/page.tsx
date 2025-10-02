@@ -11,14 +11,27 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (status === 'authenticated' && session) {
-      // หลังจาก login สำเร็จ ให้ไปหน้า Check Profile
-      router.push('/check-profile')
+      // หลังจาก login สำเร็จ ให้ไปหน้า Register
+      router.push('/register')
     }
   }, [session, status, router])
 
-  const handleLineLogin = () => {
-    // Callback ไปหน้า Check Profile
-    signIn('line', { callbackUrl: '/check-profile' })
+  const handleLineLogin = async () => {
+    try {
+      // Callback ไปหน้า Register
+      const result = await signIn('line', { 
+        callbackUrl: '/register',
+        redirect: false 
+      })
+      
+      if (result?.error) {
+        console.error('Line login error:', result.error)
+        alert('เกิดข้อผิดพลาดในการเข้าสู่ระบบด้วย Line: ' + result.error)
+      }
+    } catch (error) {
+      console.error('Line login failed:', error)
+      alert('ไม่สามารถเข้าสู่ระบบด้วย Line ได้ กรุณาลองใหม่อีกครั้ง')
+    }
   }
 
   // แสดง loading ขณะตรวจสอบ session
@@ -44,7 +57,7 @@ export default function SignInPage() {
     )
   }
 
-  // ถ้า login แล้ว ให้แสดง loading และ redirect
+  // ถ้า login แล้ว ให้แสดง loading และ redirect ไปหน้า Register
   if (status === 'authenticated') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -55,14 +68,14 @@ export default function SignInPage() {
                 size="lg"
                 color="success"
                 labelColor="success"
-                label="กำลังนำทาง..."
+                label="กำลังนำทางไปหน้า Register..."
               />
             </div>
             <h2 className="text-xl font-semibold text-gray-800 mb-2">
               เข้าสู่ระบบสำเร็จ
             </h2>
             <p className="text-gray-600">
-              กำลังนำทางไปตรวจสอบโปรไฟล์...
+              กำลังนำทางไปหน้า Register...
             </p>
           </CardBody>
         </Card>

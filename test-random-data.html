@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบการกรอกข้อมูลตัวอย่าง</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .button {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+        .data-display {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #4CAF50;
+        }
+        .data-item {
+            margin: 10px 0;
+            padding: 8px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+        .label {
+            font-weight: bold;
+            color: #555;
+            display: inline-block;
+            width: 150px;
+        }
+        .value {
+            color: #333;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f0f8ff;
+            border-radius: 8px;
+            border: 1px solid #d0e7ff;
+        }
+        .section-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #2c5aa0;
+            padding-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎲 ทดสอบการกรอกข้อมูลตัวอย่าง</h1>
+        
+        <div style="text-align: center; margin-bottom: 30px;">
+            <button class="button" onclick="generateRandomData()">
+                🎲 สร้างข้อมูลตัวอย่างใหม่
+            </button>
+            <button class="button" onclick="clearData()" style="background: linear-gradient(45deg, #ff6b6b, #ee5a52);">
+                🗑️ ล้างข้อมูล
+            </button>
+        </div>
+
+        <div id="dataDisplay" class="data-display" style="display: none;">
+            <h2 style="color: #4CAF50; text-align: center; margin-bottom: 20px;">📋 ข้อมูลตัวอย่างที่สร้างขึ้น</h2>
+            
+            <div class="section">
+                <div class="section-title">👤 ข้อมูลส่วนตัว</div>
+                <div class="data-item">
+                    <span class="label">คำนำหน้า:</span>
+                    <span class="value" id="prefix"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ชื่อ-นามสกุล:</span>
+                    <span class="value" id="fullName"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">เลขบัตรประชาชน:</span>
+                    <span class="value" id="idNumber"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">วันเกิด:</span>
+                    <span class="value" id="birthDate"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">อายุ:</span>
+                    <span class="value" id="age"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">เพศ:</span>
+                    <span class="value" id="gender"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">สถานภาพ:</span>
+                    <span class="value" id="maritalStatus"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">🏠 ข้อมูลที่อยู่</div>
+                <div class="data-item">
+                    <span class="label">ที่อยู่ตามทะเบียนบ้าน:</span>
+                    <span class="value" id="address1"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ที่อยู่ปัจจุบัน:</span>
+                    <span class="value" id="address2"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">โทรศัพท์:</span>
+                    <span class="value" id="phone"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">อีเมล:</span>
+                    <span class="value" id="email"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">📚 ข้อมูลการศึกษา</div>
+                <div class="data-item">
+                    <span class="label">สถาบัน:</span>
+                    <span class="value" id="institution"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">สาขา:</span>
+                    <span class="value" id="major"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ปีที่จบ:</span>
+                    <span class="value" id="gradYear"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">เกรดเฉลี่ย:</span>
+                    <span class="value" id="gpa"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">💼 ข้อมูลการทำงาน</div>
+                <div class="data-item">
+                    <span class="label">ตำแหน่ง:</span>
+                    <span class="value" id="position"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">บริษัท:</span>
+                    <span class="value" id="company"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">เงินเดือน:</span>
+                    <span class="value" id="salary"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ระยะเวลา:</span>
+                    <span class="value" id="workPeriod"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">🎯 ข้อมูลการสมัครงาน</div>
+                <div class="data-item">
+                    <span class="label">ตำแหน่งที่สมัคร:</span>
+                    <span class="value" id="appliedPosition"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">แผนก:</span>
+                    <span class="value" id="department"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">เงินเดือนที่คาดหวัง:</span>
+                    <span class="value" id="expectedSalary"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">วันที่สามารถเริ่มงาน:</span>
+                    <span class="value" id="availableDate"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">📄 เอกสารแนบ</div>
+                <div class="data-item">
+                    <span class="label">บัตรประชาชน:</span>
+                    <span class="value" id="idCard"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ทะเบียนบ้าน:</span>
+                    <span class="value" id="houseReg"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ใบรับรองการศึกษา:</span>
+                    <span class="value" id="educationCert"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ใบรับรองทหาร:</span>
+                    <span class="value" id="militaryCert"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function generateRandomData() {
+            const prefixes = ['นาย', 'นาง', 'นางสาว'];
+            const firstNames = ['สมชาย', 'สมหญิง', 'สมศักดิ์', 'สมปอง', 'สมใจ', 'สมบัติ', 'สมพร', 'สมคิด', 'สมศรี', 'สมบิน'];
+            const lastNames = ['ใจดี', 'รักดี', 'เงินดี', 'ดีใจ', 'ผลิตดี', 'คิดดี', 'บริการดี', 'จัดซื้อดี', 'กฎหมายดี', 'บินดี'];
+            const genders = ['ชาย', 'หญิง'];
+            const maritalStatuses = ['โสด', 'สมรส', 'หย่า', 'หม้าย'];
+            const provinces = ['กรุงเทพมหานคร', 'เชียงใหม่', 'เชียงราย', 'นครราชสีมา', 'ขอนแก่น', 'อุดรธานี', 'อุบลราชธานี', 'สงขลา', 'ภูเก็ต', 'ระยอง'];
+            const institutions = ['จุฬาลงกรณ์มหาวิทยาลัย', 'มหาวิทยาลัยธรรมศาสตร์', 'มหาวิทยาลัยเกษตรศาสตร์', 'มหาวิทยาลัยมหิดล', 'มหาวิทยาลัยเชียงใหม่'];
+            const majors = ['วิศวกรรมศาสตร์', 'บริหารธุรกิจ', 'แพทยศาสตร์', 'พยาบาลศาสตร์', 'เภสัชศาสตร์', 'ทันตแพทยศาสตร์', 'วิทยาศาสตร์', 'ศิลปศาสตร์'];
+            const positions = ['วิศวกร', 'นักบัญชี', 'พยาบาล', 'แพทย์', 'เภสัชกร', 'ทันตแพทย์', 'นักวิทยาศาสตร์', 'นักวิชาการ'];
+            const companies = ['บริษัท ตัวอย่าง จำกัด', 'โรงพยาบาลตัวอย่าง', 'มหาวิทยาลัยตัวอย่าง', 'โรงเรียนตัวอย่าง', 'องค์กรตัวอย่าง'];
+            const departments = ['แผนกการเงิน', 'แผนกบุคคล', 'แผนกการตลาด', 'แผนกผลิต', 'แผนกวิจัยและพัฒนา'];
+
+            // สร้างข้อมูลสุ่ม
+            const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+            const randomFirstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+            const randomLastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+            const randomGender = genders[Math.floor(Math.random() * genders.length)];
+            const randomAge = Math.floor(Math.random() * 40) + 20;
+            const randomYear = new Date().getFullYear() - randomAge;
+            const randomMonth = Math.floor(Math.random() * 12) + 1;
+            const randomDay = Math.floor(Math.random() * 28) + 1;
+            const randomBirthDate = `${randomDay}/${randomMonth}/${randomYear}`;
+            
+            const randomIdNumber = Math.floor(Math.random() * 9000000000000) + 1000000000000;
+            const randomProvince = provinces[Math.floor(Math.random() * provinces.length)];
+            const randomHouseNumber = Math.floor(Math.random() * 999) + 1;
+            const randomVillageNumber = Math.floor(Math.random() * 99) + 1;
+            
+            const randomInstitution = institutions[Math.floor(Math.random() * institutions.length)];
+            const randomMajor = majors[Math.floor(Math.random() * majors.length)];
+            const randomGpa = (Math.random() * 2 + 2).toFixed(2);
+            const randomGradYear = new Date().getFullYear() - Math.floor(Math.random() * 10);
+            
+            const randomPosition = positions[Math.floor(Math.random() * positions.length)];
+            const randomCompany = companies[Math.floor(Math.random() * companies.length)];
+            const randomSalary = Math.floor(Math.random() * 50000) + 20000;
+            const randomStartYear = new Date().getFullYear() - Math.floor(Math.random() * 5);
+            const randomEndYear = randomStartYear + Math.floor(Math.random() * 3) + 1;
+            
+            const randomAppliedPosition = positions[Math.floor(Math.random() * positions.length)];
+            const randomExpectedSalary = Math.floor(Math.random() * 100000) + 30000;
+            const randomDepartment = departments[Math.floor(Math.random() * departments.length)];
+            const randomAvailableDate = new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toLocaleDateString('th-TH');
+
+            // แสดงข้อมูล
+            document.getElementById('prefix').textContent = randomPrefix;
+            document.getElementById('fullName').textContent = `${randomFirstName} ${randomLastName}`;
+            document.getElementById('idNumber').textContent = randomIdNumber.toString().replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, '$1-$2-$3-$4-$5');
+            document.getElementById('birthDate').textContent = randomBirthDate;
+            document.getElementById('age').textContent = `${randomAge} ปี`;
+            document.getElementById('gender').textContent = randomGender;
+            document.getElementById('maritalStatus').textContent = maritalStatuses[Math.floor(Math.random() * maritalStatuses.length)];
+            
+            document.getElementById('address1').textContent = `${randomHouseNumber} หมู่ ${randomVillageNumber} ตำบลตัวอย่าง อำเภอเมือง จังหวัด${randomProvince} 10000`;
+            document.getElementById('address2').textContent = `${randomHouseNumber + 10} หมู่ ${randomVillageNumber + 1} ตำบลตัวอย่าง อำเภอเมือง จังหวัด${randomProvince} 10000`;
+            document.getElementById('phone').textContent = `08${Math.floor(Math.random() * 90000000) + 10000000}`;
+            document.getElementById('email').textContent = `${randomFirstName.toLowerCase()}.${randomLastName.toLowerCase()}@example.com`;
+            
+            document.getElementById('institution').textContent = randomInstitution;
+            document.getElementById('major').textContent = randomMajor;
+            document.getElementById('gradYear').textContent = randomGradYear.toString();
+            document.getElementById('gpa').textContent = randomGpa;
+            
+            document.getElementById('position').textContent = randomPosition;
+            document.getElementById('company').textContent = randomCompany;
+            document.getElementById('salary').textContent = `${randomSalary.toLocaleString()} บาท`;
+            document.getElementById('workPeriod').textContent = `${randomStartYear} - ${randomEndYear}`;
+            
+            document.getElementById('appliedPosition').textContent = randomAppliedPosition;
+            document.getElementById('department').textContent = randomDepartment;
+            document.getElementById('expectedSalary').textContent = `${randomExpectedSalary.toLocaleString()} บาท`;
+            document.getElementById('availableDate').textContent = randomAvailableDate;
+            
+            document.getElementById('idCard').textContent = `idCard_${Date.now()}.pdf`;
+            document.getElementById('houseReg').textContent = `houseRegistration_${Date.now()}.pdf`;
+            document.getElementById('educationCert').textContent = `educationCertificate_${Date.now()}.pdf`;
+            document.getElementById('militaryCert').textContent = randomGender === 'ชาย' ? `militaryCertificate_${Date.now()}.pdf` : 'ไม่จำเป็น';
+
+            // แสดงผล
+            document.getElementById('dataDisplay').style.display = 'block';
+        }
+
+        function clearData() {
+            document.getElementById('dataDisplay').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

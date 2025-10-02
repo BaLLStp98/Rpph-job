@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบการบันทึกข้อมูลที่อยู่แบบแยกในฐานข้อมูล MySQL</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #3498db;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .section h3 {
+            color: #2980b9;
+            margin-top: 0;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .field-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .field {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
+        .field-label {
+            font-weight: bold;
+            color: #34495e;
+            font-size: 14px;
+        }
+        .field-name {
+            font-family: 'Courier New', monospace;
+            color: #e74c3c;
+            font-size: 13px;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-top: 5px;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.completed { background: #d4edda; color: #155724; }
+        .status.new { background: #fff3cd; color: #856404; }
+        .code-block {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .highlight {
+            background: #f39c12;
+            color: #2c3e50;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .note {
+            background: #e8f5e8;
+            border-left: 4px solid #27ae60;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .migration-info {
+            background: #e1f5fe;
+            border: 1px solid #0277bd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏠 ระบบบันทึกข้อมูลที่อยู่แบบแยกในฐานข้อมูล MySQL</h1>
+            <p>การปรับปรุงระบบ Application Form ให้เก็บข้อมูลที่อยู่แบบแยกเป็นฟิลด์ย่อย</p>
+        </div>
+
+        <div class="section">
+            <h3>📊 สรุปการอัปเดต</h3>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <span class="status completed">✅ เพิ่มฟิลด์ในฐานข้อมูล</span>
+                <span class="status completed">✅ สร้าง Migration</span>
+                <span class="status completed">✅ อัปเดต Application Form</span>
+                <span class="status completed">✅ เพิ่มฟิลด์ที่อยู่ผู้ติดต่อฉุกเฉิน</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🗄️ ฟิลด์ใหม่ในฐานข้อมูล MySQL</h3>
+            <p>เพิ่มฟิลด์ที่อยู่แบบแยกในตาราง <code>application_forms</code>:</p>
+            
+            <h4>🏠 ที่อยู่ตามทะเบียนบ้าน (House Registration Address)</h4>
+            <div class="field-grid">
+                <div class="field">
+                    <div class="field-label">บ้านเลขที่</div>
+                    <div class="field-name">house_registration_house_number</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">หมู่ที่</div>
+                    <div class="field-name">house_registration_village_number</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ตรอก/ซอย</div>
+                    <div class="field-name">house_registration_alley</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ถนน</div>
+                    <div class="field-name">house_registration_road</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ตำบล/แขวง</div>
+                    <div class="field-name">house_registration_sub_district</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">อำเภอ/เขต</div>
+                    <div class="field-name">house_registration_district</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">จังหวัด</div>
+                    <div class="field-name">house_registration_province</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">รหัสไปรษณีย์</div>
+                    <div class="field-name">house_registration_postal_code</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">โทรศัพท์</div>
+                    <div class="field-name">house_registration_phone</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">โทรศัพท์มือถือ</div>
+                    <div class="field-name">house_registration_mobile</div>
+                </div>
+            </div>
+
+            <h4>🏠 ที่อยู่ปัจจุบัน (Current Address)</h4>
+            <div class="field-grid">
+                <div class="field">
+                    <div class="field-label">บ้านเลขที่</div>
+                    <div class="field-name">current_address_house_number</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">หมู่ที่</div>
+                    <div class="field-name">current_address_village_number</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ตรอก/ซอย</div>
+                    <div class="field-name">current_address_alley</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ถนน</div>
+                    <div class="field-name">current_address_road</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ตำบล/แขวง</div>
+                    <div class="field-name">current_address_sub_district</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">อำเภอ/เขต</div>
+                    <div class="field-name">current_address_district</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">จังหวัด</div>
+                    <div class="field-name">current_address_province</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">รหัสไปรษณีย์</div>
+                    <div class="field-name">current_address_postal_code</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">โทรศัพท์บ้าน</div>
+                    <div class="field-name">current_address_phone</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">โทรศัพท์มือถือ</div>
+                    <div class="field-name">current_address_mobile</div>
+                </div>
+            </div>
+
+            <h4>🆘 ที่อยู่ผู้ติดต่อฉุกเฉิน (Emergency Contact Address) <span class="status new">ใหม่!</span></h4>
+            <div class="field-grid">
+                <div class="field">
+                    <div class="field-label">บ้านเลขที่</div>
+                    <div class="field-name">emergency_address_house_number</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">หมู่ที่</div>
+                    <div class="field-name">emergency_address_village_number</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ตรอก/ซอย</div>
+                    <div class="field-name">emergency_address_alley</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ถนน</div>
+                    <div class="field-name">emergency_address_road</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ตำบล/แขวง</div>
+                    <div class="field-name">emergency_address_sub_district</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">อำเภอ/เขต</div>
+                    <div class="field-name">emergency_address_district</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">จังหวัด</div>
+                    <div class="field-name">emergency_address_province</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">รหัสไปรษณีย์</div>
+                    <div class="field-name">emergency_address_postal_code</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">โทรศัพท์</div>
+                    <div class="field-name">emergency_address_phone</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="migration-info">
+            <h3>🔄 Migration ที่สร้างขึ้น</h3>
+            <p><strong>ไฟล์:</strong> <code>20250917032436_add_emergency_address_fields</code></p>
+            <p>Migration นี้เพิ่มฟิลด์ที่อยู่ผู้ติดต่อฉุกเฉินในตาราง <code>application_forms</code></p>
+        </div>
+
+        <div class="section">
+            <h3>💻 การอัปเดต Application Form</h3>
+            <p>ปรับปรุงไฟล์ <code>src/app/application-form/page.tsx</code> ให้บันทึกข้อมูลที่อยู่แบบแยก:</p>
+            
+            <div class="code-block">
+// Address details - ที่อยู่ตามทะเบียนบ้าน
+<span class="highlight">house_registration_house_number</span>: applicationData.registeredAddress?.houseNumber || '',
+<span class="highlight">house_registration_village_number</span>: applicationData.registeredAddress?.villageNumber || '',
+<span class="highlight">house_registration_alley</span>: applicationData.registeredAddress?.alley || '',
+<span class="highlight">house_registration_road</span>: applicationData.registeredAddress?.road || '',
+<span class="highlight">house_registration_sub_district</span>: applicationData.registeredAddress?.subDistrict || '',
+<span class="highlight">house_registration_district</span>: applicationData.registeredAddress?.district || '',
+<span class="highlight">house_registration_province</span>: applicationData.registeredAddress?.province || '',
+<span class="highlight">house_registration_postal_code</span>: applicationData.registeredAddress?.postalCode || '',
+<span class="highlight">house_registration_phone</span>: applicationData.registeredAddress?.phone || '',
+<span class="highlight">house_registration_mobile</span>: applicationData.registeredAddress?.mobile || '',
+
+// Address details - ที่อยู่ปัจจุบัน
+<span class="highlight">current_address_house_number</span>: applicationData.currentAddressDetail?.houseNumber || '',
+<span class="highlight">current_address_village_number</span>: applicationData.currentAddressDetail?.villageNumber || '',
+// ... และอื่นๆ
+
+// Address details - ที่อยู่ผู้ติดต่อฉุกเฉิน
+<span class="highlight">emergency_address_house_number</span>: applicationData.emergencyAddress?.houseNumber || '',
+<span class="highlight">emergency_address_village_number</span>: applicationData.emergencyAddress?.villageNumber || '',
+// ... และอื่นๆ
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🔍 การ Debug และตรวจสอบ</h3>
+            <p>เพิ่มการ debug เพื่อตรวจสอบข้อมูลที่อยู่ที่บันทึกลงฐานข้อมูล:</p>
+            
+            <div class="code-block">
+console.log('🏠 Address Data:');
+console.log('  House Registration:', {
+  houseNumber: prismaData.house_registration_house_number,
+  villageNumber: prismaData.house_registration_village_number,
+  alley: prismaData.house_registration_alley,
+  road: prismaData.house_registration_road,
+  // ... และอื่นๆ
+});
+console.log('  Current Address:', { /* ... */ });
+console.log('  Emergency Address:', { /* ... */ });
+            </div>
+        </div>
+
+        <div class="note">
+            <h4>✅ ประโยชน์ของการเก็บข้อมูลแบบแยก</h4>
+            <ul>
+                <li><strong>ค้นหาง่าย:</strong> สามารถค้นหาตามจังหวัด อำเภอ ตำบล ได้โดยตรง</li>
+                <li><strong>รายงานแม่นยำ:</strong> สามารถสร้างรายงานสถิติตามพื้นที่ได้</li>
+                <li><strong>การตรวจสอบ:</strong> ตรวจสอบความถูกต้องของข้อมูลแต่ละฟิลด์ได้</li>
+                <li><strong>การแสดงผล:</strong> แสดงข้อมูลในฟอร์มและรายงานได้อย่างเป็นระเบียบ</li>
+                <li><strong>การวิเคราะห์:</strong> วิเคราะห์ข้อมูลทางสถิติตามภูมิศาสตร์ได้</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <h4>⚠️ สิ่งที่ต้องระวัง</h4>
+            <ul>
+                <li>ข้อมูลเดิมที่เป็น string เดียวยังคงอยู่ในฟิลด์ <code>addressAccordingToHouseRegistration</code> และ <code>currentAddress</code></li>
+                <li>ระบบจะบันทึกทั้งข้อมูลแบบเดิมและแบบแยกเพื่อความเข้ากันได้</li>
+                <li>ควรทดสอบการบันทึกและการแสดงผลก่อนใช้งานจริง</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h3>🚀 วิธีการทดสอบ</h3>
+            <ol>
+                <li>เข้าไปที่หน้า Application Form</li>
+                <li>กรอกข้อมูลที่อยู่ในแต่ละส่วน:
+                    <ul>
+                        <li>ที่อยู่ตามทะเบียนบ้าน</li>
+                        <li>ที่อยู่ปัจจุบัน</li>
+                        <li>ที่อยู่ผู้ติดต่อฉุกเฉิน</li>
+                    </ul>
+                </li>
+                <li>ส่งฟอร์ม</li>
+                <li>ตรวจสอบ Console เพื่อดูข้อมูลที่บันทึก</li>
+                <li>ตรวจสอบในฐานข้อมูล MySQL ว่าข้อมูลถูกบันทึกในฟิลด์ที่ถูกต้อง</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h3>📋 สรุป</h3>
+            <p>ระบบได้รับการปรับปรุงให้เก็บข้อมูลที่อยู่แบบแยกเป็นฟิลด์ย่อยในฐานข้อมูล MySQL แล้ว ทำให้:</p>
+            <ul>
+                <li>✅ เก็บข้อมูลที่อยู่ตามทะเบียนบ้านแบบแยก (10 ฟิลด์)</li>
+                <li>✅ เก็บข้อมูลที่อยู่ปัจจุบันแบบแยก (10 ฟิลด์)</li>
+                <li>✅ เก็บข้อมูลที่อยู่ผู้ติดต่อฉุกเฉินแบบแยก (9 ฟิลด์) - <strong>ใหม่!</strong></li>
+                <li>✅ มีการ debug เพื่อตรวจสอบข้อมูลที่บันทึก</li>
+                <li>✅ ระบบเดิมยังคงทำงานได้ปกติ</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

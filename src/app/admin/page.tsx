@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useUser } from '../../contexts/UserContext';
 import {
   Card,
   CardHeader,
@@ -16,7 +18,6 @@ import {
   TableBody,
   TableRow,
   TableCell,
-  Pagination,
   Input,
   Select,
   SelectItem,
@@ -39,24 +40,58 @@ import {
   FunnelIcon,
   ChartBarIcon,
   UsersIcon,
+  UserGroupIcon,
   DocumentCheckIcon,
-  ClockIcon
+  ClockIcon,
+  ClipboardDocumentListIcon
 } from '@heroicons/react/24/outline';
 
 interface ApplicationData {
   id: string;
-  submittedAt: string;
+  createdAt: string;
   status: string;
   prefix: string;
   firstName: string;
   lastName: string;
-  appliedPosition: string;
-  expectedSalary: string;
+  idNumber?: string;
+  idCardIssuedAt?: string;
+  idCardIssueDate?: string;
+  idCardExpiryDate?: string;
+  age?: string;
+  race?: string;
+  placeOfBirth?: string;
+  nationality?: string;
+  religion?: string;
+  maritalStatus?: string;
+  addressAccordingToHouseRegistration?: string;
+  currentAddress: string;
   email: string;
   phone: string;
-  currentAddress: string;
-  birthDate: string;
-  gender: string;
+  birthDate?: string;
+  gender?: string;
+  emergencyContact?: string;
+  emergencyPhone?: string;
+  emergencyRelationship?: string;
+  emergencyAddress?: {
+    houseNumber?: string;
+    villageNumber?: string;
+    alley?: string;
+    road?: string;
+    subDistrict?: string;
+    district?: string;
+    province?: string;
+  };
+  emergencyWorkplace?: {
+    name?: string;
+    district?: string;
+    province?: string;
+    phone?: string;
+  };
+  appliedPosition: string;
+  expectedSalary: string;
+  availableDate?: string;
+  currentWork?: boolean;
+  department?: string;
   education: Array<{
     level?: string;
     degree?: string;
@@ -76,6 +111,54 @@ interface ApplicationData {
     salary?: string;
     reason?: string;
   }>;
+  skills?: string;
+  languages?: string;
+  computerSkills?: string;
+  certificates?: string;
+  references?: string;
+  spouseInfo?: {
+    firstName?: string;
+    lastName?: string;
+  };
+  registeredAddress?: {
+    houseNumber?: string;
+    villageNumber?: string;
+    alley?: string;
+    road?: string;
+    subDistrict?: string;
+    district?: string;
+    province?: string;
+    postalCode?: string;
+  };
+  currentAddressDetail?: {
+    houseNumber?: string;
+    villageNumber?: string;
+    alley?: string;
+    road?: string;
+    subDistrict?: string;
+    district?: string;
+    province?: string;
+    postalCode?: string;
+    homePhone?: string;
+    mobilePhone?: string;
+  };
+  medicalRights?: {
+    hasUniversalHealthcare?: boolean;
+    universalHealthcareHospital?: string;
+    hasSocialSecurity?: boolean;
+    socialSecurityHospital?: string;
+    dontWantToChangeHospital?: boolean;
+    wantToChangeHospital?: boolean;
+    newHospital?: string;
+    hasCivilServantRights?: boolean;
+    otherRights?: string;
+  };
+  multipleEmployers?: string[];
+  staffInfo?: {
+    position?: string;
+    department?: string;
+    startWork?: string;
+  };
   profileImage?: string;
   documents?: {
     idCard?: string;
@@ -85,7 +168,9 @@ interface ApplicationData {
     medicalCertificate?: string;
     drivingLicense?: string;
     nameChangeCertificate?: string;
+    otherDocuments?: string[];
   };
+  updatedAt?: string;
 }
 
 // Component สำหรับแสดงข้อมูลในรูปแบบเดียวกับหน้า application-form
@@ -197,93 +282,267 @@ const ApplicationFormView = ({ application, onStatusUpdate }: {
         </CardHeader>
         <CardBody className="p-8">
           {/* Profile Image */}
-          {application.profileImage && (
-            <div className="mb-8 p-6 border border-gray-200 rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 shadow-lg">
-              <h3 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
-                รูปถ่ายประจำตัว
-              </h3>
-              <div className="flex items-center gap-6">
+          <div className="mb-8 p-6 border border-gray-200 rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 shadow-lg">
+            <h3 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+              รูปถ่ายประจำตัว
+            </h3>
+            <div className="flex items-center gap-6">
+              {application.profileImage ? (
                 <img
-                  src={`/image/${application.profileImage}`}
+                  src={`/api/image?file=${application.profileImage}`}
                   alt="Profile"
                   className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
                   onError={(e) => {
-                    console.error('Image failed to load:', application.profileImage);
-                    // Hide the image and show fallback
                     e.currentTarget.style.display = 'none';
                     const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                    if (fallback) {
-                      fallback.style.display = 'block';
-                    }
-                  }}
-                  onLoad={() => {
-                    console.log('Image loaded successfully:', application.profileImage);
+                    if (fallback) fallback.style.display = 'flex';
                   }}
                 />
-                <div 
-                  className="w-24 h-24 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-lg"
-                  style={{ display: 'none' }}
-                >
-                  {application.firstName.charAt(0)}{application.lastName.charAt(0)}
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">รูปถ่ายประจำตัว</p>
-                </div>
+              ) : null}
+              <div 
+                className="w-24 h-24 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-lg"
+                style={{ display: application.profileImage ? 'none' : 'flex' }}
+              >
+                {application.firstName.charAt(0)}{application.lastName.charAt(0)}
+              </div>
+              <div>
+                <p className="text-sm text-gray-700"><span className="font-medium">ชื่อ:</span> {application.prefix ? `${application.prefix} ` : ''}{application.firstName} {application.lastName}</p>
+                <p className="text-sm text-gray-700"><span className="font-medium">ตำแหน่งที่สมัคร:</span> {application.appliedPosition}</p>
               </div>
             </div>
-          )}
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">คำนำหน้า</p>
-              <p className="text-gray-800">{application.prefix || '-'}</p>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">คำนำหน้า</label>
+              <input
+                value={application.prefix || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
             </div>
             
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">ชื่อ</p>
-              <p className="text-gray-800">{application.firstName}</p>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">ชื่อ</label>
+              <input
+                value={application.firstName || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
             </div>
             
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">นามสกุล</p>
-              <p className="text-gray-800">{application.lastName}</p>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">นามสกุล</label>
+              <input
+                value={application.lastName || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
             </div>
             
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">อีเมล</p>
-              <p className="text-gray-800">{application.email}</p>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">อีเมล</label>
+              <input
+                value={application.email || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
             </div>
             
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">เบอร์โทรศัพท์</p>
-              <p className="text-gray-800">{application.phone}</p>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">เบอร์โทรศัพท์</label>
+              <input
+                value={application.phone || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
             </div>
             
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">วันเกิด</p>
-              <p className="text-gray-800">{application.birthDate}</p>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">วันเกิด</label>
+              <input
+                value={application.birthDate || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
             </div>
             
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">เพศ</p>
-              <p className="text-gray-800">{application.gender}</p>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">เพศ</label>
+              <input
+                value={application.gender || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
             </div>
             
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">ตำแหน่งที่สมัคร</p>
-              <p className="text-gray-800">{application.appliedPosition}</p>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">ตำแหน่งที่สมัคร</label>
+              <input
+                value={application.appliedPosition || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
             </div>
             
             <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">เงินเดือนที่คาดหวัง</p>
-              <p className="text-gray-800">{application.expectedSalary}</p>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">เงินเดือนที่คาดหวัง</label>
+              <input
+                value={application.expectedSalary || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
             </div>
           </div>
 
           <div className="mt-6">
-            <p className="text-sm font-medium text-gray-600 mb-1">ที่อยู่ปัจจุบัน</p>
-            <p className="text-gray-800">{application.currentAddress}</p>
+            <label className="text-sm font-medium text-gray-600 mb-1 block">ที่อยู่ปัจจุบัน</label>
+            <textarea
+              value={application.currentAddress || ''}
+              disabled
+              readOnly
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              rows={3}
+            />
           </div>
+
+          {/* ข้อมูลเพิ่มเติม */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+            <div>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">เลขบัตรประชาชน</label>
+              <input
+                value={application.idNumber || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">อายุ</label>
+              <input
+                value={application.age || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">เชื้อชาติ</label>
+              <input
+                value={application.race || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">สถานที่เกิด</label>
+              <input
+                value={application.placeOfBirth || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">สัญชาติ</label>
+              <input
+                value={application.nationality || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">ศาสนา</label>
+              <input
+                value={application.religion || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">สถานะสมรส</label>
+              <input
+                value={application.maritalStatus || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">วันที่สามารถเริ่มงานได้</label>
+              <input
+                value={application.availableDate || ''}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-600 mb-1 block">ทำงานปัจจุบัน</label>
+              <input
+                value={application.currentWork ? 'ใช่' : 'ไม่'}
+                disabled
+                readOnly
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+              />
+            </div>
+          </div>
+
+          {/* ข้อมูลติดต่อฉุกเฉิน */}
+          {(application.emergencyContact || application.emergencyPhone) && (
+            <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-blue-50">
+              <h4 className="text-lg font-semibold text-gray-700 mb-4">ข้อมูลติดต่อฉุกเฉิน</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1 block">ชื่อผู้ติดต่อฉุกเฉิน</label>
+                  <input
+                    value={application.emergencyContact || ''}
+                    disabled
+                    readOnly
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1 block">เบอร์โทรฉุกเฉิน</label>
+                  <input
+                    value={application.emergencyPhone || ''}
+                    disabled
+                    readOnly
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1 block">ความสัมพันธ์</label>
+                  <input
+                    value={application.emergencyRelationship || ''}
+                    disabled
+                    readOnly
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </CardBody>
       </Card>
 
@@ -307,28 +566,53 @@ const ApplicationFormView = ({ application, onStatusUpdate }: {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">ระดับการศึกษา</p>
-                      <p className="text-gray-800">{edu.level || '-'}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">ระดับการศึกษา</label>
+                      <input
+                        value={edu.level || ''}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                      />
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">สถาบันการศึกษา</p>
-                      <p className="text-gray-800">{edu.institution || edu.school || '-'}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">สถาบันการศึกษา</label>
+                      <input
+                        value={edu.institution || edu.school || ''}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                      />
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">สาขาวิชา</p>
-                      <p className="text-gray-800">{edu.major || '-'}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">สาขาวิชา</label>
+                      <input
+                        value={edu.major || ''}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                      />
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">ปีที่จบ</p>
-                      <p className="text-gray-800">{edu.year || edu.graduationYear || '-'}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">ปีที่จบ</label>
+                      <input
+                        value={edu.year || edu.graduationYear || ''}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                      />
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">เกรดเฉลี่ย</p>
-                      <p className="text-gray-800">{edu.gpa || '-'}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">เกรดเฉลี่ย</label>
+                      <input
+                        value={edu.gpa || ''}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                      />
                     </div>
                   </div>
                 </div>
@@ -363,30 +647,56 @@ const ApplicationFormView = ({ application, onStatusUpdate }: {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">ตำแหน่ง</p>
-                      <p className="text-gray-800">{work.position}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">ตำแหน่ง</label>
+                      <input
+                        value={work.position || ''}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                      />
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">บริษัท</p>
-                      <p className="text-gray-800">{work.company}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">บริษัท</label>
+                      <input
+                        value={work.company || ''}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                      />
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">ระยะเวลา</p>
-                      <p className="text-gray-800">{work.startDate} - {work.endDate}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">ระยะเวลา</label>
+                      <input
+                        value={`${work.startDate || ''} - ${work.endDate || ''}`}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                      />
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-gray-600 mb-1">เงินเดือน</p>
-                      <p className="text-gray-800">{work.salary || '-'}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">เงินเดือน</label>
+                      <input
+                        value={work.salary || ''}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                      />
                     </div>
                   </div>
                   
                   {(work.description || work.reason) && (
                     <div className="mt-4">
-                      <p className="text-sm font-medium text-gray-600 mb-1">รายละเอียดงาน</p>
-                      <p className="text-gray-800">{work.description || work.reason}</p>
+                      <label className="text-sm font-medium text-gray-600 mb-1 block">รายละเอียดงาน</label>
+                      <textarea
+                        value={work.description || work.reason || ''}
+                        disabled
+                        readOnly
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                        rows={3}
+                      />
                     </div>
                   )}
                 </div>
@@ -400,6 +710,217 @@ const ApplicationFormView = ({ application, onStatusUpdate }: {
           )}
         </CardBody>
       </Card>
+
+      {/* ทักษะและความสามารถ */}
+      {(application.skills || application.languages || application.computerSkills || application.certificates || application.references) && (
+        <Card className="shadow-xl border-0">
+          <CardHeader className="bg-gradient-to-r from-purple-500 via-violet-500 to-purple-600 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 to-violet-400/20"></div>
+            <div className="relative flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <DocumentTextIcon className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-semibold">ทักษะและความสามารถ</h2>
+            </div>
+          </CardHeader>
+          <CardBody className="p-8">
+            <div className="space-y-6">
+              {application.skills && (
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1 block">ทักษะพิเศษ</label>
+                  <textarea
+                    value={application.skills}
+                    disabled
+                    readOnly
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                    rows={3}
+                  />
+                </div>
+              )}
+              
+              {application.languages && (
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1 block">ภาษา</label>
+                  <textarea
+                    value={application.languages}
+                    disabled
+                    readOnly
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                    rows={2}
+                  />
+                </div>
+              )}
+              
+              {application.computerSkills && (
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1 block">ทักษะคอมพิวเตอร์</label>
+                  <textarea
+                    value={application.computerSkills}
+                    disabled
+                    readOnly
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                    rows={3}
+                  />
+                </div>
+              )}
+              
+              {application.certificates && (
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1 block">ใบรับรอง/ประกาศนียบัตร</label>
+                  <textarea
+                    value={application.certificates}
+                    disabled
+                    readOnly
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                    rows={3}
+                  />
+                </div>
+              )}
+              
+              {application.references && (
+                <div>
+                  <label className="text-sm font-medium text-gray-600 mb-1 block">บุคคลอ้างอิง</label>
+                  <textarea
+                    value={application.references}
+                    disabled
+                    readOnly
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                    rows={3}
+                  />
+                </div>
+              )}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* ข้อมูลคู่สมรส */}
+      {application.spouseInfo && (
+        <Card className="shadow-xl border-0">
+          <CardHeader className="bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-pink-400/20 to-rose-400/20"></div>
+            <div className="relative flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <UserIcon className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-semibold">ข้อมูลคู่สมรส</h2>
+            </div>
+          </CardHeader>
+          <CardBody className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">ชื่อคู่สมรส</label>
+                <input
+                  value={application.spouseInfo.firstName || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">นามสกุลคู่สมรส</label>
+                <input
+                  value={application.spouseInfo.lastName || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* ที่อยู่ตามทะเบียนบ้าน */}
+      {application.registeredAddress && (
+        <Card className="shadow-xl border-0">
+          <CardHeader className="bg-gradient-to-r from-cyan-500 via-sky-500 to-cyan-600 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-400/20 to-sky-400/20"></div>
+            <div className="relative flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <MapPinIcon className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-semibold">ที่อยู่ตามทะเบียนบ้าน</h2>
+            </div>
+          </CardHeader>
+          <CardBody className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">บ้านเลขที่</label>
+                <input
+                  value={application.registeredAddress.houseNumber || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">หมู่</label>
+                <input
+                  value={application.registeredAddress.villageNumber || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">ซอย</label>
+                <input
+                  value={application.registeredAddress.alley || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">ถนน</label>
+                <input
+                  value={application.registeredAddress.road || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">ตำบล/แขวง</label>
+                <input
+                  value={application.registeredAddress.subDistrict || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">อำเภอ/เขต</label>
+                <input
+                  value={application.registeredAddress.district || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">จังหวัด</label>
+                <input
+                  value={application.registeredAddress.province || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-600 mb-1 block">รหัสไปรษณีย์</label>
+                <input
+                  value={application.registeredAddress.postalCode || ''}
+                  disabled
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent border-gray-300 disabled:bg-gray-50"
+                />
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
 
       {/* เอกสารแนบ */}
       <Card className="shadow-xl border-0">
@@ -491,6 +1012,15 @@ const ApplicationFormView = ({ application, onStatusUpdate }: {
               อนุมัติการสมัคร
             </Button>
             <Button
+              color="warning"
+              size="lg"
+              startContent={<ClockIcon className="w-5 h-5" />}
+              onClick={() => onStatusUpdate?.(application.id, 'pending')}
+              className="flex-1"
+            >
+              รอพิจารณา
+            </Button>
+            <Button
               color="danger"
               size="lg"
               startContent={<XMarkIcon className="w-5 h-5" />}
@@ -507,6 +1037,8 @@ const ApplicationFormView = ({ application, onStatusUpdate }: {
 };
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  const { user, logout } = useUser();
   const [applications, setApplications] = useState<ApplicationData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -533,14 +1065,14 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/application-form');
+      const response = await fetch('/api/resume-deposit');
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
-      const apps = data.applications || [];
+      const apps = data.data || [];
       setApplications(apps);
       
       // คำนวณสถิติ
@@ -600,9 +1132,15 @@ export default function AdminDashboard() {
     onClose();
   };
 
+  const handleLogout = () => {
+    logout();
+    alert('ออกจากระบบ Admin สำเร็จ');
+    router.push('/dashboard');
+  };
+
   const handleStatusUpdate = async (applicationId: string, newStatus: string) => {
     try {
-      const response = await fetch(`/api/application-form/${applicationId}`, {
+      const response = await fetch(`/api/resume-deposit/${applicationId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -683,81 +1221,147 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-                <ChartBarIcon className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">ระบบจัดการผู้สมัครงาน</h1>
-                <p className="text-sm text-gray-600">Admin Dashboard</p>
-              </div>
+      {/* <div className="bg-white shadow-sm border-b">
+        <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
+              <ChartBarIcon className="w-6 h-6 text-white" />
             </div>
-            <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">ระบบจัดการผู้สมัครงาน</h1>
+              <p className="text-sm text-gray-600">Admin Dashboard</p>
+              {user && (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs text-gray-500">ผู้ใช้งาน:</span>
+                  <span className="text-xs font-medium text-blue-600">
+                    {user.firstName} {user.lastName} ({user.role === 'superadmin' ? 'Super Admin' : 'Admin'})
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+                      <div className="flex items-center gap-4">
               <Badge color="primary" variant="flat">
                 Admin
               </Badge>
+              <Button
+                color="danger"
+                variant="flat"
+                size="sm"
+                onClick={handleLogout}
+                startContent={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                }
+              >
+                ออกจากระบบ
+              </Button>
             </div>
+        </div>
+      </div> */}
+
+      <div className="flex flex-col lg:flex-row">
+        {/* Sidebar */}
+        <div className="w-full lg:w-64 bg-white shadow-lg min-h-screen lg:min-h-0">
+          <div className="p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4 sm:mb-6">เมนูจัดการ</h2>
+            <nav className="space-y-2">
+              <Button
+                variant="light"
+                className="w-full justify-start h-10 sm:h-12 text-gray-700 hover:bg-blue-50 hover:text-blue-700 text-sm sm:text-base"
+                startContent={<UsersIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                onClick={() => router.push('/departments')}
+              >
+                ประกาศรับสมัครงาน
+              </Button>
+              <Button
+                variant="light"
+                className="w-full justify-start h-10 sm:h-12 text-gray-700 hover:bg-green-50 hover:text-green-700 text-sm sm:text-base"
+                startContent={<UserGroupIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                onClick={() => router.push('/admin/members')}
+              >
+                จัดการสมาชิก
+              </Button>
+              <Button
+                variant="light"
+                className="w-full justify-start h-10 sm:h-12 text-gray-700 hover:bg-orange-50 hover:text-orange-700 text-sm sm:text-base"
+                startContent={<ClipboardDocumentListIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                onClick={() => router.push('/admin/contract-renewal')}
+              >
+                จัดการต่อสัญญาพนักงาน
+              </Button>
+              {/* <Button
+                variant="light"
+                className="w-full justify-start h-10 sm:h-12 text-gray-700 hover:bg-purple-50 hover:text-purple-700 text-sm sm:text-base"
+                startContent={
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                }
+                onClick={() => router.push('/dashboard')}
+              >
+                กลับหน้า Dashboard
+              </Button> */}
+            </nav>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* สถิติ */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="shadow-lg border-0">
-            <CardBody className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <UsersIcon className="w-6 h-6 text-blue-600" />
+        {/* Main Content */}
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
+          {/* สถิติ */}
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+            <Card className="shadow-lg border-0 rounded-xl">
+            <CardBody className="p-3 sm:p-4 md:p-6">
+              <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+                <div className="p-2 sm:p-3 bg-blue-100 rounded-lg">
+                  <UsersIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">ผู้สมัครทั้งหมด</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                  <p className="text-xs sm:text-sm text-gray-600">ผู้สมัครทั้งหมด</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{stats.total}</p>
                 </div>
               </div>
             </CardBody>
           </Card>
 
-          <Card className="shadow-lg border-0">
-            <CardBody className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-yellow-100 rounded-lg">
-                  <ClockIcon className="w-6 h-6 text-yellow-600" />
+          <Card className="shadow-lg border-0 rounded-xl">
+            <CardBody className="p-3 sm:p-4 md:p-6">
+              <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+                <div className="p-2 sm:p-3 bg-yellow-100 rounded-lg">
+                  <ClockIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-yellow-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">รอพิจารณา</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
+                  <p className="text-xs sm:text-sm text-gray-600">รอพิจารณา</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{stats.pending}</p>
                 </div>
               </div>
             </CardBody>
           </Card>
 
-          <Card className="shadow-lg border-0">
-            <CardBody className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <CheckIcon className="w-6 h-6 text-green-600" />
+          <Card className="shadow-lg border-0 rounded-xl">
+            <CardBody className="p-3 sm:p-4 md:p-6">
+              <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+                <div className="p-2 sm:p-3 bg-green-100 rounded-lg">
+                  <CheckIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">ผ่านการคัดเลือก</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.approved}</p>
+                  <p className="text-xs sm:text-sm text-gray-600">ผ่านการคัดเลือก</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{stats.approved}</p>
                 </div>
               </div>
             </CardBody>
           </Card>
 
-          <Card className="shadow-lg border-0">
-            <CardBody className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-red-100 rounded-lg">
-                  <XMarkIcon className="w-6 h-6 text-red-600" />
+          <Card className="shadow-lg border-0 rounded-xl">
+            <CardBody className="p-3 sm:p-4 md:p-6">
+              <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+                <div className="p-2 sm:p-3 bg-red-100 rounded-lg">
+                  <XMarkIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">ไม่ผ่าน</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.rejected}</p>
+                  <p className="text-xs sm:text-sm text-gray-600">ไม่ผ่าน</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{stats.rejected}</p>
                 </div>
               </div>
             </CardBody>
@@ -765,7 +1369,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* ตารางผู้สมัครงาน */}
-        <Card className="shadow-lg border-0">
+        <Card className="shadow-lg border-0 rounded-xl">
           <CardHeader className="pb-4">
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
               <div>
@@ -790,6 +1394,11 @@ export default function AdminDashboard() {
                   }}
                   startContent={<FunnelIcon className="w-4 h-4 text-gray-400" />}
                   className="w-full sm:w-40"
+                  classNames={{
+                    trigger: "bg-white border-gray-300",
+                    value: "text-gray-900",
+                    listbox: "bg-white"
+                  }}
                 >
                   <SelectItem key="all">ทั้งหมด</SelectItem>
                   <SelectItem key="pending">รอพิจารณา</SelectItem>
@@ -800,11 +1409,16 @@ export default function AdminDashboard() {
             </div>
           </CardHeader>
           <CardBody className="p-0">
-            <Table aria-label="ตารางผู้สมัครงาน">
+            <Table 
+              aria-label="ตารางผู้สมัครงาน"
+              classNames={{
+                wrapper: "min-h-[400px]",
+              }}
+            >
               <TableHeader>
                 <TableColumn>ผู้สมัคร</TableColumn>
                 <TableColumn>ตำแหน่ง</TableColumn>
-                <TableColumn>อีเมล</TableColumn>
+                <TableColumn>ฝ่าย</TableColumn>
                 <TableColumn>เบอร์โทร</TableColumn>
                 <TableColumn>วันที่สมัคร</TableColumn>
                 <TableColumn>สถานะ</TableColumn>
@@ -812,7 +1426,7 @@ export default function AdminDashboard() {
               </TableHeader>
               <TableBody emptyContent="ไม่พบข้อมูลผู้สมัครงาน">
                 {items.map((application) => (
-                  <TableRow key={application.id}>
+                  <TableRow key={application.id} className="hover:bg-gray-100 transition-colors">
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar
@@ -822,39 +1436,62 @@ export default function AdminDashboard() {
                         />
                         <div>
                           <p className="font-semibold text-gray-900">
-                            {application.firstName} {application.lastName}
+                            {application.prefix ? `${application.prefix} ` : ''}{application.firstName} {application.lastName}
                           </p>
-                          <p className="text-sm text-gray-600">{application.prefix}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <p className="text-gray-900">{application.appliedPosition}</p>
-                      <p className="text-sm text-gray-600">{application.expectedSalary}</p>
+                      <div>
+                        <p className="font-medium text-gray-900">{application.appliedPosition}</p>
+                        {/* <p className="text-sm text-gray-600">{application.expectedSalary}</p> */}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <p className="text-gray-900">{application.email}</p>
+                      <div>
+                        {application.department ? (
+                          <span className="text-gray-900 text-sm">
+                            {application.department}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500 text-sm">-</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <p className="text-gray-900">{application.phone}</p>
+                      <div>
+                        <p className="text-gray-900">{application.phone}</p>
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <p className="text-gray-900">{formatDate(application.submittedAt)}</p>
+                      <div>
+                        <p className="text-sm text-gray-600">{formatDate(application.createdAt)}</p>
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Badge
+                      <Chip
                         color={getStatusColor(application.status)}
-                        variant="flat"
-                        className="text-xs"
+                        variant="bordered"
+                        size="sm"
+                        className={`font-medium ${
+                          application.status.toLowerCase() === 'approved' 
+                            ? 'border-green-500 text-green-700 bg-green-50' 
+                            : application.status.toLowerCase() === 'pending'
+                            ? 'border-yellow-500 text-yellow-700 bg-yellow-50'
+                            : application.status.toLowerCase() === 'rejected'
+                            ? 'border-red-500 text-red-700 bg-red-50'
+                            : 'border-gray-500 text-gray-700 bg-gray-50'
+                        }`}
                       >
                         {getStatusText(application.status)}
-                      </Badge>
+                      </Chip>
                     </TableCell>
                     <TableCell>
                       <Button
                         size="sm"
                         variant="ghost"
                         color="primary"
+                        className="bg-blue-100 text-blue-600 hover:bg-blue-200"
                         startContent={<EyeIcon className="w-4 h-4" />}
                         onClick={() => handleViewDetails(application)}
                       >
@@ -866,26 +1503,93 @@ export default function AdminDashboard() {
               </TableBody>
             </Table>
             
-            <div className="flex justify-between items-center p-4 border-t">
+            {/* Custom Pagination */}
+            {pages > 1 && (
+              <div className="flex justify-center items-center space-x-2 mt-8 py-4">
+                {/* Previous Button */}
+                <button
+                  onClick={() => setPage(page - 1)}
+                  disabled={page === 1}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    page === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  ‹
+                </button>
+
+                {/* Page Numbers */}
+                {Array.from({ length: pages }, (_, i) => i + 1).map((pageNum) => {
+                  // Show first page, last page, current page, and pages around current page
+                  const shouldShow = 
+                    pageNum === 1 || 
+                    pageNum === pages || 
+                    Math.abs(pageNum - page) <= 1
+
+                  if (!shouldShow) {
+                    // Show ellipsis
+                    if (pageNum === 2 && page > 4) {
+                      return (
+                        <span key={pageNum} className="px-3 py-2 text-gray-500">
+                          ...
+                        </span>
+                      )
+                    }
+                    if (pageNum === pages - 1 && page < pages - 3) {
+                      return (
+                        <span key={pageNum} className="px-3 py-2 text-gray-500">
+                          ...
+                        </span>
+                      )
+                    }
+                    return null
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setPage(pageNum)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        page === pageNum
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                })}
+
+                {/* Next Button */}
+                <button
+                  onClick={() => setPage(page + 1)}
+                  disabled={page === pages}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    page === pages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  ›
+                </button>
+              </div>
+            )}
+            
+            {/* Page Info */}
+            <div className="flex justify-center items-center p-4 border-t">
               <div className="text-sm text-gray-600">
                 แสดง {((page - 1) * rowsPerPage) + 1} ถึง {Math.min(page * rowsPerPage, filteredApplications.length)} จาก {filteredApplications.length} รายการ
               </div>
-              <Pagination
-                total={pages}
-                page={page}
-                onChange={setPage}
-                showControls
-                showShadow
-                color="primary"
-              />
             </div>
           </CardBody>
         </Card>
+        </div>
       </div>
 
       {/* Detail Modal */}
       {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-800">

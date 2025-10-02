@@ -43,23 +43,25 @@ export default function CheckProfilePage() {
             return;
           }
 
-          const email = session.user?.email ?? ''
-          const response = await fetch(`/api/profile?lineId=${encodeURIComponent(lineId)}${email ? `&email=${encodeURIComponent(email)}` : ''}`);
+          const response = await fetch(`/api/prisma/users?lineId=${encodeURIComponent(lineId)}`);
           console.log('Check Profile - API response status:', response.status);
 
           if (response.ok) {
             const data = await response.json();
             console.log('Check Profile - API response data:', data);
 
-            if (data.success && data.data) {
-              console.log('Check Profile - Found application data, redirect to dashboard');
+            // ตรวจสอบว่ามีข้อมูลผู้ใช้จริงๆ หรือไม่
+            if (data.success && data.data && Array.isArray(data.data) && data.data.length > 0) {
+              console.log('Check Profile - Found user data, redirect to dashboard');
               setHasApplicationData(true);
               setStep('redirecting');
               router.replace('/dashboard');
               return;
+            } else {
+              console.log('Check Profile - No user data found in response:', data);
             }
           } else if (response.status === 404) {
-            console.log('Check Profile - No application data (404)');
+            console.log('Check Profile - No user data (404)');
           } else {
             console.log('Check Profile - API response not ok:', response.status);
           }

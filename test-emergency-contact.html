@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบการกรอกข้อมูลผู้ติดต่อฉุกเฉิน</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .button {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+        .data-display {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #4CAF50;
+        }
+        .data-item {
+            margin: 10px 0;
+            padding: 8px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+        .label {
+            font-weight: bold;
+            color: #555;
+            display: inline-block;
+            width: 200px;
+        }
+        .value {
+            color: #333;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f0f8ff;
+            border-radius: 8px;
+            border: 1px solid #d0e7ff;
+        }
+        .section-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c5aa0;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #2c5aa0;
+            padding-bottom: 5px;
+        }
+        .debug-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚨 ทดสอบการกรอกข้อมูลผู้ติดต่อฉุกเฉิน</h1>
+        
+        <div style="text-align: center; margin-bottom: 30px;">
+            <button class="button" onclick="generateEmergencyContactData()">
+                🎲 สร้างข้อมูลผู้ติดต่อฉุกเฉิน
+            </button>
+            <button class="button" onclick="clearData()" style="background: linear-gradient(45deg, #ff6b6b, #ee5a52);">
+                🗑️ ล้างข้อมูล
+            </button>
+        </div>
+
+        <div id="dataDisplay" class="data-display" style="display: none;">
+            <h2 style="color: #4CAF50; text-align: center; margin-bottom: 20px;">📋 ข้อมูลผู้ติดต่อฉุกเฉินที่สร้างขึ้น</h2>
+            
+            <div class="section">
+                <div class="section-title">👤 ข้อมูลพื้นฐานผู้ติดต่อฉุกเฉิน</div>
+                <div class="data-item">
+                    <span class="label">ชื่อ:</span>
+                    <span class="value" id="emergencyFirstName"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">นามสกุล:</span>
+                    <span class="value" id="emergencyLastName"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ความสัมพันธ์:</span>
+                    <span class="value" id="emergencyRelationship"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">เบอร์โทรศัพท์:</span>
+                    <span class="value" id="emergencyPhone"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">🏠 ที่อยู่ผู้ติดต่อฉุกเฉิน</div>
+                <div class="data-item">
+                    <span class="label">บ้านเลขที่:</span>
+                    <span class="value" id="emergencyHouseNumber"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">หมู่:</span>
+                    <span class="value" id="emergencyVillageNumber"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ซอย:</span>
+                    <span class="value" id="emergencyAlley"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ถนน:</span>
+                    <span class="value" id="emergencyRoad"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">ตำบล:</span>
+                    <span class="value" id="emergencySubDistrict"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">อำเภอ:</span>
+                    <span class="value" id="emergencyDistrict"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">จังหวัด:</span>
+                    <span class="value" id="emergencyProvince"></span>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">💼 ที่ทำงานผู้ติดต่อฉุกเฉิน</div>
+                <div class="data-item">
+                    <span class="label">ชื่อที่ทำงาน:</span>
+                    <span class="value" id="emergencyWorkplaceName"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">อำเภอ:</span>
+                    <span class="value" id="emergencyWorkplaceDistrict"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">จังหวัด:</span>
+                    <span class="value" id="emergencyWorkplaceProvince"></span>
+                </div>
+                <div class="data-item">
+                    <span class="label">เบอร์โทรศัพท์:</span>
+                    <span class="value" id="emergencyWorkplacePhone"></span>
+                </div>
+            </div>
+
+            <div class="debug-info">
+                <strong>🔍 Debug Information:</strong><br>
+                <div id="debugInfo"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function generateEmergencyContactData() {
+            const firstNames = ['สมชาย', 'สมหญิง', 'สมศักดิ์', 'สมปอง', 'สมใจ', 'สมบัติ', 'สมพร', 'สมคิด', 'สมศรี', 'สมบิน'];
+            const lastNames = ['ใจดี', 'รักดี', 'เงินดี', 'ดีใจ', 'ผลิตดี', 'คิดดี', 'บริการดี', 'จัดซื้อดี', 'กฎหมายดี', 'บินดี'];
+            const relationships = ['บิดา', 'มารดา', 'พี่ชาย', 'น้องชาย', 'พี่สาว', 'น้องสาว', 'สามี', 'ภรรยา'];
+            const provinces = ['กรุงเทพมหานคร', 'เชียงใหม่', 'เชียงราย', 'นครราชสีมา', 'ขอนแก่น', 'อุดรธานี', 'อุบลราชธานี', 'สงขลา', 'ภูเก็ต', 'ระยอง'];
+            const districts = ['เมือง', 'สันทราย', 'แม่ริม', 'หางดง', 'สันป่าข่อย'];
+            const subDistricts = ['ศรีภูมิ', 'สุเทพ', 'ช้างเผือก', 'หายยา', 'วัดเกต'];
+
+            // สร้างข้อมูลสุ่ม
+            const randomEmergencyFirstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+            const randomEmergencyLastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+            const randomEmergencyPhone = `08${Math.floor(Math.random() * 90000000) + 10000000}`;
+            const randomEmergencyRelationship = relationships[Math.floor(Math.random() * relationships.length)];
+            
+            const randomProvince = provinces[Math.floor(Math.random() * provinces.length)];
+            const randomDistrict = districts[Math.floor(Math.random() * districts.length)];
+            const randomSubDistrict = subDistricts[Math.floor(Math.random() * subDistricts.length)];
+            const randomHouseNumber = Math.floor(Math.random() * 999) + 1;
+            const randomVillageNumber = Math.floor(Math.random() * 99) + 1;
+
+            // แสดงข้อมูล
+            document.getElementById('emergencyFirstName').textContent = randomEmergencyFirstName;
+            document.getElementById('emergencyLastName').textContent = randomEmergencyLastName;
+            document.getElementById('emergencyRelationship').textContent = randomEmergencyRelationship;
+            document.getElementById('emergencyPhone').textContent = randomEmergencyPhone;
+            
+            document.getElementById('emergencyHouseNumber').textContent = (randomHouseNumber + 20).toString();
+            document.getElementById('emergencyVillageNumber').textContent = (randomVillageNumber + 2).toString();
+            document.getElementById('emergencyAlley').textContent = `ซอย ${Math.floor(Math.random() * 99) + 1}`;
+            document.getElementById('emergencyRoad').textContent = `ถนน ${Math.floor(Math.random() * 99) + 1}`;
+            document.getElementById('emergencySubDistrict').textContent = randomSubDistrict;
+            document.getElementById('emergencyDistrict').textContent = randomDistrict;
+            document.getElementById('emergencyProvince').textContent = randomProvince;
+            
+            document.getElementById('emergencyWorkplaceName').textContent = `บริษัท ${randomEmergencyFirstName} จำกัด`;
+            document.getElementById('emergencyWorkplaceDistrict').textContent = randomDistrict;
+            document.getElementById('emergencyWorkplaceProvince').textContent = randomProvince;
+            document.getElementById('emergencyWorkplacePhone').textContent = `02${Math.floor(Math.random() * 90000000) + 10000000}`;
+
+            // แสดง debug information
+            const debugInfo = `
+emergencyContactFirstName: "${randomEmergencyFirstName}"
+emergencyContactLastName: "${randomEmergencyLastName}"
+emergencyPhone: "${randomEmergencyPhone}"
+emergencyRelationship: "${randomEmergencyRelationship}"
+emergencyAddress: {
+  houseNumber: "${(randomHouseNumber + 20).toString()}"
+  villageNumber: "${(randomVillageNumber + 2).toString()}"
+  alley: "ซอย ${Math.floor(Math.random() * 99) + 1}"
+  road: "ถนน ${Math.floor(Math.random() * 99) + 1}"
+  subDistrict: "${randomSubDistrict}"
+  district: "${randomDistrict}"
+  province: "${randomProvince}"
+}
+emergencyWorkplace: {
+  name: "บริษัท ${randomEmergencyFirstName} จำกัด"
+  district: "${randomDistrict}"
+  province: "${randomProvince}"
+  phone: "02${Math.floor(Math.random() * 90000000) + 10000000}"
+}
+            `;
+            document.getElementById('debugInfo').innerHTML = debugInfo.replace(/\n/g, '<br>');
+
+            // แสดงผล
+            document.getElementById('dataDisplay').style.display = 'block';
+        }
+
+        function clearData() {
+            document.getElementById('dataDisplay').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
+

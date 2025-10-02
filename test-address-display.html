@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ทดสอบการแสดงผลข้อมูลที่อยู่แบบแยกในหน้า Application Data</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #3498db;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .section h3 {
+            color: #2980b9;
+            margin-top: 0;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .field-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .field {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
+        .field-label {
+            font-weight: bold;
+            color: #34495e;
+            font-size: 14px;
+        }
+        .field-name {
+            font-family: 'Courier New', monospace;
+            color: #e74c3c;
+            font-size: 13px;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-top: 5px;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.completed { background: #d4edda; color: #155724; }
+        .status.new { background: #fff3cd; color: #856404; }
+        .code-block {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .highlight {
+            background: #f39c12;
+            color: #2c3e50;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .note {
+            background: #e8f5e8;
+            border-left: 4px solid #27ae60;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .ui-preview {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .ui-section {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .ui-section h4 {
+            color: #2980b9;
+            margin-top: 0;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+        .ui-field {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .ui-field:last-child {
+            border-bottom: none;
+        }
+        .ui-label {
+            font-weight: 500;
+            color: #555;
+            font-size: 14px;
+        }
+        .ui-value {
+            color: #333;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏠 ระบบแสดงผลข้อมูลที่อยู่แบบแยกในหน้า Application Data</h1>
+            <p>การปรับปรุงหน้า Application Data ให้แสดงข้อมูลที่อยู่แบบแยกจากฐานข้อมูล MySQL</p>
+        </div>
+
+        <div class="section">
+            <h3>📊 สรุปการอัปเดต</h3>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <span class="status completed">✅ อัปเดต Interface</span>
+                <span class="status completed">✅ อัปเดตการดึงข้อมูล</span>
+                <span class="status completed">✅ อัปเดต UI แสดงผล</span>
+                <span class="status completed">✅ เพิ่มฟิลด์ที่อยู่ผู้ติดต่อฉุกเฉิน</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🔧 การอัปเดต Interface ApplicationData</h3>
+            <p>เพิ่มฟิลด์ที่อยู่แบบแยกจากฐานข้อมูลใน interface:</p>
+            
+            <div class="code-block">
+interface ApplicationData {
+  // ... existing fields ...
+  
+  // ฟิลด์ที่อยู่แบบแยกจากฐานข้อมูล
+  <span class="highlight">house_registration_house_number</span>?: string;
+  <span class="highlight">house_registration_village_number</span>?: string;
+  <span class="highlight">house_registration_alley</span>?: string;
+  <span class="highlight">house_registration_road</span>?: string;
+  <span class="highlight">house_registration_sub_district</span>?: string;
+  <span class="highlight">house_registration_district</span>?: string;
+  <span class="highlight">house_registration_province</span>?: string;
+  <span class="highlight">house_registration_postal_code</span>?: string;
+  <span class="highlight">house_registration_phone</span>?: string;
+  <span class="highlight">house_registration_mobile</span>?: string;
+  
+  <span class="highlight">current_address_house_number</span>?: string;
+  <span class="highlight">current_address_village_number</span>?: string;
+  // ... และอื่นๆ
+  
+  <span class="highlight">emergency_address_house_number</span>?: string;
+  <span class="highlight">emergency_address_village_number</span>?: string;
+  // ... และอื่นๆ
+}
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>📡 การอัปเดตการดึงข้อมูลจากฐานข้อมูล</h3>
+            <p>ปรับปรุงการดึงข้อมูลจาก API ให้รวมฟิลด์ที่อยู่แบบแยก:</p>
+            
+            <div class="code-block">
+const applicationsData = data.data.map((app: any) => ({
+  // ... existing fields ...
+  
+  // ฟิลด์ที่อยู่แบบแยกจากฐานข้อมูล
+  <span class="highlight">house_registration_house_number</span>: app.house_registration_house_number || '',
+  <span class="highlight">house_registration_village_number</span>: app.house_registration_village_number || '',
+  <span class="highlight">house_registration_alley</span>: app.house_registration_alley || '',
+  <span class="highlight">house_registration_road</span>: app.house_registration_road || '',
+  <span class="highlight">house_registration_sub_district</span>: app.house_registration_sub_district || '',
+  <span class="highlight">house_registration_district</span>: app.house_registration_district || '',
+  <span class="highlight">house_registration_province</span>: app.house_registration_province || '',
+  <span class="highlight">house_registration_postal_code</span>: app.house_registration_postal_code || '',
+  <span class="highlight">house_registration_phone</span>: app.house_registration_phone || '',
+  <span class="highlight">house_registration_mobile</span>: app.house_registration_mobile || '',
+  
+  // ... current address fields ...
+  // ... emergency address fields ...
+}));
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🎨 การอัปเดต UI แสดงผล</h3>
+            <p>เพิ่มส่วนแสดงข้อมูลที่อยู่แบบแยกในหน้า Application Data:</p>
+            
+            <div class="ui-preview">
+                <h4>ตัวอย่าง UI ที่แสดงผล:</h4>
+                
+                <div class="ui-section">
+                    <h4>🏠 ที่อยู่ตามทะเบียนบ้านแบบละเอียด</h4>
+                    <div class="ui-field">
+                        <span class="ui-label">เลขที่:</span>
+                        <span class="ui-value">123</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">หมู่ที่:</span>
+                        <span class="ui-value">4</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">ตรอก/ซอย:</span>
+                        <span class="ui-value">สุขุมวิท 42</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">ถนน:</span>
+                        <span class="ui-value">สุขุมวิท</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">ตำบล/แขวง:</span>
+                        <span class="ui-value">บางนาใต้</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">อำเภอ/เขต:</span>
+                        <span class="ui-value">เขตบางนา</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">จังหวัด:</span>
+                        <span class="ui-value">กรุงเทพมหานคร</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">รหัสไปรษณีย์:</span>
+                        <span class="ui-value">10260</span>
+                    </div>
+                </div>
+                
+                <div class="ui-section">
+                    <h4>🏠 ที่อยู่ปัจจุบันแบบละเอียด</h4>
+                    <div class="ui-field">
+                        <span class="ui-label">เลขที่:</span>
+                        <span class="ui-value">456</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">หมู่ที่:</span>
+                        <span class="ui-value">2</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">ตรอก/ซอย:</span>
+                        <span class="ui-value">สุขุมวิท 24</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">ถนน:</span>
+                        <span class="ui-value">สุขุมวิท</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">ตำบล/แขวง:</span>
+                        <span class="ui-value">คลองตัน</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">อำเภอ/เขต:</span>
+                        <span class="ui-value">เขตวัฒนา</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">จังหวัด:</span>
+                        <span class="ui-value">กรุงเทพมหานคร</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">รหัสไปรษณีย์:</span>
+                        <span class="ui-value">10110</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">โทรศัพท์บ้าน:</span>
+                        <span class="ui-value">02-123-4567</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">โทรศัพท์มือถือ:</span>
+                        <span class="ui-value">081-234-5678</span>
+                    </div>
+                </div>
+                
+                <div class="ui-section">
+                    <h4>🆘 ที่อยู่ผู้ติดต่อฉุกเฉินแบบละเอียด</h4>
+                    <div class="ui-field">
+                        <span class="ui-label">บ้านเลขที่:</span>
+                        <span class="ui-value">789</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">หมู่ที่:</span>
+                        <span class="ui-value">1</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">ตรอก/ซอย:</span>
+                        <span class="ui-value">สุขุมวิท 55</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">ถนน:</span>
+                        <span class="ui-value">สุขุมวิท</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">ตำบล/แขวง:</span>
+                        <span class="ui-value">คลองตัน</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">อำเภอ/เขต:</span>
+                        <span class="ui-value">เขตวัฒนา</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">จังหวัด:</span>
+                        <span class="ui-value">กรุงเทพมหานคร</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">รหัสไปรษณีย์:</span>
+                        <span class="ui-value">10110</span>
+                    </div>
+                    <div class="ui-field">
+                        <span class="ui-label">โทรศัพท์:</span>
+                        <span class="ui-value">02-987-6543</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>🔍 วิธีการทำงาน</h3>
+            <p>ระบบจะแสดงข้อมูลที่อยู่แบบแยกโดย:</p>
+            <ol>
+                <li><strong>ตรวจสอบข้อมูล:</strong> ตรวจสอบว่ามีข้อมูลที่อยู่แบบแยกจากฐานข้อมูลหรือไม่</li>
+                <li><strong>แสดงผลแบบแยก:</strong> แสดงข้อมูลที่อยู่แบบแยกเป็นฟิลด์ย่อย</li>
+                <li><strong>Fallback:</strong> หากไม่มีข้อมูลแบบแยก จะแสดงข้อมูลจากฟิลด์เดิม</li>
+                <li><strong>เงื่อนไขการแสดง:</strong> แสดงเฉพาะเมื่อมีข้อมูลที่อยู่แบบแยก</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h3>💻 โค้ดตัวอย่างการแสดงผล</h3>
+            <div class="code-block">
+{/* ที่อยู่ตามทะเบียนบ้านแบบละเอียด */}
+{((application.registeredAddress && Object.keys(application.registeredAddress).some(key => (application.registeredAddress as any)[key])) || 
+  (application.house_registration_house_number || application.house_registration_village_number || application.house_registration_alley || application.house_registration_road || application.house_registration_sub_district || application.house_registration_district || application.house_registration_province || application.house_registration_postal_code)) && (
+  <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-blue-50">
+    <h4 className="font-medium text-gray-800 mb-3">ที่อยู่ตามทะเบียนบ้านแบบละเอียด</h4>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <p className="text-sm font-medium text-gray-600 mb-1">เลขที่</p>
+        <div className="w-full p-2 border border-gray-200 rounded-md bg-gray-50">
+          <p className="text-gray-800">{application.registeredAddress?.houseNumber || application.house_registration_house_number || '-'}</p>
+        </div>
+      </div>
+      {/* ... other fields ... */}
+    </div>
+  </div>
+)}
+            </div>
+        </div>
+
+        <div class="note">
+            <h4>✅ ประโยชน์ที่ได้รับ</h4>
+            <ul>
+                <li><strong>แสดงผลชัดเจน:</strong> ข้อมูลที่อยู่แสดงเป็นฟิลด์ย่อยที่อ่านง่าย</li>
+                <li><strong>ข้อมูลครบถ้วน:</strong> แสดงข้อมูลที่อยู่แบบแยกจากฐานข้อมูล</li>
+                <li><strong>ความยืดหยุ่น:</strong> รองรับทั้งข้อมูลแบบเดิมและแบบแยก</li>
+                <li><strong>การจัดการ:</strong> สามารถแก้ไขข้อมูลที่อยู่แบบแยกได้</li>
+                <li><strong>การค้นหา:</strong> ค้นหาข้อมูลตามฟิลด์ย่อยได้</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <h4>⚠️ สิ่งที่ต้องระวัง</h4>
+            <ul>
+                <li>ข้อมูลที่อยู่แบบแยกจะแสดงเฉพาะเมื่อมีข้อมูลในฐานข้อมูล</li>
+                <li>หากไม่มีข้อมูลแบบแยก ระบบจะแสดงข้อมูลจากฟิลด์เดิม</li>
+                <li>ควรทดสอบการแสดงผลกับข้อมูลจริง</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h3>🚀 วิธีการทดสอบ</h3>
+            <ol>
+                <li>เข้าไปที่หน้า Application Data</li>
+                <li>เลือกดูข้อมูลใบสมัครงาน</li>
+                <li>ตรวจสอบว่ามีส่วนแสดงข้อมูลที่อยู่แบบแยกหรือไม่</li>
+                <li>ตรวจสอบว่าข้อมูลที่แสดงถูกต้องหรือไม่</li>
+                <li>ทดสอบกับข้อมูลที่อยู่ผู้ติดต่อฉุกเฉิน</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h3>📋 สรุป</h3>
+            <p>ระบบ Application Data ได้รับการปรับปรุงให้แสดงข้อมูลที่อยู่แบบแยกแล้ว:</p>
+            <ul>
+                <li>✅ <strong>ที่อยู่ตามทะเบียนบ้านแบบแยก</strong> - แสดง 10 ฟิลด์</li>
+                <li>✅ <strong>ที่อยู่ปัจจุบันแบบแยก</strong> - แสดง 10 ฟิลด์</li>
+                <li>✅ <strong>ที่อยู่ผู้ติดต่อฉุกเฉินแบบแยก</strong> - แสดง 9 ฟิลด์</li>
+                <li>✅ <strong>การแสดงผลแบบยืดหยุ่น</strong> - รองรับทั้งข้อมูลแบบเดิมและแบบแยก</li>
+                <li>✅ <strong>UI ที่สวยงาม</strong> - แสดงผลเป็นตารางแบบแยกฟิลด์</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

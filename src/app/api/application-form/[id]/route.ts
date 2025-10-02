@@ -119,3 +119,45 @@ export async function DELETE(
     );
   }
 } 
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const updates = await request.json();
+
+    const dataPath = path.join(process.cwd(), 'data', 'application-forms.json');
+    const raw = fs.readFileSync(dataPath, 'utf8');
+    const data = JSON.parse(raw);
+
+    const index = data.applications.findIndex((app: any) => app.id === id);
+    if (index === -1) {
+      return NextResponse.json(
+        { error: 'ไม่พบข้อมูลใบสมัครงาน' },
+        { status: 404 }
+      );
+    }
+
+    // อัปเดตเฉพาะฟิลด์ที่ส่งมา พร้อม timestamp
+    data.applications[index] = {
+      ...data.applications[index],
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+
+    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+
+    return NextResponse.json({
+      message: 'อัปเดตข้อมูลสำเร็จ',
+      application: data.applications[index],
+    });
+  } catch (error) {
+    console.error('Error patching application:', error);
+    return NextResponse.json(
+      { error: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล' },
+      { status: 500 }
+    );
+  }
+}

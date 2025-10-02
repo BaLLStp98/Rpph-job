@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       doc.fontSize(14).font('Helvetica-Bold').text('๑.๗ ประวัติการศึกษา');
       doc.fontSize(12).font('Helvetica');
       
-      application.education.forEach((edu, index) => {
+      application.education.forEach((edu: any, index) => {
         doc.text(`การศึกษา #${index + 1}:`);
         doc.text(`  ระดับการศึกษา: ${edu.level || '-'}`);
         doc.text(`  สถาบันการศึกษา: ${edu.institution || edu.school || '-'}`);
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       doc.fontSize(14).font('Helvetica-Bold').text('๑.๘ ประสบการณ์การทำงาน');
       doc.fontSize(12).font('Helvetica');
       
-      application.workExperience.forEach((work, index) => {
+      application.workExperience.forEach((work: any, index) => {
         doc.text(`ประสบการณ์การทำงาน #${index + 1}:`);
         doc.text(`  ตำแหน่ง: ${work.position}`);
         doc.text(`  บริษัท: ${work.company}`);

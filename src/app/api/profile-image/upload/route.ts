@@ -1,87 +1,80 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
+import { NextRequest, NextResponse } from 'next/server'
+import fs from 'fs'
+import path from 'path'
+import { prisma } from '../../../../../lib/prisma'
+
+const ensureDir = (dirPath: string) => {
+	if (!fs.existsSync(dirPath)) {
+		fs.mkdirSync(dirPath, { recursive: true })
+	}
+}
+
+const getExtensionFromNameOrType = (file: File): string => {
+	// Prefer file name extension, fallback to mime type
+	const name = (file as any).name as string | undefined
+	if (name && name.includes('.')) {
+		const ext = name.split('.').pop()!.toLowerCase()
+		return ext
+	}
+	const mime = file.type || ''
+	if (mime === 'image/png') return 'png'
+	if (mime === 'image/jpeg') return 'jpg'
+	if (mime === 'image/jpg') return 'jpg'
+	if (mime === 'image/webp') return 'webp'
+	if (mime === 'image/gif') return 'gif'
+	return 'png'
+}
 
 export async function POST(request: NextRequest) {
-  try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const documentType = formData.get('documentType') as string;
+	try {
+		const formData = await request.formData()
+		const file = formData.get('file') as File | null
+		const applicationId = formData.get('applicationId') as string | null
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
+		if (!file || !applicationId) {
+			return NextResponse.json(
+				{ success: false, message: 'ข้อมูลไม่ครบ (file หรือ applicationId)' },
+				{ status: 400 }
+			)
+		}
 
-    // ตรวจสอบว่าเป็นรูปภาพ
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'File must be an image' }, { status: 400 });
-    }
+		const publicDir = path.join(process.cwd(), 'public')
+		const imageDir = path.join(publicDir, 'image')
+		ensureDir(imageDir)
 
-    // สร้างโฟลเดอร์ public/image ถ้ายังไม่มี
-    const imageDir = path.join(process.cwd(), 'public', 'image');
-    try {
-      await mkdir(imageDir, { recursive: true });
-    } catch (error) {
-      console.error('Error creating directory:', error);
-    }
+		// ลบไฟล์เดิมของไอดีนี้ (ถ้ามี) เพื่อแทนที่
+		const existingFiles = fs
+			.readdirSync(imageDir)
+			.filter((f) => f.startsWith(`profile_${applicationId}.`))
+		existingFiles.forEach((f) => {
+			try { fs.unlinkSync(path.join(imageDir, f)) } catch {}
+		})
 
-    // สร้างชื่อไฟล์ที่ไม่ซ้ำกัน
-    const timestamp = Date.now();
-    const fileExtension = path.extname(file.name);
-    const fileName = `profile_${timestamp}${fileExtension}`;
-    const filePath = path.join(imageDir, fileName);
+		const ext = getExtensionFromNameOrType(file)
+		const fileName = `profile_${applicationId}.${ext}`
+		const filePath = path.join(imageDir, fileName)
 
-    // แปลงไฟล์เป็น Buffer และบันทึก
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
+		const arrayBuffer = await file.arrayBuffer()
+		const buffer = Buffer.from(arrayBuffer)
+		fs.writeFileSync(filePath, buffer)
 
-    // อัปเดตข้อมูลใน application-forms.json
-    const fs = require('fs');
-    const applicationsPath = path.join(process.cwd(), 'data', 'application-forms.json');
-    
-    if (fs.existsSync(applicationsPath)) {
-      const applicationsData = JSON.parse(fs.readFileSync(applicationsPath, 'utf8'));
-      
-      // ตรวจสอบว่า applicationsData มีโครงสร้างที่ถูกต้อง
-      if (!applicationsData || !applicationsData.applications || !Array.isArray(applicationsData.applications)) {
-        console.error('Invalid applications data structure:', applicationsData);
-        return NextResponse.json({ error: 'Invalid data structure' }, { status: 500 });
-      }
-      
-      // รับ applicationId จาก formData
-      const applicationId = formData.get('applicationId') as string;
-      
-      if (applicationId) {
-        // หา application ตาม ID และอัปเดต profileImage
-        const applicationIndex = applicationsData.applications.findIndex((app: any) => app.id === applicationId);
-        if (applicationIndex !== -1) {
-          applicationsData.applications[applicationIndex].profileImage = fileName;
-          applicationsData.applications[applicationIndex].updatedAt = new Date().toISOString();
-        } else {
-          console.error('Application not found with ID:', applicationId);
-          return NextResponse.json({ error: 'Application not found' }, { status: 404 });
-        }
-      } else {
-        // ถ้าไม่มี ID ให้อัปเดต application ล่าสุด
-        if (applicationsData.applications.length > 0) {
-          const latestApplication = applicationsData.applications[applicationsData.applications.length - 1];
-          latestApplication.profileImage = fileName;
-          latestApplication.updatedAt = new Date().toISOString();
-        }
-      }
-      
-      fs.writeFileSync(applicationsPath, JSON.stringify(applicationsData, null, 2));
-    }
+		// อัปเดตฟิลด์ profileImageUrl ในตาราง resumeDeposit เพื่อให้หน้าอื่นดึงไปใช้ได้
+		try {
+			await prisma.resumeDeposit.update({
+				where: { id: applicationId },
+				data: { profileImageUrl: fileName }
+			})
+		} catch (e) {
+			console.error('Failed to update resumeDeposit profileImageUrl:', e)
+			// ไม่ fail การอัปโหลดรูป แม้จะอัปเดต DB ไม่สำเร็จ
+		}
 
-    return NextResponse.json({ 
-      success: true, 
-      fileName: fileName,
-      message: 'Profile image uploaded successfully' 
-    });
-
-  } catch (error) {
-    console.error('Error uploading profile image:', error);
-    return NextResponse.json({ error: 'Failed to upload profile image' }, { status: 500 });
-  }
-} 
+		return NextResponse.json({ success: true, profileImage: fileName })
+	} catch (error) {
+		console.error('Upload profile image error:', error)
+		return NextResponse.json(
+			{ success: false, message: 'เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ' },
+			{ status: 500 }
+		)
+	}
+}

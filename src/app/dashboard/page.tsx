@@ -1,496 +1,802 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, CardBody, CardHeader, Button, Avatar, Chip, Badge, Input, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from '@heroui/react'
+import { Card, CardBody, CardHeader, Button, Chip, Spinner, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure, Input, Select, SelectItem } from '@heroui/react'
+import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
+import { useUser } from '../../contexts/UserContext'
+import { getSession, useSession } from 'next-auth/react'
 
 export default function Dashboard() {
   const router = useRouter()
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedDepartment, setSelectedDepartment] = useState('all')
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const { user, isAuthenticated, isAdmin, login, loginWithUser, logout } = useUser()
+  const { data: session, status } = useSession()
 
-  // ข้อมูลแผนกต่างๆ
-  const departments = [
-    { id: 'all', name: 'ทั้งหมด', icon: '🏥', color: 'primary' },
-    { id: 'emergency', name: 'ห้องฉุกเฉิน', icon: '🚑', color: 'danger' },
-    { id: 'surgery', name: 'ศัลยกรรม', icon: '⚕️', color: 'warning' },
-    { id: 'pediatrics', name: 'กุมารเวชศาสตร์', icon: '👶', color: 'success' },
-    { id: 'cardiology', name: 'โรคหัวใจ', icon: '❤️', color: 'danger' },
-    { id: 'neurology', name: 'ประสาทวิทยา', icon: '🧠', color: 'secondary' },
-    { id: 'orthopedics', name: 'ออร์โธปิดิกส์', icon: '🦴', color: 'warning' },
-    { id: 'dermatology', name: 'ผิวหนัง', icon: '🔬', color: 'primary' },
-    { id: 'ophthalmology', name: 'จักษุวิทยา', icon: '👁️', color: 'secondary' },
-    { id: 'dental', name: 'ทันตกรรม', icon: '🦷', color: 'success' },
-    { id: 'psychiatry', name: 'จิตเวชศาสตร์', icon: '🧠', color: 'primary' },
-    { id: 'radiology', name: 'รังสีวิทยา', icon: '📷', color: 'secondary' },
-    { id: 'laboratory', name: 'ห้องปฏิบัติการ', icon: '🧪', color: 'success' },
-    { id: 'pharmacy', name: 'เภสัชกรรม', icon: '💊', color: 'warning' },
-    { id: 'nursing', name: 'พยาบาลศาสตร์', icon: '👩‍⚕️', color: 'primary' },
-    { id: 'administration', name: 'บริหาร', icon: '📋', color: 'secondary' }
-  ]
+  
+  // Department data state
+  const [departmentsData, setDepartmentsData] = useState([])
+  const [departmentsLoading, setDepartmentsLoading] = useState(true)
+  
+  // Resume deposit data state
+  const [resumeDepositData, setResumeDepositData] = useState<any[]>([])
+  const [resumeDepositLoading, setResumeDepositLoading] = useState(true)
+  const [userHasResume, setUserHasResume] = useState<boolean>(false)
+  // Loading states for buttons
+  const [navigatingPath, setNavigatingPath] = useState<string | null>(null)
+  const [applyingDeptId, setApplyingDeptId] = useState<string | null>(null)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 9
+  
+  // Department filter state
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active')
+  
+  // Detail modal state
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [detailDepartment, setDetailDepartment] = useState<any | null>(null)
+  const openDetail = (dept: any) => { setDetailDepartment(dept); setIsDetailOpen(true) }
+  const closeDetail = () => { setIsDetailOpen(false); setDetailDepartment(null) }
 
-  // ข้อมูลประกาศรับสมัคร
-  const jobPostings = [
-    {
-      id: 1,
-      title: 'นักจัดการงานทั่วไป',
-      department: 'IT',
-      departmentName: 'IT',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '15,000 - 20,000',
-      experience: '2-5 ปี',
-      education: 'คณะหรือสาขาที่เกี่ยวข้อง',
-      postedDate: '2024-01-15',
-      deadline: '2025-12-31',
-      urgent: true,
-      description: 'รับสมัครนักจัดการงานทั่วไปสำหรับแผนกคอมพิวเตอร์'
-    },
-    {
-      id: 2,
-      title: 'พยาบาลวิชาชีพ',
-      department: 'nursing',
-      departmentName: 'พยาบาลศาสตร์',
-      location: 'โรงพยาบาลกรุงเทพ',
-      type: 'full-time',
-      salary: '25,000 - 35,000',
-      experience: '1-3 ปี',
-      education: 'พยาบาลศาสตร์',
-      postedDate: '2024-01-14',
-      deadline: '2024-02-10',
-      urgent: false,
-      description: 'รับสมัครพยาบาลวิชาชีพสำหรับแผนกต่างๆ'
-    },
-    {
-      id: 3,
-      title: 'แพทย์เวชศาสตร์ฉุกเฉิน',
-      department: 'emergency',
-      departmentName: 'ห้องฉุกเฉิน',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '45,000 - 60,000',
-      experience: '3-7 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-10',
-      deadline: '2024-03-15',
-      urgent: true,
-      description: 'รับสมัครแพทย์เวชศาสตร์ฉุกเฉินที่มีประสบการณ์ในการดูแลผู้ป่วยฉุกเฉิน'
-    },
-    {
-      id: 4,
-      title: 'ศัลยแพทย์',
-      department: 'surgery',
-      departmentName: 'ศัลยกรรม',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '50,000 - 70,000',
-      experience: '5-10 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-12',
-      deadline: '2024-04-20',
-      urgent: false,
-      description: 'รับสมัครศัลยแพทย์ที่มีความเชี่ยวชาญในการผ่าตัดทั่วไป'
-    },
-    {
-      id: 5,
-      title: 'กุมารแพทย์',
-      department: 'pediatrics',
-      departmentName: 'กุมารเวชศาสตร์',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '40,000 - 55,000',
-      experience: '3-8 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-08',
-      deadline: '2024-02-28',
-      urgent: false,
-      description: 'รับสมัครกุมารแพทย์ที่มีความรักและเข้าใจเด็ก'
-    },
-    {
-      id: 6,
-      title: 'แพทย์โรคหัวใจ',
-      department: 'cardiology',
-      departmentName: 'โรคหัวใจ',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '55,000 - 75,000',
-      experience: '5-12 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-05',
-      deadline: '2024-05-10',
-      urgent: true,
-      description: 'รับสมัครแพทย์โรคหัวใจที่มีความเชี่ยวชาญในการวินิจฉัยและรักษาโรคหัวใจ'
-    },
-    {
-      id: 7,
-      title: 'แพทย์ประสาทวิทยา',
-      department: 'neurology',
-      departmentName: 'ประสาทวิทยา',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '50,000 - 65,000',
-      experience: '4-10 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-13',
-      deadline: '2024-03-30',
-      urgent: false,
-      description: 'รับสมัครแพทย์ประสาทวิทยาที่มีความเชี่ยวชาญในการวินิจฉัยโรคทางระบบประสาท'
-    },
-    {
-      id: 8,
-      title: 'แพทย์ออร์โธปิดิกส์',
-      department: 'orthopedics',
-      departmentName: 'ออร์โธปิดิกส์',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '45,000 - 60,000',
-      experience: '4-8 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-11',
-      deadline: '2024-04-15',
-      urgent: false,
-      description: 'รับสมัครแพทย์ออร์โธปิดิกส์ที่มีความเชี่ยวชาญในการรักษาโรคกระดูกและข้อ'
-    },
-    {
-      id: 9,
-      title: 'แพทย์ผิวหนัง',
-      department: 'dermatology',
-      departmentName: 'ผิวหนัง',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '40,000 - 55,000',
-      experience: '3-7 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-09',
-      deadline: '2024-03-25',
-      urgent: false,
-      description: 'รับสมัครแพทย์ผิวหนังที่มีความเชี่ยวชาญในการวินิจฉัยและรักษาโรคผิวหนัง'
-    },
-    {
-      id: 10,
-      title: 'แพทย์จักษุวิทยา',
-      department: 'ophthalmology',
-      departmentName: 'จักษุวิทยา',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '45,000 - 60,000',
-      experience: '4-9 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-07',
-      deadline: '2024-04-05',
-      urgent: false,
-      description: 'รับสมัครแพทย์จักษุวิทยาที่มีความเชี่ยวชาญในการรักษาโรคตา'
-    },
-    {
-      id: 11,
-      title: 'ทันตแพทย์',
-      department: 'dental',
-      departmentName: 'ทันตกรรม',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '35,000 - 50,000',
-      experience: '2-6 ปี',
-      education: 'ทันตแพทยศาสตร์',
-      postedDate: '2024-01-06',
-      deadline: '2024-02-20',
-      urgent: false,
-      description: 'รับสมัครทันตแพทย์ที่มีความเชี่ยวชาญในการรักษาโรคฟันและช่องปาก'
-    },
-    {
-      id: 12,
-      title: 'จิตแพทย์',
-      department: 'psychiatry',
-      departmentName: 'จิตเวชศาสตร์',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '45,000 - 60,000',
-      experience: '4-8 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-04',
-      deadline: '2024-03-18',
-      urgent: false,
-      description: 'รับสมัครจิตแพทย์ที่มีความเข้าใจและเอาใจใส่ผู้ป่วยทางจิตเวช'
-    },
-    {
-      id: 13,
-      title: 'รังสีแพทย์',
-      department: 'radiology',
-      departmentName: 'รังสีวิทยา',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '50,000 - 65,000',
-      experience: '4-10 ปี',
-      education: 'แพทยศาสตร์',
-      postedDate: '2024-01-03',
-      deadline: '2024-04-12',
-      urgent: false,
-      description: 'รับสมัครรังสีแพทย์ที่มีความเชี่ยวชาญในการอ่านผลการตรวจทางรังสี'
-    },
-    {
-      id: 14,
-      title: 'นักเทคนิคการแพทย์',
-      department: 'laboratory',
-      departmentName: 'ห้องปฏิบัติการ',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '20,000 - 30,000',
-      experience: '1-4 ปี',
-      education: 'เทคนิคการแพทย์',
-      postedDate: '2024-01-02',
-      deadline: '2024-02-15',
-      urgent: true,
-      description: 'รับสมัครนักเทคนิคการแพทย์ที่มีความละเอียดและแม่นยำในการตรวจวิเคราะห์'
-    },
-    {
-      id: 15,
-      title: 'เภสัชกร',
-      department: 'pharmacy',
-      departmentName: 'เภสัชกรรม',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '25,000 - 35,000',
-      experience: '2-5 ปี',
-      education: 'เภสัชศาสตร์',
-      postedDate: '2024-01-01',
-      deadline: '2024-02-28',
-      urgent: false,
-      description: 'รับสมัครเภสัชกรที่มีความรู้ด้านยาและความปลอดภัยในการใช้ยา'
-    },
-    {
-      id: 16,
-      title: 'เจ้าหน้าที่บริหาร',
-      department: 'administration',
-      departmentName: 'บริหาร',
-      location: 'โรงพยาบาลราชพิพัฒน์',
-      type: 'full-time',
-      salary: '18,000 - 25,000',
-      experience: '2-4 ปี',
-      education: 'บริหารธุรกิจหรือสาขาที่เกี่ยวข้อง',
-      postedDate: '2024-01-16',
-      deadline: '2024-03-10',
-      urgent: false,
-      description: 'รับสมัครเจ้าหน้าที่บริหารที่มีความสามารถในการจัดการและประสานงาน'
+  // Sidebar toggle state
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+
+  // ตรวจว่ามีใบสมัครงานแล้วหรือไม่ เพื่อกำหนดการแสดง Sidebar
+  const [hasApplication, setHasApplication] = useState<boolean>(false)
+  const [checkingApplication, setCheckingApplication] = useState<boolean>(true)
+
+  useEffect(() => {
+    const checkMyApplication = async () => {
+      if (status !== 'authenticated') return
+      try {
+        setCheckingApplication(true)
+        const res = await fetch('/api/prisma/applications?mine=1&limit=1')
+        if (!res.ok) {
+          setHasApplication(false)
+        } else {
+          const json = await res.json().catch(() => ({}))
+          const list = (json?.data || json?.applications || (Array.isArray(json) ? json : [])) as any[]
+          setHasApplication(Array.isArray(list) && list.length > 0)
+        }
+      } catch (_) {
+        setHasApplication(false)
+      } finally {
+        setCheckingApplication(false)
+      }
     }
-  ]
+    checkMyApplication()
+  }, [status])
 
-  // กรองข้อมูลตามการค้นหาและแผนกที่เลือก
-  const filteredJobs = jobPostings.filter(job => {
-    const matchesSearch = job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         job.departmentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         job.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesDepartment = selectedDepartment === 'all' || job.department === selectedDepartment
-    return matchesSearch && matchesDepartment
+  // Modal ต่อสัญญา
+  const { isOpen: isRenewOpen, onOpen: openRenewModal, onClose: closeRenewModal } = useDisclosure()
+  const [renewForm, setRenewForm] = useState({
+    prefix: '',
+    firstName: '',
+    lastName: '',
+    department: '',
+    position: '',
+    newStartDate: '',
+    newEndDate: '',
+    contractStartDate: '',
+    contractEndDate: '',
+    newSalary: '',
+    notes: '',
   })
+  const [renewFile, setRenewFile] = useState<File | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // ฟังก์ชันบันทึกข้อมูลการต่อสัญญา
+  const handleSubmitRenewal = async () => {
+    try {
+      setIsSubmitting(true)
+
+      // ตรวจสอบข้อมูลที่จำเป็น
+      if (!renewForm.prefix || !renewForm.firstName || !renewForm.lastName || !renewForm.department || !renewForm.position) {
+        alert('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน')
+        return
+      }
+
+      // สร้าง FormData
+      const formData = new FormData()
+      formData.append('prefix', renewForm.prefix)
+      formData.append('firstName', renewForm.firstName)
+      formData.append('lastName', renewForm.lastName)
+      formData.append('department', renewForm.department)
+      formData.append('position', renewForm.position)
+      formData.append('newStartDate', renewForm.newStartDate)
+      formData.append('newEndDate', renewForm.newEndDate)
+      formData.append('contractStartDate', renewForm.contractStartDate)
+      formData.append('contractEndDate', renewForm.contractEndDate)
+      formData.append('newSalary', renewForm.newSalary)
+      formData.append('notes', renewForm.notes)
+      
+      if (renewFile) {
+        formData.append('file', renewFile)
+      }
+
+      // ส่งข้อมูลไปยัง API
+      const response = await fetch('/api/contract-renewals', {
+        method: 'POST',
+        body: formData
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert('บันทึกข้อมูลการต่อสัญญาเรียบร้อยแล้ว')
+        // รีเซ็ตฟอร์ม
+        setRenewForm({
+          prefix: '',
+          firstName: '',
+          lastName: '',
+          department: '',
+          position: '',
+          newStartDate: '',
+          newEndDate: '',
+          contractStartDate: '',
+          contractEndDate: '',
+          newSalary: '',
+          notes: '',
+        })
+        setRenewFile(null)
+        closeRenewModal()
+      } else {
+        alert(result.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล')
+      }
+    } catch (error) {
+      console.error('Error submitting renewal:', error)
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // ตรวจสอบสถานะการเข้าสู่ระบบ
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin')
+    }
+  }, [status, router])
+  
+  // Department names for dropdown (derive from data)
+  const departmentNames = useMemo(() => {
+    const names = Array.isArray(departmentsData)
+      ? departmentsData
+          .filter((d: any) => !!d?.name)
+          .map((d: any) => d.name as string)
+      : []
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'th'))
+  }, [departmentsData])
+  
+
+
+  // Auto-login ด้วย LineID จาก NextAuth session
+  useEffect(() => {
+    const tryAutoLogin = async () => {
+      try {
+        const session = await getSession();
+        const lineId = (session as any)?.user?.lineId || (session as any)?.user?.sub || (session as any)?.profile?.userId;
+        if (!lineId || isAuthenticated) return;
+
+        const res = await fetch('/api/users');
+        if (!res.ok) return;
+        const data = await res.json();
+        const matched = (data.users || []).find((u: any) => u.lineId && u.lineId === lineId && (u.role === 'admin' || u.role === 'superadmin'));
+        if (matched) {
+          loginWithUser(matched);
+        }
+      } catch (e) {
+        console.error('Auto-login by LineID failed:', e);
+      }
+    };
+    tryAutoLogin();
+  }, [isAuthenticated]);
+
+  // Fetch departments data
+  // ฟังก์ชันดึงข้อมูลจาก resume-deposit
+  const fetchResumeDepositData = async () => {
+    try {
+      setResumeDepositLoading(true);
+      const response = await fetch('/api/resume-deposit?limit=100');
+      if (response.ok) {
+        const data = await response.json();
+        setResumeDepositData(data.data || []);
+        console.log('🔍 Fetched resume deposit data:', data.data?.length || 0, 'records');
+      } else {
+        console.error('Failed to fetch resume deposit data');
+      }
+    } catch (error) {
+      console.error('Error fetching resume deposit data:', error);
+    } finally {
+      setResumeDepositLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        setDepartmentsLoading(true);
+        const response = await fetch(`/api/prisma/departments?status=${statusFilter}&limit=100`);
+        if (response.ok) {
+          const data = await response.json();
+          // Map enum status (e.g., ACTIVE) to lowercase (active) for UI filters
+          const list = (data.data || []).map((d: any) => ({
+            ...d,
+            status: (d.status || 'ACTIVE').toString().toLowerCase()
+          }));
+          setDepartmentsData(list);
+        } else {
+          console.error('Failed to fetch departments');
+        }
+      } catch (error) {
+        console.error('Error fetching departments:', error);
+      } finally {
+        setDepartmentsLoading(false);
+      }
+    };
+
+    fetchDepartments();
+    fetchResumeDepositData();
+  }, [statusFilter]);
+
+  // ตรวจว่าผู้ใช้ปัจจุบันมีข้อมูลฝากประวัติหรือยัง (ตรวจสอบจากข้อมูลฝากประวัติโดยตรง)
+  useEffect(() => {
+    if (!session?.user) { 
+      setUserHasResume(false); 
+      return 
+    }
+    
+    // ตรวจสอบว่ามีข้อมูลฝากประวัติหรือไม่ (ไม่ต้องเปรียบเทียบกับ session)
+    // ถ้ามีข้อมูลฝากประวัติในระบบ แสดงว่าผู้ใช้สามารถสมัครงานได้
+    const hasResume = resumeDepositData.length > 0 && resumeDepositData.some((r: any) => {
+      // ตรวจสอบว่าข้อมูลฝากประวัติมีข้อมูลครบถ้วน
+      return r && (
+        (r.firstName && r.lastName) || 
+        (r.email) || 
+        (r.phone)
+      )
+    })
+
+    console.log('🔍 Checking userHasResume from resume deposit data:', {
+      resumeDepositDataLength: resumeDepositData.length,
+      hasResume,
+      sessionUser: session?.user
+    });
+    
+    // Debug: แสดงข้อมูล resume deposit ทั้งหมด
+    console.log('🔍 All resume deposit data:', resumeDepositData);
+
+    setUserHasResume(hasResume)
+  }, [resumeDepositData, session?.user])
+
+  // รีเฟรชข้อมูลเมื่อผู้ใช้กลับมาจากหน้า resume-deposit
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('🔍 Window focused, refreshing resume deposit data');
+      fetchResumeDepositData();
+    };
+
+    // รีเฟรชข้อมูลเมื่อโหลดหน้าใหม่
+    const handleLoad = () => {
+      console.log('🔍 Page loaded, refreshing resume deposit data');
+      fetchResumeDepositData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('load', handleLoad);
+    
+    // รีเฟรชข้อมูลทันทีเมื่อ component mount
+    handleLoad();
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('load', handleLoad);
+    };
+  }, []);
+
+  // ฟังก์ชันดึงข้อมูลฝ่ายและกลุ่มงานจาก resume-deposit
+  const getDepartmentInfo = (deptName: string) => {
+    const resumeData = resumeDepositData.find((resume: any) => 
+      resume.department === deptName || resume.appliedPosition === deptName
+    );
+    
+    if (resumeData) {
+      return {
+        department: resumeData.department || 'ไม่ระบุ',
+        workGroup: resumeData.workGroup || 'ไม่ระบุ',
+        appliedPosition: resumeData.appliedPosition || 'ไม่ระบุ'
+      };
+    }
+    
+    return {
+      department: 'ไม่ระบุ',
+      workGroup: 'ไม่ระบุ',
+      appliedPosition: 'ไม่ระบุ'
+    };
+  };
+
+  // Filter and sort departments based on selected department and status
+  const filteredDepartments = selectedDepartment === 'all' 
+    ? departmentsData
+        .filter((dept: any) => statusFilter === 'all' ? true : dept.status === statusFilter)
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.createdAt || a.updatedAt || '2024-01-01').getTime()
+          const dateB = new Date(b.createdAt || b.updatedAt || '2024-01-01').getTime()
+          return dateB - dateA
+        })
+    : departmentsData
+        .filter((dept: any) => dept.name === selectedDepartment && (statusFilter === 'all' ? true : dept.status === statusFilter))
+        .sort((a: any, b: any) => {
+          const dateA = new Date(a.createdAt || a.updatedAt || '2024-01-01').getTime()
+          const dateB = new Date(b.createdAt || b.updatedAt || '2024-01-01').getTime()
+          return dateB - dateA
+        })
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredDepartments.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentDepartments = filteredDepartments.slice(startIndex, endIndex)
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handleDepartmentSelect = (departmentName: string) => {
+    setSelectedDepartment(departmentName)
+    setCurrentPage(1) // Reset to first page when filter changes
+  }
+
+  // Helpers for attachment preview (align with Home page)
+  const isImage = (url: string) => /\.(png|jpg|jpeg|gif|webp)$/i.test(url)
+  const isPdf = (url: string) => /\.pdf(\?|#|$)/i.test(url)
+  const buildFileUrl = (att: any) => {
+    const name = att?.fileName || att?.filename
+    const raw = att?.path || att?.file_path || (name ? `/uploads/departments/${name}` : '')
+    return encodeURI(raw && raw.startsWith('/') ? raw : `/${raw}`)
+  }
+
+
+
+
+
+
+
+
+
+  // แสดงหน้า loading ถ้ายังไม่ได้ตรวจสอบสถานะการเข้าสู่ระบบ
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <Spinner size="lg" color="primary" />
+          <p className="mt-4 text-gray-600">กำลังตรวจสอบสถานะการเข้าสู่ระบบ...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // แสดงหน้า login ถ้ายังไม่ได้เข้าสู่ระบบ
+  if (status === 'unauthenticated') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">กรุณาเข้าสู่ระบบ</h2>
+          <p className="text-gray-600 mb-6">คุณต้องเข้าสู่ระบบก่อนจึงจะสามารถดูข้อมูลได้</p>
+          <Button 
+            color="primary" 
+            onClick={() => router.push('/auth/signin')}
+            className="px-8"
+          >
+            เข้าสู่ระบบ
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Navbar */}
-      <nav className="bg-white shadow-lg border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              </div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                โรงพยาบาลราชพิพัฒน์
-              </h1>
-            </div>
-              <div className="flex items-center space-x-4">
-              <Input
-                placeholder="ค้นหางาน..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64"
-                startContent={
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                }
-              />
-              <Button color="primary" variant="flat" size="sm">
-                เข้าสู่ระบบ
+      {/* Mobile Header with Toggle Button */}
+      <div className="lg:hidden bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
+        <Button
+          isIconOnly
+          variant="ghost"
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="text-gray-600 hover:text-gray-900"
+        >
+          {isSidebarOpen ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
+        </Button>
+      </div>
+
+      <div className="flex flex-col lg:flex-row">
+        {/* Mobile Overlay */}
+        {isSidebarOpen && (
+          <div 
+            className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
+        {(
+        <aside className={`
+          fixed lg:static inset-y-0 left-0 z-50 lg:z-auto
+          w-64 bg-white shadow-lg border-r border-gray-200 p-3 sm:p-4 md:p-6
+          transform transition-transform duration-300 ease-in-out
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}>
+          <div className="space-y-3 sm:space-y-4">
+            {/* Mobile Close Button */}
+            <div className="lg:hidden flex items-center justify-between mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800">เมนู</h3>
+              <Button
+                isIconOnly
+                variant="ghost"
+                onClick={() => setIsSidebarOpen(false)}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                <XMarkIcon className="w-5 h-5" />
               </Button>
             </div>
-          </div>
-        </div>
-      </nav>
-
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 bg-white shadow-lg min-h-screen">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">แผนกต่างๆ</h2>
             
-            {/* Custom Dropdown Button */}
-            <div className="w-full mb-6">
-              <button
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-full flex items-center justify-between p-3 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200"
-              >
-                <div className="flex items-center space-x-2">
-                  <span className="text-xl">
-                    {departments.find(d => d.id === selectedDepartment)?.icon || '🏥'}
-                  </span>
-                  <span className="font-medium">
-                    {departments.find(d => d.id === selectedDepartment)?.name || 'ทั้งหมด'}
-                  </span>
-                </div>
-                <svg 
-                  className={`w-4 h-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              
-              {/* Dropdown Menu with Slide Animation */}
-              <div className={`mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden transition-all duration-300 ease-in-out ${
-                isDropdownOpen 
-                  ? 'max-h-96 opacity-100 transform translate-y-0' 
-                  : 'max-h-0 opacity-0 transform -translate-y-2'
-              }`}>
-                <div className="py-1 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-                  {departments.map((dept) => (
-                    <button
-                      key={dept.id}
-                      onClick={() => {
-                        setSelectedDepartment(dept.id)
-                        setIsDropdownOpen(false)
-                      }}
-                      className={`w-full flex items-center space-x-3 px-3 py-2 text-left transition-all duration-200 ${
-                        selectedDepartment === dept.id 
-                          ? 'bg-blue-50 text-blue-600' 
-                          : 'hover:bg-gray-50 text-gray-700'
-                      }`}
-                    >
-                      <span className="text-xl">{dept.icon}</span>
-                      <span className="font-medium">{dept.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Application Data Link */}
-            <div className="w-full mt-6">
+            {/* Desktop Menu Title */}
+            <h3 className="hidden lg:block text-base sm:text-lg font-semibold text-gray-800 mb-3 sm:mb-4">เมนู</h3>
+            
               <Button
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-                onClick={() => router.push('/application-data')}
+              color="primary"
+              variant="ghost"
+              className="w-full justify-start text-xs sm:text-sm rounded-lg transition-colors hover:bg-blue-50"
+                isLoading={navigatingPath === '/'}
+                onClick={() => { setNavigatingPath('/'); router.push('/') }}
                 startContent={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h4" />
+                  </svg>
+                }
+              >
+              หน้าแรก
+              </Button>
+
+              <Button
+                color="secondary"
+                variant="ghost"
+                className="w-full justify-start text-xs sm:text-sm rounded-lg transition-colors hover:bg-blue-50"
+                isLoading={navigatingPath === '/register'}
+                onClick={() => {
+                  setNavigatingPath('/register');
+                  try {
+                    const existing = (resumeDepositData && resumeDepositData.length > 0)
+                      ? resumeDepositData[0]
+                      : null;
+                    const url = existing?.id ? `/register?resumeId=${existing.id}` : '/register';
+                    router.push(url);
+                  } catch {
+                    router.push('/register');
+                  }
+                }}
+                startContent={
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                }
+              >
+              ฝากประวัติ
+              </Button>
+              
+              
+              
+              
+              
+              <Button
+              color="primary"
+              variant="ghost"
+              className="w-full justify-start text-xs sm:text-sm rounded-lg transition-colors hover:bg-blue-50"
+                isLoading={navigatingPath === '/application-data'}
+                onClick={() => { setNavigatingPath('/application-data'); router.push('/application-data') }}
+                startContent={
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 }
               >
-                ดูข้อมูลใบสมัครงาน
+              ดูประวัติการสมัครงาน
               </Button>
-            </div>
 
+
+              
+
+              <Button
+                color="success"
+                variant="ghost"
+                className="w-full justify-start text-xs sm:text-sm rounded-lg transition-colors hover:bg-blue-50"
+                onClick={openRenewModal}
+                startContent={
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                }
+              >
+                ต่อสัญญา
+              </Button>
+
+              <Button
+                color="warning"
+                variant="ghost"
+                className="w-full justify-start text-xs sm:text-sm rounded-lg transition-colors hover:bg-blue-50"
+                onClick={() => router.push('contract-renewals')}
+                startContent={
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                }
+              >
+                ประวัติการต่อสัญญา
+              </Button>
+              <Button
+              color="secondary"
+              variant="ghost"
+              className="w-full justify-start text-xs sm:text-sm rounded-lg transition-colors hover:bg-blue-50"
+                isLoading={navigatingPath === '/contact'}
+                onClick={() => { setNavigatingPath('/contact'); router.push('/contact') }}
+                startContent={
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                }
+              >
+              ติดต่อเรา
+              </Button>
+
+          
+
+            
+
+            {/* Department Filter Dropdown */}
+            <div className="pt-3 sm:pt-4 border-t border-gray-200">
+              <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3 flex items-center">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                กรองตามแผนก
+              </h4>
+              <Dropdown 
+                classNames={{
+                  content: "max-h-80 overflow-y-auto bg-white/95 backdrop-blur-sm border border-gray-200 shadow-xl rounded-xl",
+                  trigger: "w-full"
+                }}
+                placement="bottom-start"
+              >
+                <DropdownTrigger>
+                  <Button
+                    color="primary"
+                    variant="bordered"
+                    className="w-full justify-between bg-white/80 backdrop-blur-sm border-gray-300 hover:border-blue-400 hover:bg-blue-50/50 transition-all duration-200 text-xs sm:text-sm"
+                    endContent={
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    }
+                    startContent={
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    }
+                  >
+                    <span className="truncate">
+                      {selectedDepartment === 'all' ? 'ทั้งหมด' : selectedDepartment}
+                    </span>
+                  </Button>
+                </DropdownTrigger>
+                <DropdownMenu 
+                  aria-label="Department filter"
+                  onAction={(key) => handleDepartmentSelect(key as string)}
+                  items={[
+                    { key: 'all', label: 'ทั้งหมด', icon: '🏢' },
+                    ...departmentNames.map(deptName => ({ 
+                      key: deptName, 
+                      label: deptName,
+                      icon: '🏥'
+                    }))
+                  ]}
+                  classNames={{
+                    base: "max-h-80 overflow-y-auto",
+                    list: "py-2"
+                  }}
+                >
+                  {(item) => (
+                    <DropdownItem 
+                      key={item.key}
+                      className="flex items-center space-x-2 sm:space-x-3 py-1.5 sm:py-2 px-2 sm:px-3 hover:bg-blue-50/80 transition-colors duration-150"
+                      startContent={
+                        <span className="text-sm sm:text-lg">{item.icon}</span>
+                      }
+                    >
+                      <span className="text-xs sm:text-sm font-medium text-gray-700">
+                        {item.label}
+                      </span>
+                    </DropdownItem>
+                  )}
+                </DropdownMenu>
+              </Dropdown>
+              
+              {/* Selected Department Info
+              {selectedDepartment !== 'all' && (
+                <div className="mt-3 p-3 bg-blue-50/50 rounded-lg border border-blue-200">
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-xs text-blue-700 font-medium">
+                      แสดงเฉพาะ: {selectedDepartment}
+                    </span>
+                  </div>
+                </div>
+            )} */}
+            </div>
           </div>
         </aside>
+        )}
 
         {/* Main Content */}
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-2 sm:p-4 md:p-6 lg:ml-0">
           <div className="max-w-6xl mx-auto">
-            {/* Header */}
+            {/* Departments Overview Section - ย้ายขึ้นมาบนสุด */}
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                ประกาศรับสมัครงาน
-                  </h1>
-                  <p className="text-gray-600">
-                ค้นหางานที่เหมาะสมกับคุณในโรงพยาบาลราชพิพัฒน์
-              </p>
-              <div className="flex items-center space-x-4 mt-4">
-                <Chip color="success" variant="flat">
-                  {filteredJobs.length} ตำแหน่ง
-                </Chip>
-                <Chip color="danger" variant="flat">
-                  {filteredJobs.filter(job => job.urgent).length} ตำแหน่งด่วน
-                </Chip>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6">
+                <div className="mb-2 sm:mb-0">
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">
+                  ตำแหน่งงานที่เปิดรับสมัคร
+                  </h2>
+                  <p className="text-sm sm:text-base text-gray-600">
+                    ข้อมูลฝ่ายและตำแหน่งที่เปิดรับสมัคร
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {/* Job Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredJobs.map((job) => (
-                <Card key={job.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-0 bg-white/80 backdrop-blur-sm">
-                  <CardHeader className="pb-3">
+              {/* Departments Cards - แสดง 9 cards */}
+              {departmentsLoading ? (
+                <div className="flex justify-center items-center py-12">
+                  <Spinner size="lg" color="primary" />
+                  <span className="ml-3 text-gray-600">กำลังโหลดข้อมูลฝ่าย...</span>
+            </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+                    {currentDepartments.map((dept: any) => (
+                      <Card key={dept.id} className="shadow-lg hover:shadow-xl transition-transform duration-300 border-0 bg-white/80 backdrop-blur-sm relative rounded-xl hover:-translate-y-1">
+                        {/* New Badge for recently added departments */}
+                        {(() => {
+                          const createdDate = new Date(dept.createdAt || dept.updatedAt || '2024-01-01')
+                          const now = new Date()
+                          const daysDiff = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24))
+                          return daysDiff <= 7 ? (
+                            <div className="absolute -top-2 -right-2 z-10">
+                              <Chip color="success" variant="solid" size="sm" className="text-xs font-medium">
+                                
+                              </Chip>
+                            </div>
+                          ) : null
+                        })()}
+                  <CardHeader className="pb-2 sm:pb-3">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-800 line-clamp-2">
-                            {job.title}
+                          <h3 className="text-sm sm:text-base md:text-lg font-semibold text-gray-800 line-clamp-2">
+                                {dept.name}
                           </h3>
-                          {job.urgent && (
-                            <Badge color="danger" variant="flat" size="sm">
-                              ด่วน
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2 text-sm text-gray-600">
-                          <span className="text-2xl">{departments.find(d => d.id === job.department)?.icon}</span>
-                          <span>{job.departmentName}</span>
-                        </div>
+                              {/* <p className="text-sm text-gray-600 line-clamp-2">
+                                {dept.description}
+                              </p> */}
                       </div>
                     </div>
                   </CardHeader>
                   <CardBody className="pt-0">
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-3">
+                            <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                              <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                              </svg>
+                              <span className="text-gray-600 truncate">จำนวนที่เปิดรับสมัคร: {dept.employeeCount} ตำแหน่ง</span>
+                            </div>
 
+                            {/* ฝ่ายและกลุ่มงานในโรงพยาบาล - ดึงข้อมูลจาก resume-deposit */}
+                            {(() => {
+                              const deptInfo = getDepartmentInfo(dept.name);
+                              return (
+                                <>
+                                  {/* <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                                    <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                    </svg>
+                                    <span className="text-gray-600 truncate">ฝ่าย: {deptInfo.department}</span>
+                                  </div> */}
+
+                                  <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                                    <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    <span className="text-gray-600 truncate">กลุ่มงาน: {deptInfo.workGroup}</span>
+                                  </div>
+
+                                  {/* <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                                    <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2V6" />
+                                    </svg>
+                                    <span className="text-gray-600 truncate">ตำแหน่งที่สมัคร: {deptInfo.appliedPosition}</span>
+                                  </div> */}
+                                </>
+                              );
+                            })()}
+
+                            <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                              <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+                              </svg>
+                              <span className="text-gray-600 truncate">วุฒิการศึกษา: {dept.education || 'ไม่ระบุ'}</span>
+                            </div>
                       
-                      <div className="flex items-center space-x-2 text-sm">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                        </svg>
-                        <span className="text-gray-600">{job.salary}</span>
-                      </div>
+                     
 
-                      <div className="flex items-center space-x-2 text-sm">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2V6" />
                         </svg>
-                        <span className="text-gray-600">{job.experience}</span>
+                              <span className="text-gray-600 truncate">ตำแหน่งที่เปิดรับสมัคร: {dept.positions || ' ไม่ระบุ'}</span>
                     </div>
 
-                      <div className="flex items-center space-x-2 text-sm">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
-                        <span className="text-gray-600">{job.education}</span>
-                    </div>
-
-                      <div className="flex items-center space-x-2 text-sm">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {/* วันที่เปิดรับสมัคร */}
+                      <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        <span className="text-gray-600">หมดเขต: {new Date(job.deadline).toLocaleDateString('th-TH')}</span>
+                        <span className="text-gray-600 truncate">เปิดรับสมัคร: {dept.applicationStartDate ? new Date(dept.applicationStartDate).toLocaleDateString('th-TH') : 'ไม่ระบุ'}</span>
+                    </div>
+
+                                            {/* วันที่ปิดรับสมัคร */}
+                      <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-gray-600 truncate">ปิดรับสมัคร: {dept.applicationEndDate ? new Date(dept.applicationEndDate).toLocaleDateString('th-TH') : 'ไม่ระบุ'}</span>
                   </div>
 
-                      <p className="text-sm text-gray-600 line-clamp-3">
-                        {job.description}
-                      </p>
+                      {/* วันที่เพิ่มแผนก */}
+                      <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-gray-600 truncate">เพิ่มเมื่อ: {dept.createdAt ? new Date(dept.createdAt).toLocaleDateString('th-TH') : 'ไม่ระบุ'}</span>
+                      </div>
 
-                      <div className="flex space-x-2 pt-2">
+                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 pt-2">
                     <Button
                       color="primary"
                       variant="solid"
                           size="sm"
-                          className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600"
-                          onClick={() => router.push('/application-form')}
+                          className={`flex-1 text-xs sm:text-sm border-0 rounded-xl ${userHasResume ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+                          isLoading={applyingDeptId === String(dept.id) || resumeDepositLoading}
+                          onClick={() => {
+                            setApplyingDeptId(String(dept.id))
+                            if (!userHasResume) {
+                              alert('ไม่พบข้อมูลฝากประวัติ กรุณาฝากประวัติก่อนทำการสมัครงาน')
+                              router.push('/resume-deposit')
+                              setApplyingDeptId(null)
+                              return
+                            }
+                            router.push(`/register?department=${encodeURIComponent(dept.name)}&departmentId=${dept.id}`)
+                          }}
                         >
-                          สมัครงาน
+                          {resumeDepositLoading ? 'กำลังตรวจสอบ...' : (userHasResume ? 'สมัครงาน' : 'ไม่มีข้อมูลฝากประวัติ')}
                     </Button>
                     <Button
                       color="secondary"
                       variant="solid"
                           size="sm"
-                          className="bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          className="bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs sm:text-sm border-0 rounded-xl"
+                                onClick={() => openDetail(dept)}
                         >
                           รายละเอียด
                     </Button>
@@ -501,20 +807,296 @@ export default function Dashboard() {
               ))}
             </div>
 
-            {filteredJobs.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">ไม่พบตำแหน่งงาน</h3>
-                <p className="text-gray-600">ลองเปลี่ยนคำค้นหาหรือเลือกแผนกอื่น</p>
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center space-x-1 sm:space-x-2 mt-6 sm:mt-8">
+                      {/* Previous Button */}
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                          currentPage === 1
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
+                      >
+                        ‹
+                      </button>
+
+                      {/* Page Numbers */}
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                        // Show first page, last page, current page, and pages around current page
+                        const shouldShow = 
+                          page === 1 || 
+                          page === totalPages || 
+                          Math.abs(page - currentPage) <= 1
+
+                        if (!shouldShow) {
+                          // Show ellipsis
+                          if (page === 2 && currentPage > 4) {
+                            return (
+                              <span key={page} className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 text-xs sm:text-sm">
+                                ...
+                              </span>
+                            )
+                          }
+                          if (page === totalPages - 1 && currentPage < totalPages - 3) {
+                            return (
+                              <span key={page} className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 text-xs sm:text-sm">
+                                ...
+                              </span>
+                            )
+                          }
+                          return null
+                        }
+
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => handlePageChange(page)}
+                            className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                              currentPage === page
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        )
+                      })}
+
+                      {/* Next Button */}
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                          currentPage === totalPages
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
+                      >
+                        ›
+                      </button>
               </div>
             )}
+                </>
+              )}
+            </div>
+
+
         </div>
         </main>
       </div>
+
+    
+      {/* Detail Modal */}
+      {isDetailOpen && detailDepartment && (
+        <Modal 
+          isOpen={isDetailOpen} 
+          onClose={closeDetail}
+          size="full"
+          classNames={{
+            backdrop: "bg-white/80 backdrop-blur-sm",
+            base: "bg-white shadow-2xl h-[95vh] w-[95vw] max-w-none",
+            body: "bg-white overflow-y-auto h-[80vh]",
+            header: "bg-white",
+            footer: "bg-white",
+          }}
+          hideCloseButton={true}
+        >
+        <ModalContent>
+            <ModalHeader className="flex flex-row items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-lg font-semibold text-gray-900">{(detailDepartment as any).name}</span>
+                {/* <span className="text-xs text-gray-500">รายละเอียดและเอกสารแนบ</span> */}
+              </div>
+              <Button
+                isIconOnly
+                variant="light"
+                onPress={closeDetail}
+                className="text-gray-500 hover:text-gray-700 text-2xl rounded-lg transition-colors hover:bg-blue-50"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </Button>
+            </ModalHeader>
+          <ModalBody>
+              <div className="space-y-4">
+                {/* <p className="text-sm text-gray-700">{(detailDepartment as any).description}</p> */}
+
+                {/* Attachments viewer */}
+                {Array.isArray((detailDepartment as any).attachments) && (detailDepartment as any).attachments.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="space-y-6">
+                      {((detailDepartment as any).attachments as any[]).map((att: any, idx: number) => {
+                        const url = buildFileUrl(att)
+                        const label = att?.filename || att?.fileName || 'ไฟล์แนบ'
+                        if (isImage(url)) {
+                          return (
+                            <div key={idx} className="space-y-2">
+                              <div className="flex justify-center">
+                                <img src={url} alt={label} className="max-w-xl max-h-200 rounded border object-contain" />
+                              </div>
+                            </div>
+                          )
+                        }
+                        if (isPdf(url)) {
+                          return (
+                            <div key={idx} className="space-y-2">
+                              <div className="flex justify-center">
+                                <iframe src={url} title={label} className="w-full max-w-5xl h-[80vh] border rounded" />
+                              </div>
+                            </div>
+                          )
+                        }
+                        return (
+                          <div key={idx} className="text-sm">
+                            <a href={url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline break-all">{label}</a>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500">ไม่มีไฟล์แนบ</div>
+                )}
+            </div>
+          </ModalBody>
+            {/* <ModalFooter>
+              <Button variant="light" onPress={closeDetail}>ปิด</Button>
+            </ModalFooter> */}
+        </ModalContent>
+      </Modal>
+      )}
+
+      {/* Renew Contract Modal */}
+      {isRenewOpen && (
+        <Modal isOpen={isRenewOpen} onClose={closeRenewModal} size="xl" scrollBehavior="inside">
+          <ModalContent className="bg-white shadow-2xl">
+            <ModalHeader className="bg-white">
+              <div>
+                <h3 className="text-lg font-semibold">ต่อสัญญา</h3>
+                <p className="text-sm text-gray-600">กรอกข้อมูลผู้ขอและแนบไฟล์ที่เกี่ยวข้อง</p>
+              </div>
+            </ModalHeader>
+            <ModalBody className="bg-white">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">คำนำหน้า</label>
+                      <Select
+                        selectedKeys={renewForm.prefix ? [renewForm.prefix] : []}
+                        onSelectionChange={(keys) => {
+                          const key = Array.from(keys)[0] as string
+                          setRenewForm((p) => ({ ...p, prefix: key }))
+                        }}
+                        placeholder="เลือกคำนำหน้า"
+                        variant="bordered"
+                        classNames={{
+                          base: "mt-1",
+                          trigger: "h-10 bg-white border border-gray-300 rounded-md data-[hover=true]:border-blue-400 data-[open=true]:border-blue-500",
+                          value: "text-gray-800 truncate pr-2",
+                          innerWrapper: "pr-14", /* เว้นที่ด้านขวาเพิ่มเพื่อไม่ให้ placeholder ทับไอคอน */
+                          selectorIcon: "text-gray-500 right-3",
+                          popoverContent: "bg-white border border-gray-200 shadow-xl rounded-lg",
+                          listbox: "max-h-60"
+                        }}
+                      >
+                        <SelectItem key="นาย">นาย</SelectItem>
+                        <SelectItem key="นาง">นาง</SelectItem>
+                        <SelectItem key="นางสาว">นางสาว</SelectItem>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">ชื่อ</label>
+                      <Input value={renewForm.firstName} onChange={(e) => setRenewForm((p)=>({ ...p, firstName: e.target.value }))} placeholder="กรอกชื่อ" className="mt-1 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">นามสกุล</label>
+                      <Input value={renewForm.lastName} onChange={(e) => setRenewForm((p)=>({ ...p, lastName: e.target.value }))} placeholder="กรอกนามสกุล" className="mt-1 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">หน่วยงาน</label>
+                  <Input value={renewForm.department} onChange={(e) => setRenewForm((p)=>({ ...p, department: e.target.value }))} placeholder="กรอกหน่วยงาน" className="mt-1 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">ตำแหน่ง</label>
+                  <Input value={renewForm.position} onChange={(e) => setRenewForm((p)=>({ ...p, position: e.target.value }))} placeholder="กรอกตำแหน่ง" className="mt-1 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">วันที่เริ่มสัญญาใหม่</label>
+                  <Input 
+                    type="date"
+                    value={renewForm.newStartDate} 
+                    onChange={(e) => setRenewForm((p)=>({ ...p, newStartDate: e.target.value }))} 
+                    className="mt-1 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500" 
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">วันที่สิ้นสุดสัญญาใหม่</label>
+                  <Input 
+                    type="date"
+                    value={renewForm.newEndDate} 
+                    onChange={(e) => setRenewForm((p)=>({ ...p, newEndDate: e.target.value }))} 
+                    className="mt-1 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500" 
+                  />
+                </div>
+                {/* <div>
+                  <label className="text-sm font-medium text-gray-700">เงินเดือนใหม่</label>
+                  <Input value={renewForm.newSalary} onChange={(e) => setRenewForm((p)=>({ ...p, newSalary: e.target.value }))} placeholder="กรอกเงินเดือนใหม่" className="mt-1 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500" />
+                </div> */}
+                <div className="md:col-span-2">
+                  <label className="text-sm font-medium text-gray-700">หมายเหตุ</label>
+                  <textarea 
+                    value={renewForm.notes} 
+                    onChange={(e) => setRenewForm((p)=>({ ...p, notes: e.target.value }))} 
+                    placeholder="กรอกหมายเหตุเพิ่มเติม" 
+                    className="mt-1 w-full p-2 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-blue-500 resize-none" 
+                    rows={3}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-sm font-medium text-gray-700">แนบไฟล์ (PDF/รูปภาพ)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={(e) => setRenewFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                    className="mt-1 block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  {renewFile && (
+                    <div className="text-xs text-gray-600 mt-1">ไฟล์: {renewFile.name}</div>
+                  )}
+                </div>
+              </div>
+            </ModalBody>
+            <ModalFooter className="bg-white">
+              <Button 
+                color="danger" 
+                variant="light" 
+                onPress={closeRenewModal}
+                isDisabled={isSubmitting}
+                className="rounded-lg transition-colors hover:bg-blue-50"
+              >
+                ยกเลิก
+              </Button>
+              <Button 
+                color="success" 
+                onPress={handleSubmitRenewal}
+                isLoading={isSubmitting}
+                isDisabled={isSubmitting}
+                className="rounded-lg transition-colors hover:bg-blue-50"
+              >
+                {isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
+
     </div>
   )
 } 

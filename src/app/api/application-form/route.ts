@@ -11,30 +11,31 @@ const ensureDataDir = () => {
   return dataDir;
 };
 
-// ฟังก์ชันสำหรับอ่านข้อมูล application-form จากไฟล์
-const readApplicationForms = () => {
+// ฟังก์ชันสำหรับอ่านข้อมูล applications จากไฟล์
+const readApplications = () => {
   try {
     const dataDir = ensureDataDir();
     const filePath = path.join(dataDir, 'application-forms.json');
     if (fs.existsSync(filePath)) {
       const data = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(data);
+      const parsedData = JSON.parse(data);
+      return { applications: parsedData.applications || [] };
     }
     return { applications: [] };
   } catch (error) {
-    console.error('Error reading application forms:', error);
+    console.error('Error reading applications:', error);
     return { applications: [] };
   }
 };
 
-// ฟังก์ชันสำหรับเขียนข้อมูล application-form ลงไฟล์
-const writeApplicationForms = (data: any) => {
+// ฟังก์ชันสำหรับเขียนข้อมูล applications ลงไฟล์
+const writeApplications = (data: any) => {
   try {
     const dataDir = ensureDataDir();
     const filePath = path.join(dataDir, 'application-forms.json');
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
   } catch (error) {
-    console.error('Error writing application forms:', error);
+    console.error('Error writing applications:', error);
     throw error;
   }
 };
@@ -137,11 +138,11 @@ export async function POST(request: NextRequest) {
     }
 
     // อ่านข้อมูลเดิมและเพิ่มข้อมูลใหม่
-    const existingData = readApplicationForms();
+    const existingData = readApplications();
     existingData.applications.push(applicationData);
     
     // บันทึกลงไฟล์
-    writeApplicationForms(existingData);
+    writeApplications(existingData);
 
     return NextResponse.json({ 
       success: true, 
@@ -160,12 +161,57 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    const data = readApplicationForms();
+    const data = readApplications();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error reading application forms:', error);
+    console.error('Error reading applications:', error);
     return NextResponse.json(
       { success: false, message: 'เกิดข้อผิดพลาดในการอ่านข้อมูล' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const url = new URL(request.url);
+    const applicationId = url.searchParams.get('id');
+    
+    if (!applicationId) {
+      return NextResponse.json(
+        { success: false, message: 'ไม่พบ ID ของใบสมัครงาน' },
+        { status: 400 }
+      );
+    }
+
+    // อ่านข้อมูลเดิม
+    const existingData = readApplications();
+    
+    // หา index ของ application ที่ต้องการลบ
+    const applicationIndex = existingData.applications.findIndex((app: any) => app.id === applicationId);
+    
+    if (applicationIndex === -1) {
+      return NextResponse.json(
+        { success: false, message: 'ไม่พบใบสมัครงานที่ต้องการลบ' },
+        { status: 404 }
+      );
+    }
+
+    // ลบ application ออกจาก array
+    existingData.applications.splice(applicationIndex, 1);
+    
+    // บันทึกข้อมูลที่อัปเดตแล้ว
+    writeApplications(existingData);
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'ลบใบสมัครงานเรียบร้อยแล้ว' 
+    });
+
+  } catch (error) {
+    console.error('Error deleting application:', error);
+    return NextResponse.json(
+      { success: false, message: 'เกิดข้อผิดพลาดในการลบข้อมูล' },
       { status: 500 }
     );
   }

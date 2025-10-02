@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 // Simple file-based storage for demonstration
-const DATA_FILE = path.join(process.cwd(), 'data', 'applications.json');
+const DATA_FILE = path.join(process.cwd(), 'data', 'register.json');
 
 // Ensure data directory exists
 const ensureDataDir = () => {
@@ -21,7 +21,9 @@ const readApplications = () => {
   }
   try {
     const data = fs.readFileSync(DATA_FILE, 'utf8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    // register.json contains array directly, not wrapped in applications property
+    return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
     console.error('Error reading applications:', error);
     return [];
@@ -90,6 +92,7 @@ export async function GET(request: NextRequest) {
       prefix: application.prefix,
       firstName: application.firstName,
       lastName: application.lastName,
+      lineDisplayName: application.lineDisplayName,
       email: application.email,
       phone: application.phone,
       gender: application.gender,
@@ -104,10 +107,15 @@ export async function GET(request: NextRequest) {
       postalCode: application.postalCode,
       emergencyContact: application.emergencyContact,
       emergencyPhone: application.emergencyPhone,
+      isHospitalStaff: application.isHospitalStaff,
+      hospitalDepartment: application.hospitalDepartment,
+      username: application.username,
+      password: application.password,
       profileImageUrl: application.profileImageUrl,
       educationList: application.educationList,
       workList: application.workList,
       createdAt: application.createdAt,
+      updatedAt: application.updatedAt,
       status: application.status
     };
 
@@ -120,6 +128,57 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching profile:', error);
     return NextResponse.json(
       { success: false, message: 'เกิดข้อผิดพลาดในการดึงข้อมูล' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    console.log('API Profile Update - Received data:', body);
+
+    if (!body.id) {
+      return NextResponse.json(
+        { success: false, message: 'ไม่พบ ID ของข้อมูล' },
+        { status: 400 }
+      );
+    }
+
+    // อ่านข้อมูลจากไฟล์ JSON
+    const applications = readApplications();
+    
+    // หาข้อมูลที่ต้องการอัปเดต
+    const applicationIndex = applications.findIndex((app: any) => app.id === body.id);
+    
+    if (applicationIndex === -1) {
+      return NextResponse.json(
+        { success: false, message: 'ไม่พบข้อมูลที่ต้องการอัปเดต' },
+        { status: 404 }
+      );
+    }
+
+    // อัปเดตข้อมูล
+    applications[applicationIndex] = {
+      ...applications[applicationIndex],
+      ...body,
+      updatedAt: new Date().toISOString()
+    };
+
+    // บันทึกข้อมูลลงไฟล์
+    writeApplications(applications);
+
+    console.log('API Profile Update - Successfully updated application:', body.id);
+
+    return NextResponse.json({
+      success: true,
+      message: 'อัปเดตข้อมูลเรียบร้อยแล้ว'
+    });
+
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    return NextResponse.json(
+      { success: false, message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล' },
       { status: 500 }
     );
   }

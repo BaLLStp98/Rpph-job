@@ -1,0 +1,27 @@
+{
+  "name": "rpph-job-mysql-dependencies",
+  "version": "1.0.0",
+  "description": "MySQL dependencies for RPPH Job Application System",
+  "main": "migrate-to-mysql.js",
+  "scripts": {
+    "migrate": "node migrate-to-mysql.js",
+    "setup-db": "mysql -u root -p < database-schema.sql",
+    "backup": "mysqldump -u root -p rpph_job_system > backup.sql",
+    "restore": "mysql -u root -p rpph_job_system < backup.sql"
+  },
+  "dependencies": {
+    "mysql2": "^3.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "keywords": [
+    "mysql",
+    "database",
+    "migration",
+    "rpph",
+    "job-application"
+  ],
+  "author": "RPPH Development Team",
+  "license": "MIT"
+}
