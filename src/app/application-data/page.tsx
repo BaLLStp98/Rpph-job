@@ -2492,58 +2492,8 @@ export default function ApplicationData() {
 
   // ฟังก์ชันสำหรับพิมพ์เอกสาร
   const handlePrintDocument = (application: ApplicationData) => {
-    const params = new URLSearchParams();
-    params.append('firstName', application.firstName || '');
-    params.append('lastName', application.lastName || '');
-    params.append('email', application.email || '');
-    params.append('phone', application.phone || '');
-    params.append('appliedPosition', application.appliedPosition || '');
-    params.append('department', application.department || '');
-    params.append('expectedSalary', application.expectedSalary || '');
-    params.append('availableDate', application.availableDate || '');
-    params.append('currentAddress', application.currentAddress || '');
-    params.append('birthDate', application.birthDate || '');
-    params.append('age', application.age || '');
-    params.append('gender', application.gender || '');
-    params.append('nationality', application.nationality || '');
-    params.append('religion', application.religion || '');
-    params.append('maritalStatus', application.maritalStatus || '');
-    params.append('idNumber', application.idNumber || '');
-    params.append('idCardIssuedAt', application.idCardIssuedAt || '');
-    params.append('idCardIssueDate', application.idCardIssueDate || '');
-    params.append('idCardExpiryDate', application.idCardExpiryDate || '');
-    params.append('emergencyContact', application.emergencyContact || '');
-    params.append('emergencyPhone', application.emergencyPhone || '');
-    params.append('emergencyRelationship', application.emergencyRelationship || '');
-    params.append('skills', application.skills || '');
-    params.append('languages', application.languages || '');
-    params.append('computerSkills', application.computerSkills || '');
-    params.append('certificates', application.certificates || '');
-    
-    // เพิ่มข้อมูลการศึกษา
-    if (application.education && application.education.length > 0) {
-      application.education.forEach((edu, index) => {
-        params.append(`education[${index}][level]`, edu.level || '');
-        params.append(`education[${index}][institution]`, edu.institution || edu.school || '');
-        params.append(`education[${index}][major]`, edu.major || '');
-        params.append(`education[${index}][year]`, edu.year || edu.graduationYear || '');
-        params.append(`education[${index}][gpa]`, edu.gpa || '');
-      });
-    }
-    
-    // เพิ่มข้อมูลประสบการณ์ทำงาน
-    if (application.workExperience && application.workExperience.length > 0) {
-      application.workExperience.forEach((work, index) => {
-        params.append(`workExperience[${index}][position]`, work.position || '');
-        params.append(`workExperience[${index}][company]`, work.company || '');
-        params.append(`workExperience[${index}][startDate]`, work.startDate || '');
-        params.append(`workExperience[${index}][endDate]`, work.endDate || '');
-        params.append(`workExperience[${index}][salary]`, work.salary || '');
-        params.append(`workExperience[${index}][reason]`, work.reason || '');
-      });
-    }
-    
-    const printUrl = `/official-documents/print-all?${params.toString()}`;
+    // ส่งเฉพาะ ID ไปยัง official-documents เพื่อให้ดึงข้อมูลจาก API
+    const printUrl = `/official-documents?id=${application.id}`;
     window.open(printUrl, '_blank');
   };
 

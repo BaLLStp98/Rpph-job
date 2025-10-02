@@ -3,6 +3,12 @@ import { NextResponse } from "next/server"
 
 export default withAuth(
   function middleware(req) {
+    // ตั้งค่า Cache-Control ป้องกันการแคชข้อมูลผู้ใช้ข้าม session
+    const res = NextResponse.next({ request: req })
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    res.headers.set('Pragma', 'no-cache')
+    res.headers.set('Expires', '0')
+
     const { pathname } = req.nextUrl
     const token = req.nextauth.token
 
@@ -44,7 +50,7 @@ export default withAuth(
       }
     }
 
-    return NextResponse.next()
+    return res
   },
   {
     callbacks: {

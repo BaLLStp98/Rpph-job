@@ -166,6 +166,7 @@ model ApplicationForm {
   education                           ApplicationEducation[]
   user                                User?                       @relation(fields: [userId], references: [id])
   workExperience                      ApplicationWorkExperience[]
+  previousGovernmentService           ApplicationPreviousGovernmentService[]
 
   @@index([userId], map: "application_forms_user_id_fkey")
   @@map("application_forms")
@@ -200,6 +201,22 @@ model ApplicationWorkExperience {
 
   @@index([applicationId], map: "application_work_experience_application_id_fkey")
   @@map("application_work_experience")
+}
+
+model ApplicationPreviousGovernmentService {
+  id              Int             @id @default(autoincrement())
+  applicationId   String          @map("application_id")
+  position        String          @db.VarChar(200)
+  department      String          @db.VarChar(200)
+  reason          String          @db.Text
+  date            String          @db.VarChar(50)
+  type            String?         @default("civilServant") @db.VarChar(50)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  application     ApplicationForm @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId], map: "application_prev_gov_service_application_id_fkey")
+  @@map("application_previous_government_service")
 }
 
 model ApplicationDocument {
@@ -438,6 +455,7 @@ model ResumeDepositPreviousGovernmentService {
   department      String        @db.VarChar(200)
   reason          String        @db.Text
   date            String        @db.VarChar(50)
+  type            String?       @default("civilServant") @db.VarChar(50)
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   resumeDeposit   ResumeDeposit @relation(fields: [resumeDepositId], references: [id], onDelete: Cascade)

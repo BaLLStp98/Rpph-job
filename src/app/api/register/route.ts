@@ -68,7 +68,38 @@ export async function POST(request: NextRequest) {
         certificates: applicationData.certificates || null,
         references: applicationData.references || null,
         profileImage: applicationData.profileImage || null,
-        status: 'PENDING'
+        status: 'PENDING',
+        // ข้อมูลการศึกษา
+        education: {
+          create: (applicationData.education || []).map((e: any) => ({
+            level: e.level,
+            institution: e.institution,
+            major: e.major || null,
+            year: e.year || null,
+            gpa: e.gpa ? parseFloat(e.gpa) : null
+          }))
+        },
+        // ข้อมูลประสบการณ์ทำงาน
+        workExperience: {
+          create: (applicationData.workExperience || []).map((w: any) => ({
+            position: w.position,
+            company: w.company,
+            startDate: w.startDate ? new Date(w.startDate) : null,
+            endDate: w.endDate ? new Date(w.endDate) : null,
+            salary: w.salary || null,
+            reason: w.reason || null
+          }))
+        },
+        // ข้อมูลการรับราชการก่อนหน้า
+        previousGovernmentService: {
+          create: (applicationData.previousGovernmentService || []).map((g: any) => ({
+            position: g.position,
+            department: g.department,
+            reason: g.reason,
+            date: g.date,
+            type: g.type || 'civilServant'
+          }))
+        }
       }
     })
 

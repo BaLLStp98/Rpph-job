@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Button } from '@heroui/react';
+import { Button, Spinner } from '@heroui/react';
 import { DocumentTextIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 
@@ -200,6 +200,8 @@ interface ApplicationData {
 
 export default function PrintAllDocuments() {
   const [applicationData, setApplicationData] = useState<ApplicationData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -332,9 +334,246 @@ export default function PrintAllDocuments() {
     return {};
   };
 
-  // โหลดข้อมูลจาก URL parameters
+  // ฟังก์ชันสำหรับดึงข้อมูลจาก API
+  const fetchApplicationData = async (applicationId: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch(`/api/resume-deposit/${applicationId}`, {
+        cache: 'no-store'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch application data');
+      }
+      
+      const responseData = await response.json();
+      
+      if (!responseData.success) {
+        throw new Error(responseData.message || 'Failed to fetch application data');
+      }
+      
+      const data = responseData.data;
+      
+      // Debug: แสดงข้อมูลที่ได้รับจาก API
+      console.log('🔍 Print-All API Response Data:', data);
+      console.log('🔍 Print-All Data keys:', Object.keys(data));
+      console.log('🔍 Print-All Raw data fields:', {
+        prefix: data.prefix,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        idNumber: data.idNumber,
+        birthDate: data.birthDate,
+        gender: data.gender,
+        maritalStatus: data.maritalStatus,
+        idCardIssuedAt: data.idCardIssuedAt,
+        idCardIssueDate: data.idCardIssueDate,
+        idCardExpiryDate: data.idCardExpiryDate,
+        house_registration_house_number: data.house_registration_house_number,
+        house_registration_village_number: data.house_registration_village_number,
+        house_registration_alley: data.house_registration_alley,
+        house_registration_road: data.house_registration_road,
+        house_registration_sub_district: data.house_registration_sub_district,
+        house_registration_district: data.house_registration_district,
+        house_registration_province: data.house_registration_province,
+        house_registration_postal_code: data.house_registration_postal_code,
+        addressAccordingToHouseRegistration: data.addressAccordingToHouseRegistration
+      });
+      
+      // แปลงข้อมูลจาก ResumeDeposit เป็น ApplicationData
+      const applicationData: ApplicationData = {
+        id: data.id,
+        submittedAt: data.createdAt || data.submittedAt || '',
+        status: data.status || 'PENDING',
+        prefix: data.prefix || '',
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
+        idNumber: data.idNumber || '',
+        idCardIssuedAt: data.idCardIssuedAt || '',
+        idCardIssueDate: data.idCardIssueDate || '',
+        idCardExpiryDate: data.idCardExpiryDate || '',
+        birthDate: data.birthDate || '',
+        age: data.age || '',
+        race: data.race || '',
+        placeOfBirth: data.placeOfBirth || '',
+        placeOfBirthProvince: data.placeOfBirthProvince || '',
+        gender: data.gender === 'MALE' ? 'ชาย' : data.gender === 'FEMALE' ? 'หญิง' : data.gender || '',
+        nationality: data.nationality || '',
+        religion: data.religion || '',
+        maritalStatus: data.maritalStatus === 'SINGLE' ? 'โสด' : 
+                      data.maritalStatus === 'MARRIED' ? 'สมรส' : 
+                      data.maritalStatus === 'DIVORCED' ? 'หย่าร้าง' : 
+                      data.maritalStatus === 'WIDOWED' ? 'หม้าย' : data.maritalStatus || '',
+        addressAccordingToHouseRegistration: data.addressAccordingToHouseRegistration || '',
+        houseRegistrationAddress: data.houseRegistrationAddress || undefined,
+        currentAddress: data.currentAddress || data.address || '',
+        currentAddressDetail: data.currentAddressDetail || undefined,
+        phone: data.phone || '',
+        email: data.email || '',
+        emergencyContact: data.emergencyContact || data.emergencyContactFirstName + ' ' + data.emergencyContactLastName || '',
+        emergencyContactFirstName: data.emergencyContactFirstName || '',
+        emergencyContactLastName: data.emergencyContactLastName || '',
+        emergencyContactRelationship: data.emergencyContactRelationship || data.emergencyRelationship || '',
+        emergencyContactPhone: data.emergencyContactPhone || data.emergencyPhone || '',
+        emergencyPhone: data.emergencyPhone || data.emergencyContactPhone || '',
+        emergencyRelationship: data.emergencyRelationship || data.emergencyContactRelationship || '',
+        emergencyAddress: data.emergencyAddress || undefined,
+        emergencyWorkplace: data.emergencyWorkplace || undefined,
+        appliedPosition: data.expectedPosition || data.appliedPosition || data.position || '',
+        expectedSalary: data.expectedSalary || data.salary || '',
+        availableDate: data.availableDate || data.availableStartDate || '',
+        currentWork: data.currentWork || data.isCurrentlyWorking || false,
+        department: data.department || data.appliedDepartment || '',
+        division: data.division || data.appliedDivision || '',
+        previousGovernmentService: data.previousGovernmentService || [],
+        education: (data.education || []).map((edu: any) => ({
+          level: edu.level || '',
+          degree: edu.degree || '',
+          institution: edu.institution || edu.school || '',
+          school: edu.school || '',
+          major: edu.major || '',
+          year: edu.year || '',
+          graduationYear: edu.graduationYear || '',
+          gpa: edu.gpa || ''
+        })),
+        workExperience: (data.workExperience || []).map((work: any) => ({
+          position: work.position || '',
+          company: work.company || '',
+          district: work.district || '',
+          province: work.province || '',
+          startDate: work.startDate || '',
+          endDate: work.endDate || '',
+          description: work.description || '',
+          salary: work.salary || '',
+          reason: work.reason || '',
+          phone: work.phone || '',
+          reasonForLeaving: work.reasonForLeaving || ''
+        })),
+        skills: data.skills || data.specialSkills || data.abilities || '',
+        languages: data.languages || data.languageSkills || data.foreignLanguages || '',
+        computerSkills: data.computerSkills || data.computerKnowledge || data.technicalSkills || '',
+        certificates: data.certificates || data.certifications || data.licenses || '',
+        references: data.references || data.referencePersons || data.recommendations || '',
+        spouseInfo: data.spouseInfo || (data.spouseFirstName || data.spouseLastName ? {
+          firstName: data.spouseFirstName || data.spouseName || '',
+          lastName: data.spouseLastName || data.spouseSurname || ''
+        } : undefined),
+        registeredAddress: data.registeredAddress || undefined,
+        // ฟิลด์ที่อยู่แบบแยกจากฐานข้อมูล
+        house_registration_house_number: data.house_registration_house_number || data.houseNumber || '',
+        house_registration_village_number: data.house_registration_village_number || data.villageNumber || '',
+        house_registration_alley: data.house_registration_alley || data.alley || '',
+        house_registration_road: data.house_registration_road || data.road || '',
+        house_registration_sub_district: data.house_registration_sub_district || data.subDistrict || '',
+        house_registration_district: data.house_registration_district || data.district || '',
+        house_registration_province: data.house_registration_province || data.province || '',
+        house_registration_postal_code: data.house_registration_postal_code || data.postalCode || '',
+        house_registration_phone: data.house_registration_phone || data.phone || '',
+        house_registration_mobile: data.house_registration_mobile || data.mobile || data.phone || '',
+        current_address_house_number: data.current_address_house_number || data.currentHouseNumber || '',
+        current_address_village_number: data.current_address_village_number || data.currentVillageNumber || '',
+        current_address_alley: data.current_address_alley || data.currentAlley || '',
+        current_address_road: data.current_address_road || data.currentRoad || '',
+        current_address_sub_district: data.current_address_sub_district || data.currentSubDistrict || '',
+        current_address_district: data.current_address_district || data.currentDistrict || '',
+        current_address_province: data.current_address_province || data.currentProvince || '',
+        current_address_postal_code: data.current_address_postal_code || data.currentPostalCode || '',
+        current_address_phone: data.current_address_phone || data.currentPhone || data.phone || '',
+        current_address_mobile: data.current_address_mobile || data.currentMobile || data.mobile || data.phone || '',
+        emergency_address_house_number: data.emergency_address_house_number || data.emergencyHouseNumber || '',
+        emergency_address_village_number: data.emergency_address_village_number || data.emergencyVillageNumber || '',
+        emergency_address_alley: data.emergency_address_alley || data.emergencyAlley || '',
+        emergency_address_road: data.emergency_address_road || data.emergencyRoad || '',
+        emergency_address_sub_district: data.emergency_address_sub_district || data.emergencySubDistrict || '',
+        emergency_address_district: data.emergency_address_district || data.emergencyDistrict || '',
+        emergency_address_province: data.emergency_address_province || data.emergencyProvince || '',
+        emergency_address_postal_code: data.emergency_address_postal_code || data.emergencyPostalCode || '',
+        emergency_address_phone: data.emergency_address_phone || data.emergencyPhone || data.emergencyContactPhone || '',
+        medicalRights: data.medicalRights || undefined,
+        multipleEmployers: data.multipleEmployers || data.otherEmployers || [],
+        staffInfo: data.staffInfo || undefined,
+        profileImage: data.profileImage || data.photo || data.avatar || '',
+        updatedAt: data.updatedAt || data.modifiedAt || '',
+        documents: data.documents || undefined,
+        // เพิ่มฟิลด์อื่นๆ ที่อาจมีในฐานข้อมูล
+        placeOfBirth: data.placeOfBirth || data.birthPlace || '',
+        placeOfBirthProvince: data.placeOfBirthProvince || data.birthProvince || '',
+        age: data.age || data.ageYears || '',
+        race: data.race || data.ethnicity || '',
+        nationality: data.nationality || data.citizenship || '',
+        religion: data.religion || data.faith || '',
+        // เพิ่มฟิลด์อื่นๆ ที่อาจมีในฐานข้อมูล
+        idCardIssuedAt: data.idCardIssuedAt || data.idCardIssuedPlace || data.idCardIssuedLocation || '',
+        idCardIssueDate: data.idCardIssueDate || data.idCardIssuedDate || data.idCardDate || '',
+        idCardExpiryDate: data.idCardExpiryDate || data.idCardExpireDate || data.idCardExpirationDate || '',
+        idNumber: data.idNumber || data.idCardNumber || data.nationalId || data.citizenId || '',
+        phone: data.phone || data.telephone || data.phoneNumber || data.contactPhone || '',
+        email: data.email || data.emailAddress || data.contactEmail || '',
+        // เพิ่มฟิลด์อื่นๆ ที่อาจมีในฐานข้อมูล
+        addressAccordingToHouseRegistration: data.addressAccordingToHouseRegistration || data.houseRegistrationAddress || data.registeredAddress || '',
+        currentAddress: data.currentAddress || data.address || data.currentResidence || data.presentAddress || '',
+        // เพิ่มฟิลด์อื่นๆ ที่อาจมีในฐานข้อมูล
+        emergencyContact: data.emergencyContact || data.emergencyContactName || data.emergencyPerson || data.emergencyName || '',
+        emergencyContactFirstName: data.emergencyContactFirstName || data.emergencyFirstName || data.emergencyName || '',
+        emergencyContactLastName: data.emergencyContactLastName || data.emergencyLastName || data.emergencySurname || '',
+        emergencyContactRelationship: data.emergencyContactRelationship || data.emergencyRelationship || data.emergencyRelation || '',
+        emergencyContactPhone: data.emergencyContactPhone || data.emergencyPhone || data.emergencyContactNumber || '',
+        emergencyPhone: data.emergencyPhone || data.emergencyContactPhone || data.emergencyNumber || '',
+        emergencyRelationship: data.emergencyRelationship || data.emergencyContactRelationship || data.emergencyRelation || '',
+        // เพิ่มฟิลด์อื่นๆ ที่อาจมีในฐานข้อมูล
+        appliedPosition: data.appliedPosition || data.expectedPosition || data.position || data.jobPosition || data.desiredPosition || '',
+        expectedSalary: data.expectedSalary || data.salary || data.desiredSalary || data.expectedWage || '',
+        availableDate: data.availableDate || data.availableStartDate || data.startDate || data.availableFrom || '',
+        currentWork: data.currentWork || data.isCurrentlyWorking || data.currentlyWorking || false,
+        department: data.department || data.appliedDepartment || data.departmentName || '',
+        division: data.division || data.appliedDivision || data.divisionName || ''
+      };
+      
+      // Debug: แสดงข้อมูลที่แปลงแล้ว
+      console.log('🔍 Print-All Mapped ApplicationData:', applicationData);
+      console.log('🔍 Print-All Key fields check:', {
+        firstName: applicationData.firstName,
+        lastName: applicationData.lastName,
+        prefix: applicationData.prefix,
+        idNumber: applicationData.idNumber,
+        birthDate: applicationData.birthDate,
+        gender: applicationData.gender,
+        maritalStatus: applicationData.maritalStatus,
+        idCardIssuedAt: applicationData.idCardIssuedAt,
+        idCardIssueDate: applicationData.idCardIssueDate,
+        idCardExpiryDate: applicationData.idCardExpiryDate
+      });
+      console.log('🔍 Print-All Address fields check:', {
+        house_registration_house_number: applicationData.house_registration_house_number,
+        house_registration_village_number: applicationData.house_registration_village_number,
+        house_registration_alley: applicationData.house_registration_alley,
+        house_registration_road: applicationData.house_registration_road,
+        house_registration_sub_district: applicationData.house_registration_sub_district,
+        house_registration_district: applicationData.house_registration_district,
+        house_registration_province: applicationData.house_registration_province,
+        house_registration_postal_code: applicationData.house_registration_postal_code,
+        addressAccordingToHouseRegistration: applicationData.addressAccordingToHouseRegistration
+      });
+      
+      setApplicationData(applicationData);
+    } catch (err) {
+      console.error('Error fetching application data:', err);
+      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // โหลดข้อมูลจาก URL parameters หรือ API
   useEffect(() => {
-    if (searchParams) {
+    const applicationId = searchParams?.get('id');
+    
+    if (applicationId) {
+      // ดึงข้อมูลจาก API โดยใช้ ID
+      fetchApplicationData(applicationId);
+    } else if (searchParams) {
+      // Fallback: ใช้ URL parameters แบบเดิม
       const data: Partial<ApplicationData> = {};
       
       searchParams.forEach((value, key) => {
@@ -351,7 +590,10 @@ export default function PrintAllDocuments() {
 
       if (Object.keys(data).length > 0) {
         setApplicationData(data as ApplicationData);
+        setLoading(false);
       }
+    } else {
+      setLoading(false);
     }
   }, [searchParams]);
 
@@ -359,6 +601,50 @@ export default function PrintAllDocuments() {
   const handlePrint = () => {
     window.print();
   };
+
+  // แสดง loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Spinner size="lg" color="primary" />
+          <p className="mt-4 text-gray-600">กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // แสดง error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">เกิดข้อผิดพลาด</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button 
+            color="primary" 
+            onClick={() => window.location.reload()}
+          >
+            ลองใหม่
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // แสดงข้อความเมื่อไม่มีข้อมูล
+  if (!applicationData) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="text-gray-400 text-6xl mb-4">📄</div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">ไม่พบข้อมูล</h2>
+          <p className="text-gray-600">กรุณาเลือกใบสมัครงานจากหน้าการจัดการข้อมูล</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
@@ -439,6 +725,32 @@ export default function PrintAllDocuments() {
         </Button>
       </div>
 
+      {/* Debug Information - Development Mode Only */}
+      {process.env.NODE_ENV === 'development' && applicationData && (
+        <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded-lg no-print">
+          <h3 className="font-bold text-yellow-800 mb-2">🔍 Debug Information (Development Mode)</h3>
+          <div className="text-sm text-yellow-700">
+            <p><strong>ID:</strong> {applicationData.id}</p>
+            <p><strong>ชื่อ-นามสกุล:</strong> {applicationData.prefix} {applicationData.firstName} {applicationData.lastName}</p>
+            <p><strong>เลขบัตรประชาชน:</strong> {applicationData.idNumber || 'ไม่มีข้อมูล'}</p>
+            <p><strong>วันเกิด:</strong> {applicationData.birthDate || 'ไม่มีข้อมูล'}</p>
+            <p><strong>เพศ:</strong> {applicationData.gender || 'ไม่มีข้อมูล'}</p>
+            <p><strong>สถานะสมรส:</strong> {applicationData.maritalStatus || 'ไม่มีข้อมูล'}</p>
+            <p><strong>ออกให้ ณ อำเภอ/เขต:</strong> {applicationData.idCardIssuedAt || 'ไม่มีข้อมูล'}</p>
+            <p><strong>วันที่ออกบัตร:</strong> {applicationData.idCardIssueDate || 'ไม่มีข้อมูล'}</p>
+            <p><strong>หมดอายุวันที่:</strong> {applicationData.idCardExpiryDate || 'ไม่มีข้อมูล'}</p>
+            <p><strong>บ้านเลขที่:</strong> {applicationData.house_registration_house_number || 'ไม่มีข้อมูล'}</p>
+            <p><strong>หมู่ที่:</strong> {applicationData.house_registration_village_number || 'ไม่มีข้อมูล'}</p>
+            <p><strong>ตรอก/ซอย:</strong> {applicationData.house_registration_alley || 'ไม่มีข้อมูล'}</p>
+            <p><strong>ถนน:</strong> {applicationData.house_registration_road || 'ไม่มีข้อมูล'}</p>
+            <p><strong>ตำบล/แขวง:</strong> {applicationData.house_registration_sub_district || 'ไม่มีข้อมูล'}</p>
+            <p><strong>อำเภอ/เขต:</strong> {applicationData.house_registration_district || 'ไม่มีข้อมูล'}</p>
+            <p><strong>จังหวัด:</strong> {applicationData.house_registration_province || 'ไม่มีข้อมูล'}</p>
+            <p><strong>รหัสไปรษณีย์:</strong> {applicationData.house_registration_postal_code || 'ไม่มีข้อมูล'}</p>
+          </div>
+        </div>
+      )}
+
       {/* Print Container */}
       <div ref={containerRef} className="print-a4-container bg-white shadow-lg">
         <div className="p-8">
@@ -512,26 +824,38 @@ export default function PrintAllDocuments() {
                   <div className="flex items-center gap-2 text-xm w-full">
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span>คำนำหน้า</span>
-                      <div className="flex-1 min-w-[60px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                        <span className="text-xm font-medium text-gray-800">{applicationData?.prefix || ''}</span>
-                      </div>
+                    <div className="flex-1 min-w-[60px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.prefix || ''}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.prefix || 'empty'}]</div>
+                      )}
+                    </div>
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span>ชื่อ</span>
                       <div className="flex-1 min-w-[100px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                         <span className="text-xm font-medium text-gray-800">{applicationData?.firstName || ''}</span>
+                        {process.env.NODE_ENV === 'development' && (
+                          <div className="text-xs text-blue-500 ml-1">[{applicationData?.firstName || 'empty'}]</div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span>นามสกุล</span>
                       <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                         <span className="text-xm font-medium text-gray-800">{applicationData?.lastName || ''}</span>
+                        {process.env.NODE_ENV === 'development' && (
+                          <div className="text-xs text-blue-500 ml-1">[{applicationData?.lastName || 'empty'}]</div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span>อายุ</span>
                       <div className="flex-1 min-w-[40px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                         <span className="text-xm font-medium text-gray-800">{applicationData?.age || ''}</span>
+                        {process.env.NODE_ENV === 'development' && (
+                          <div className="text-xs text-blue-500 ml-1">[{applicationData?.age || 'empty'}]</div>
+                        )}
                       </div>
                       <span>ปี</span>
                     </div>
@@ -542,18 +866,27 @@ export default function PrintAllDocuments() {
                     <span>เชื้อชาติ</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.race || ''}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.race || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>สัญชาติ</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.nationality || ''}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.nationality || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>ศาสนา</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.religion || ''}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.religion || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -590,6 +923,13 @@ export default function PrintAllDocuments() {
                         ? `${applicationData.spouseInfo.firstName || ''} ${applicationData.spouseInfo.lastName || ''}`.trim()
                         : ''}
                     </span>
+                    {process.env.NODE_ENV === 'development' && (
+                      <div className="text-xs text-blue-500 ml-1">
+                        [{applicationData?.maritalStatus === 'สมรส' && applicationData?.spouseInfo 
+                          ? `${applicationData.spouseInfo.firstName || ''} ${applicationData.spouseInfo.lastName || ''}`.trim()
+                          : 'empty'}]
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -602,12 +942,18 @@ export default function PrintAllDocuments() {
                     <span>เลขที่</span>
                     <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.idNumber || ''}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.idNumber || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>ออกให้ ณ อำเภอ/เขต</span>
                     <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.idCardIssuedAt || ''}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.idCardIssuedAt || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -616,28 +962,46 @@ export default function PrintAllDocuments() {
                     <span className="whitespace-nowrap">วันที่ออกบัตร</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{getThaiDay(applicationData?.idCardIssueDate || '')}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{getThaiDay(applicationData?.idCardIssueDate || '') || 'empty'}]</div>
+                      )}
                     </div>
                     <span>เดือน</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{getThaiMonthName(applicationData?.idCardIssueDate || '')}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{getThaiMonthName(applicationData?.idCardIssueDate || '') || 'empty'}]</div>
+                      )}
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{getGregorianYear(applicationData?.idCardIssueDate || '')}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{getGregorianYear(applicationData?.idCardIssueDate || '') || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span className="whitespace-nowrap">หมดอายุวันที่</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{getThaiDay(applicationData?.idCardExpiryDate || '')}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{getThaiDay(applicationData?.idCardExpiryDate || '') || 'empty'}]</div>
+                      )}
                     </div>
                     <span>เดือน</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{getThaiMonthName(applicationData?.idCardExpiryDate || '')}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{getThaiMonthName(applicationData?.idCardExpiryDate || '') || 'empty'}]</div>
+                      )}
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{getGregorianYear(applicationData?.idCardExpiryDate || '')}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{getGregorianYear(applicationData?.idCardExpiryDate || '') || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -651,60 +1015,90 @@ export default function PrintAllDocuments() {
                     <span>บ้านเลขที่</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_house_number || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').houseNumber}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_house_number || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').houseNumber || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>หมู่ที่</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_village_number || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').villageNumber}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_village_number || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').villageNumber || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ตรอก/ซอย</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_alley || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').alley}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_alley || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').alley || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ถนน</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_road || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').road}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_road || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').road || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ตำบล/แขวง</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_sub_district || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').subDistrict}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_sub_district || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').subDistrict || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>อำเภอ/เขต</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_district || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').district}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_district || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').district || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>จังหวัด</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_province || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').province}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_province || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').province || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>รหัสไปรษณีย์</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_postal_code || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').postalCode}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_postal_code || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').postalCode || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>โทรศัพท์</span>
                     <div className="flex-1 min-w-[80px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_phone || applicationData?.phone || ''}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_phone || applicationData?.phone || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>โทรศัพท์มือถือ</span>
                     <div className="flex-1 min-w-[80px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_mobile || applicationData?.phone || ''}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_mobile || applicationData?.phone || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -718,24 +1112,36 @@ export default function PrintAllDocuments() {
                     <span>บ้านเลขที่</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.current_address_house_number || parseAddress(applicationData?.currentAddress || '').houseNumber}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.current_address_house_number || parseAddress(applicationData?.currentAddress || '').houseNumber || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>หมู่ที่</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.current_address_village_number || parseAddress(applicationData?.currentAddress || '').villageNumber}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.current_address_village_number || parseAddress(applicationData?.currentAddress || '').villageNumber || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ตรอก/ซอย</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.current_address_alley || parseAddress(applicationData?.currentAddress || '').alley}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.current_address_alley || parseAddress(applicationData?.currentAddress || '').alley || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ถนน</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.current_address_road || parseAddress(applicationData?.currentAddress || '').road}</span>
+                      {process.env.NODE_ENV === 'development' && (
+                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.current_address_road || parseAddress(applicationData?.currentAddress || '').road || 'empty'}]</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
