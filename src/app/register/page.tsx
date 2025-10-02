@@ -1766,7 +1766,7 @@ export default function ApplicationForm() {
           }
           
           console.log('✅ ดึงข้อมูลฝากประวัติสำหรับ department สำเร็จ');
-          alert(`โหลดข้อมูลฝากประวัติของ ${found.firstName} ${found.lastName} เรียบร้อยแล้ว`);
+          // alert(`โหลดข้อมูลฝากประวัติของ ${found.firstName} ${found.lastName} เรียบร้อยแล้ว`);
         } else {
           console.log('ℹ️ ไม่พบข้อมูลฝากประวัติสำหรับผู้ใช้ปัจจุบัน');
           console.log('🔍 ข้อมูลที่ค้นหา:', {
@@ -2348,6 +2348,63 @@ export default function ApplicationForm() {
     setPreviewFile(null);
   };
 
+  // ฟังก์ชันลบไฟล์เอกสารแนบ
+  const handleDeleteDocument = async (documentId: string, documentType: string) => {
+    if (!savedResume?.id) {
+      alert('ไม่พบข้อมูลฝากประวัติ');
+      return;
+    }
+
+    if (!confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      
+      const response = await fetch(`/api/resume-documents/${documentId}`, {
+        method: 'DELETE'
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // อัปเดตข้อมูลเอกสารที่อัปโหลดแล้ว
+        const documents = await fetchUploadedDocuments(savedResume.id);
+        setUploadedDocuments(documents);
+        
+        // ลบไฟล์จาก formData ด้วย
+        setFormData(prev => ({
+          ...prev,
+          documents: {
+            ...prev.documents,
+            [documentType]: undefined
+          }
+        }));
+        
+        alert('ลบไฟล์สำเร็จ');
+      } else {
+        alert(result.message || 'เกิดข้อผิดพลาดในการลบไฟล์');
+      }
+    } catch (error) {
+      console.error('Delete document error:', error);
+      alert('เกิดข้อผิดพลาดในการลบไฟล์');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // ฟังก์ชันลบไฟล์ใหม่ที่ยังไม่ได้อัปโหลด
+  const handleDeleteNewDocument = (documentType: string) => {
+    setFormData(prev => ({
+      ...prev,
+      documents: {
+        ...prev.documents,
+        [documentType]: undefined
+      }
+    }));
+  };
+
   const handleArrayChange = (
     arrayName: 'education' | 'workExperience' | 'multipleEmployers',
     index: number,
@@ -2781,17 +2838,29 @@ export default function ApplicationForm() {
     try {
       const timestamp = new Date().toISOString();
 
-      // บันทึกข้อมูลไปที่ ResumeDeposit เสมอ (ไม่ว่าจะเป็นโหมดสมัครงานหรือฝากประวัติ)
-      console.log('🔍 Mode: RESUME DEPOSIT (ฝากประวัติ) - ดึงข้อมูลจากฝากประวัติเสมอ');
+        // ตรวจสอบว่ามี department parameter หรือไม่
+        const hasDepartment = departmentName || departmentId;
+        
+        // บันทึกข้อมูลไปที่ ResumeDeposit เสมอ (ไม่ว่าจะมี department parameter หรือไม่)
+        console.log('🔍 Mode: RESUME DEPOSIT (ฝากประวัติ) - บันทึกไปที่ตาราง ResumeDeposit');
       console.log('🔍 departmentId:', departmentId);
       console.log('🔍 departmentName:', departmentName);
 
-      // ========== บันทึกไปที่ ResumeDeposit เสมอ ==========
-      {
-        console.log('📝 Saving to ResumeDeposit...');
-        
-        // สร้าง ResumeDeposit payload
-        const resumePayload = {
+        await saveToResumeDeposit();
+    } catch (error) {
+      console.error('❌ Error in handleSubmit:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      setIsSaving(false);
+    }
+  };
+
+  // ฟังก์ชันบันทึกข้อมูลไปที่ ApplicationForm
+  const saveToApplicationForm = async () => {
+    try {
+      console.log('📝 Saving to ApplicationForm...');
+      
+      // สร้าง ApplicationForm payload
+      const applicationPayload = {
           firstName: formData.firstName || '',
           lastName: formData.lastName || '',
           email: formData.email || '',
@@ -2806,117 +2875,136 @@ export default function ApplicationForm() {
           availableDate: formData.availableDate ? new Date(formData.availableDate) : null,
           expectedSalary: formData.expectedSalary || '',
           department: departmentName || formData.department || '',
+        departmentId: departmentId || formData.departmentId || '',
           appliedPosition: formData.appliedPosition || departmentName || '',
           // ที่อยู่ปัจจุบัน
-          currentAddress: {
-            houseNumber: formData.currentAddress?.houseNumber || '',
-            village: formData.currentAddress?.village || '',
-            soi: formData.currentAddress?.soi || '',
-            road: formData.currentAddress?.road || '',
-            subDistrict: formData.currentAddress?.subDistrict || '',
-            district: formData.currentAddress?.district || '',
-            province: formData.currentAddress?.province || '',
-            postalCode: formData.currentAddress?.postalCode || '',
-            phone: formData.currentAddress?.phone || ''
-          },
+        currentAddress: formData.currentAddress?.currentAddress || '',
+        current_address_house_number: formData.currentAddress?.houseNumber || '',
+        current_address_village_number: formData.currentAddress?.villageNumber || '',
+        current_address_alley: formData.currentAddress?.alley || '',
+        current_address_road: formData.currentAddress?.road || '',
+        current_address_sub_district: formData.currentAddress?.subDistrict || '',
+        current_address_district: formData.currentAddress?.district || '',
+        current_address_province: formData.currentAddress?.province || '',
+        current_address_postal_code: formData.currentAddress?.postalCode || '',
+        current_address_phone: formData.currentAddress?.phone || '',
+        current_address_mobile: formData.currentAddress?.mobile || '',
           // ที่อยู่ตามทะเบียนบ้าน
-          registeredAddress: {
-            houseNumber: formData.registeredAddress?.houseNumber || '',
-            village: formData.registeredAddress?.village || '',
-            soi: formData.registeredAddress?.soi || '',
-            road: formData.registeredAddress?.road || '',
-            subDistrict: formData.registeredAddress?.subDistrict || '',
-            district: formData.registeredAddress?.district || '',
-            province: formData.registeredAddress?.province || '',
-            postalCode: formData.registeredAddress?.postalCode || '',
-            phone: formData.registeredAddress?.phone || ''
-          },
+        addressAccordingToHouseRegistration: formData.registeredAddress?.addressAccordingToHouseRegistration || '',
+        house_registration_house_number: formData.registeredAddress?.houseNumber || '',
+        house_registration_village_number: formData.registeredAddress?.villageNumber || '',
+        house_registration_alley: formData.registeredAddress?.alley || '',
+        house_registration_road: formData.registeredAddress?.road || '',
+        house_registration_sub_district: formData.registeredAddress?.subDistrict || '',
+        house_registration_district: formData.registeredAddress?.district || '',
+        house_registration_province: formData.registeredAddress?.province || '',
+        house_registration_postal_code: formData.registeredAddress?.postalCode || '',
+        house_registration_phone: formData.registeredAddress?.phone || '',
+        house_registration_mobile: formData.registeredAddress?.mobile || '',
           // ที่อยู่ฉุกเฉิน
-          emergencyAddress: {
-            houseNumber: formData.emergencyAddress?.houseNumber || '',
-            village: formData.emergencyAddress?.village || '',
-            soi: formData.emergencyAddress?.soi || '',
-            road: formData.emergencyAddress?.road || '',
-            subDistrict: formData.emergencyAddress?.subDistrict || '',
-            district: formData.emergencyAddress?.district || '',
-            province: formData.emergencyAddress?.province || '',
-            postalCode: formData.emergencyAddress?.postalCode || '',
-            phone: formData.emergencyAddress?.phone || ''
-          },
+        emergencyContact: formData.emergencyContact || '',
+        emergencyPhone: formData.emergencyPhone || '',
+        emergencyRelationship: formData.emergencyRelationship || '',
+        emergency_address_house_number: formData.emergencyAddress?.houseNumber || '',
+        emergency_address_village_number: formData.emergencyAddress?.villageNumber || '',
+        emergency_address_alley: formData.emergencyAddress?.alley || '',
+        emergency_address_road: formData.emergencyAddress?.road || '',
+        emergency_address_sub_district: formData.emergencyAddress?.subDistrict || '',
+        emergency_address_district: formData.emergencyAddress?.district || '',
+        emergency_address_province: formData.emergencyAddress?.province || '',
+        emergency_address_postal_code: formData.emergencyAddress?.postalCode || '',
+        emergency_address_phone: formData.emergencyAddress?.phone || '',
           // ข้อมูลคู่สมรส
-          spouseInfo: {
-            firstName: formData.spouseInfo?.firstName || '',
-            lastName: formData.spouseInfo?.lastName || '',
-            phone: formData.spouseInfo?.phone || '',
-            occupation: formData.spouseInfo?.occupation || '',
-            workplace: formData.spouseInfo?.workplace || ''
-          },
-          // การศึกษา
-          education: formData.education?.map(e => ({
-            level: e.level || '',
-            institution: e.institution || '',
-            major: e.major || '',
-            startYear: e.startYear || null,
-            endYear: e.endYear || null,
-            gpa: e.gpa ? parseFloat(e.gpa) : null
-          })) || [],
-          // ประสบการณ์ทำงาน
-          workExperience: formData.workExperience?.map(w => ({
-            position: w.position || '',
-            company: w.company || '',
-            startDate: w.startDate ? new Date(w.startDate) : null,
-            endDate: w.endDate ? new Date(w.endDate) : null,
-            isCurrent: w.isCurrent || false,
-            description: w.description || '',
-            salary: w.salary || ''
-          })) || [],
-          // ประวัติการรับราชการ
-          previousGovernmentService: formData.previousGovernmentService?.map(g => ({
-            position: g.position || '',
-            department: g.department || '',
-            reason: g.reason || '',
-            date: g.date || ''
-          })) || [],
+        spouseFirstName: formData.spouseInfo?.firstName || '',
+        spouseLastName: formData.spouseInfo?.lastName || '',
           // ข้อมูลเพิ่มเติม
-          additionalInfo: {
-            skills: formData.additionalInfo?.skills || '',
-            languages: formData.additionalInfo?.languages || '',
-            certifications: formData.additionalInfo?.certifications || '',
-            interests: formData.additionalInfo?.interests || '',
-            references: formData.additionalInfo?.references || ''
-          },
+        skills: formData.skills || '',
+        languages: formData.languages || '',
+        computerSkills: formData.computerSkills || '',
+        certificates: formData.certificates || '',
+        references: formData.references || '',
           // ข้อมูลเจ้าหน้าที่
-          staffInfo: formData.staffInfo ? {
-            employeeId: formData.staffInfo.employeeId || '',
-            position: formData.staffInfo.position || '',
-            department: formData.staffInfo.department || '',
-            startDate: formData.staffInfo.startDate ? new Date(formData.staffInfo.startDate) : null,
-            salary: formData.staffInfo.salary || ''
-          } : undefined
-        };
+        staff_position: formData.staffInfo?.position || '',
+        staff_department: formData.staffInfo?.department || '',
+        staff_start_work: formData.staffInfo?.startWork || '',
+      };
 
-        const rdRes = await fetch('/api/resume-deposit', {
+      const appRes = await fetch('/api/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(resumePayload)
-        });
-        const rdJson = await rdRes.json().catch(() => ({}));
-        if (!rdRes.ok) {
-          console.error('❌ ResumeDeposit create failed:', rdRes.status, rdJson);
-          alert(rdJson?.message || 'ไม่สามารถบันทึกข้อมูลฝากประวัติได้');
+        body: JSON.stringify(applicationPayload)
+      });
+      
+      const appJson = await appRes.json().catch(() => ({}));
+      if (!appRes.ok) {
+        console.error('❌ ApplicationForm create failed:', appRes.status, appJson);
+        alert(appJson?.message || 'ไม่สามารถบันทึกข้อมูลสมัครงานได้');
           setIsSaving(false);
           return;
         }
 
-        const resumeId = rdJson?.data?.id;
-        console.log('✅ ResumeDeposit created:', resumeId);
+      const applicationId = appJson?.data?.id;
+      console.log('✅ ApplicationForm created:', applicationId);
 
-        // 2. อัปโหลดรูปโปรไฟล์ (ถ้ามี)
+      // บันทึกข้อมูลการศึกษา
+      if (formData.education && formData.education.length > 0) {
+        for (const edu of formData.education) {
+          const educationPayload = {
+            applicationId: applicationId,
+            level: edu.level || '',
+            institution: edu.institution || '',
+            major: edu.major || '',
+            year: edu.year || '',
+            gpa: edu.gpa ? parseFloat(edu.gpa) : null
+          };
+
+          const eduRes = await fetch('/api/application-education', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(educationPayload)
+          });
+
+          if (!eduRes.ok) {
+            console.error('❌ ApplicationEducation create failed:', eduRes.status);
+          } else {
+            console.log('✅ ApplicationEducation created');
+          }
+        }
+      }
+
+      // บันทึกข้อมูลประสบการณ์ทำงาน
+      if (formData.workExperience && formData.workExperience.length > 0) {
+        for (const work of formData.workExperience) {
+          const workPayload = {
+            applicationId: applicationId,
+            position: work.position || '',
+            company: work.company || '',
+            startDate: work.startDate ? new Date(work.startDate) : null,
+            endDate: work.endDate ? new Date(work.endDate) : null,
+            salary: work.salary || '',
+            reason: work.reason || ''
+          };
+
+          const workRes = await fetch('/api/application-work-experience', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(workPayload)
+          });
+
+          if (!workRes.ok) {
+            console.error('❌ ApplicationWorkExperience create failed:', workRes.status);
+          } else {
+            console.log('✅ ApplicationWorkExperience created');
+          }
+        }
+      }
+
+      // อัปโหลดรูปโปรไฟล์ (ถ้ามี)
         if (formData.profileImage && formData.profileImage instanceof File) {
           try {
             const imgFd = new FormData();
             imgFd.append('profileImage', formData.profileImage);
-            imgFd.append('resumeId', resumeId);
+          imgFd.append('applicationId', applicationId);
 
             const imgRes = await fetch('/api/profile-image/upload', {
               method: 'POST',
@@ -2933,16 +3021,16 @@ export default function ApplicationForm() {
           }
         }
 
-        // 3. อัปโหลดเอกสารแนบ (ถ้ามี)
+      // อัปโหลดเอกสารแนบ (ถ้ามี)
         if (formData.documents) {
           const docTypes = [
             'idCard',
             'houseRegistration',
-            'transcript',
+          'educationCertificate',
             'militaryCertificate',
             'medicalCertificate',
             'drivingLicense',
-            'other'
+          'otherDocuments'
           ];
 
           for (const docType of docTypes) {
@@ -2951,18 +3039,18 @@ export default function ApplicationForm() {
               try {
                 const docFd = new FormData();
                 docFd.append('file', doc);
-                docFd.append('resumeId', resumeId);
+              docFd.append('applicationId', applicationId);
                 docFd.append('documentType', docType);
 
-                const docRes = await fetch('/api/documents', {
+              const docRes = await fetch('/api/application-documents', {
                   method: 'POST',
                   body: docFd
                 });
 
                 if (!docRes.ok) {
-                  console.error(`❌ Document upload failed: ${docType}`);
+                console.error(`❌ Document ${docType} upload failed`);
                 } else {
-                  console.log(`✅ Document uploaded: ${docType}`);
+                console.log(`✅ Document ${docType} uploaded`);
                 }
               } catch (err) {
                 console.error(`❌ Error uploading document ${docType}:`, err);
@@ -2971,59 +3059,54 @@ export default function ApplicationForm() {
           }
         }
 
-        // 4. อัปเดตข้อมูลครบถ้วนพร้อม education & workExperience
-        const fullPayload = {
-          // ข้อมูลส่วนตัว
+      console.log('✅ ApplicationForm saved successfully');
+      alert('บันทึกข้อมูลสมัครงานเรียบร้อยแล้ว');
+      
+    } catch (error) {
+      console.error('❌ Error saving to ApplicationForm:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูลสมัครงาน');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ฟังก์ชันบันทึกข้อมูลไปที่ ResumeDeposit
+  const saveToResumeDeposit = async () => {
+    try {
+      console.log('📝 Saving to ResumeDeposit...');
+      
+      // สร้าง ResumeDeposit payload
+      const resumePayload = {
+        // บุคคล
         prefix: formData.prefix || null,
         firstName: formData.firstName,
         lastName: formData.lastName,
           idNumber: formData.idNumber || null,
           idCardIssuedAt: formData.idCardIssuedAt || null,
-          idCardIssueDate: formData.idCardIssueDate ? new Date(formData.idCardIssueDate).toISOString() : null,
-          idCardExpiryDate: formData.idCardExpiryDate ? new Date(formData.idCardExpiryDate).toISOString() : null,
-          birthDate: formData.birthDate ? new Date(formData.birthDate).toISOString() : null,
+        idCardIssueDate: formData.idCardIssueDate ? new Date(formData.idCardIssueDate) : null,
+        idCardExpiryDate: formData.idCardExpiryDate ? new Date(formData.idCardExpiryDate) : null,
+        birthDate: formData.birthDate ? new Date(formData.birthDate) : null,
         age: formData.age ? Number(formData.age) : null,
           race: formData.race || null,
           placeOfBirth: formData.placeOfBirth || null,
           placeOfBirthProvince: formData.placeOfBirthProvince || null,
           gender: formData.gender || 'UNKNOWN',
-        nationality: formData.nationality || 'ไทย',
+        nationality: formData.nationality || null,
         religion: formData.religion || null,
           maritalStatus: formData.maritalStatus || 'UNKNOWN',
           // ที่อยู่
-          registeredAddressHouseNumber: formData.registeredAddress?.houseNumber || null,
-          registeredAddressVillageNumber: formData.registeredAddress?.villageNumber || null,
-          registeredAddressAlley: formData.registeredAddress?.alley || null,
-          registeredAddressRoad: formData.registeredAddress?.road || null,
-          registeredAddressSubDistrict: formData.registeredAddress?.subDistrict || null,
-          registeredAddressDistrict: formData.registeredAddress?.district || null,
-          registeredAddressProvince: formData.registeredAddress?.province || null,
-          registeredAddressPostalCode: formData.registeredAddress?.postalCode || null,
-          registeredAddressPhone: formData.registeredAddress?.phone || null,
-          currentAddressHouseNumber: formData.currentAddressDetail?.houseNumber || null,
-          currentAddressVillageNumber: formData.currentAddressDetail?.villageNumber || null,
-          currentAddressAlley: formData.currentAddressDetail?.alley || null,
-          currentAddressRoad: formData.currentAddressDetail?.road || null,
-          currentAddressSubDistrict: formData.currentAddressDetail?.subDistrict || null,
-          currentAddressDistrict: formData.currentAddressDetail?.district || null,
-          currentAddressProvince: formData.currentAddressDetail?.province || null,
-          currentAddressPostalCode: formData.currentAddressDetail?.postalCode || null,
-          currentAddressPhone: formData.currentAddressDetail?.homePhone || null,
-          // ติดต่อ
-          phone: formData.phone,
-          email: formData.email,
-          emergencyContact: formData.emergencyContact || `${formData.emergencyContactFirstName || ''} ${formData.emergencyContactLastName || ''}`.trim(),
+        addressAccordingToHouseRegistration: formData.addressAccordingToHouseRegistration || null,
+        currentAddress: formData.currentAddress || null,
+        phone: formData.phone || null,
+        email: formData.email || null,
+        // ข้อมูลฉุกเฉิน
+        emergencyContact: formData.emergencyContact || null,
+        emergencyContactFirstName: formData.emergencyContactFirstName || null,
+        emergencyContactLastName: formData.emergencyContactLastName || null,
           emergencyPhone: formData.emergencyPhone || null,
           emergencyRelationship: formData.emergencyRelationship || null,
-          emergencyAddressHouseNumber: formData.emergencyAddress?.houseNumber || null,
-          emergencyAddressVillageNumber: formData.emergencyAddress?.villageNumber || null,
-          emergencyAddressAlley: formData.emergencyAddress?.alley || null,
-          emergencyAddressRoad: formData.emergencyAddress?.road || null,
-          emergencyAddressSubDistrict: formData.emergencyAddress?.subDistrict || null,
-          emergencyAddressDistrict: formData.emergencyAddress?.district || null,
-          emergencyAddressProvince: formData.emergencyAddress?.province || null,
-          emergencyAddressPostalCode: formData.emergencyAddress?.postalCode || null,
-          // ความสามารถ
+        emergencyAddress: formData.emergencyAddress || null,
+        // ข้อมูลเพิ่มเติม
           skills: formData.skills || null,
           languages: formData.languages || null,
           computerSkills: formData.computerSkills || null,
@@ -3044,8 +3127,8 @@ export default function ApplicationForm() {
             level: e.level,
             institution: e.institution,
             major: e.major || null,
-            year: e.year || null,
-            gpa: e.gpa ? parseFloat(e.gpa) : null,
+          year: e.year,
+          gpa: e.gpa ? parseFloat(e.gpa) : null
           })),
           // ประสบการณ์ทำงาน
           workExperience: (formData.workExperience || []).map((w) => ({
@@ -3056,145 +3139,7 @@ export default function ApplicationForm() {
             salary: w.salary || null,
             reason: w.reason || null,
           })),
-        };
-
-        const updateRes = await fetch(`/api/resume-deposit/${resumeId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(fullPayload)
-        });
-
-        const updateJson = await updateRes.json().catch(() => ({}));
-        if (!updateRes.ok) {
-          console.error('❌ ApplicationForm update failed:', updateRes.status, updateJson);
-          alert(updateJson?.message || 'ไม่สามารถอัปเดตข้อมูลสมัครงานได้');
-          setIsSaving(false);
-          return;
-        }
-
-        console.log('✅ ResumeDeposit updated successfully');
-        alert('บันทึกข้อมูลฝากประวัติเรียบร้อยแล้ว!');
-        
-        // รีเฟรชหน้า หรือนำทางไปหน้าอื่น
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 1500);
-        
-        setIsSaving(false);
-        return;
-      }
-      console.log('📝 Saving to ResumeDeposit...');
-      const resumePayload = {
-        // บุคคล
-        prefix: formData.prefix || null,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        idNumber: formData.idNumber || null,
-        idCardIssuedAt: formData.idCardIssuedAt || null,
-        idCardIssueDate: formData.idCardIssueDate ? new Date(formData.idCardIssueDate) : null,
-        idCardExpiryDate: formData.idCardExpiryDate ? new Date(formData.idCardExpiryDate) : null,
-        birthDate: formData.birthDate ? new Date(formData.birthDate) : null,
-        age: formData.age ? Number(formData.age) : null,
-        race: formData.race || null,
-        placeOfBirth: formData.placeOfBirth || null,
-        placeOfBirthProvince: formData.placeOfBirthProvince || null,
-        gender: (formData.gender || 'UNKNOWN') as any,
-        nationality: formData.nationality || 'ไทย',
-        religion: formData.religion || null,
-        maritalStatus: (formData.maritalStatus || 'UNKNOWN') as any,
-        // ที่อยู่แบบสรุป (คงค่าเดิมไว้เป็นสำรอง)
-        address: formData.currentAddress || formData.addressAccordingToHouseRegistration || null,
-        // ที่อยู่ตามทะเบียนบ้าน
-        house_registration_house_number: formData.registeredAddress?.houseNumber || null,
-        house_registration_village_number: formData.registeredAddress?.villageNumber || null,
-        house_registration_alley: formData.registeredAddress?.alley || null,
-        house_registration_road: formData.registeredAddress?.road || null,
-        house_registration_sub_district: formData.registeredAddress?.subDistrict || null,
-        house_registration_district: formData.registeredAddress?.district || null,
-        house_registration_province: formData.registeredAddress?.province || null,
-        house_registration_postal_code: formData.registeredAddress?.postalCode || null,
-        house_registration_phone: formData.registeredAddress?.phone || null,
-        house_registration_mobile: formData.registeredAddress?.mobile || null,
-        // ที่อยู่ปัจจุบัน
-        current_address_house_number: formData.currentAddressDetail?.houseNumber || null,
-        current_address_village_number: formData.currentAddressDetail?.villageNumber || null,
-        current_address_alley: formData.currentAddressDetail?.alley || null,
-        current_address_road: formData.currentAddressDetail?.road || null,
-        current_address_sub_district: formData.currentAddressDetail?.subDistrict || null,
-        current_address_district: formData.currentAddressDetail?.district || null,
-        current_address_province: formData.currentAddressDetail?.province || null,
-        current_address_postal_code: formData.currentAddressDetail?.postalCode || null,
-        current_address_phone: formData.currentAddressDetail?.homePhone || null,
-        current_address_mobile: formData.currentAddressDetail?.mobilePhone || null,
-        // ติดต่อ
-        phone: formData.phone,
-        email: formData.email,
-        emergencyContact: formData.emergencyContact || `${formData.emergencyContactFirstName || ''} ${formData.emergencyContactLastName || ''}`.trim(),
-        emergencyPhone: formData.emergencyPhone || null,
-        emergencyRelationship: formData.emergencyRelationship || null,
-        emergencyWorkplace: {
-          name: formData.emergencyWorkplace?.name || '',
-          district: formData.emergencyWorkplace?.district || '',
-          province: formData.emergencyWorkplace?.province || '',
-          phone: formData.emergencyWorkplace?.phone || ''
-        },
-        // ที่อยู่ผู้ติดต่อฉุกเฉิน
-        emergency_address_house_number: formData.emergencyAddress?.houseNumber || null,
-        emergency_address_village_number: formData.emergencyAddress?.villageNumber || null,
-        emergency_address_alley: formData.emergencyAddress?.alley || null,
-        emergency_address_road: formData.emergencyAddress?.road || null,
-        emergency_address_sub_district: formData.emergencyAddress?.subDistrict || null,
-        emergency_address_district: formData.emergencyAddress?.district || null,
-        emergency_address_province: formData.emergencyAddress?.province || null,
-        emergency_address_postal_code: formData.emergencyAddress?.postalCode || null,
-        emergency_address_phone: formData.emergencyAddress?.phone || null,
-        // ความสามารถ
-        skills: formData.skills || null,
-        languages: formData.languages || null,
-        computerSkills: formData.computerSkills || null,
-        certificates: formData.certificates || null,
-        references: formData.references || null,
-        // งานที่สนใจ
-        expectedPosition: formData.appliedPosition || null,
-        expectedSalary: formData.expectedSalary || null,
-        availableDate: formData.availableDate ? new Date(formData.availableDate) : null,
-        additionalInfo: null,
-        profileImageUrl: formData.profileImage ? `profile_${Date.now()}.${formData.profileImage.name.split('.').pop()}` : null,
-        // การศึกษา
-        education: (formData.education || []).map((e) => ({
-          level: e.level,
-          school: e.institution,
-          major: e.major || null,
-          startYear: undefined,
-          endYear: e.year || undefined,
-          gpa: e.gpa ? parseFloat(e.gpa) : undefined,
-        })),
-        // ประสบการณ์ทำงาน
-        workExperience: (formData.workExperience || []).map((w) => ({
-          position: w.position,
-          company: w.company,
-          startDate: w.startDate ? new Date(w.startDate) : null,
-          endDate: w.endDate ? new Date(w.endDate) : null,
-          isCurrent: !!formData.currentWork,
-          description: w.reason || null,
-          salary: w.salary || null,
-        })),
-        // ข้อมูลคู่สมรส
-        spouse_first_name: formData.spouseInfo?.firstName || null,
-        spouse_last_name: formData.spouseInfo?.lastName || null,
-        // ข้อมูลสิทธิการรักษา
-        medical_rights_has_universal_healthcare: formData.medicalRights?.hasUniversalHealthcare || false,
-        medical_rights_universal_healthcare_hospital: formData.medicalRights?.universalHealthcareHospital || null,
-        medical_rights_has_social_security: formData.medicalRights?.hasSocialSecurity || false,
-        medical_rights_social_security_hospital: formData.medicalRights?.socialSecurityHospital || null,
-        medical_rights_dont_want_to_change_hospital: formData.medicalRights?.dontWantToChangeHospital || false,
-        medical_rights_want_to_change_hospital: formData.medicalRights?.wantToChangeHospital || false,
-        medical_rights_new_hospital: formData.medicalRights?.newHospital || null,
-        medical_rights_has_civil_servant_rights: formData.medicalRights?.hasCivilServantRights || false,
-        medical_rights_other_rights: formData.medicalRights?.otherRights || null,
-        // ข้อมูลนายจ้างหลายราย (เก็บเป็น JSON)
-        multiple_employers: formData.multipleEmployers ? JSON.stringify(formData.multipleEmployers) : null,
-        // ข้อมูลสถานที่ทำงานปัจจุบัน
+        // ข้อมูลเจ้าหน้าที่
         staff_position: formData.staffInfo?.position || null,
         staff_department: formData.staffInfo?.department || null,
         staff_start_work: formData.staffInfo?.startWork || null,
@@ -3206,573 +3151,94 @@ export default function ApplicationForm() {
       console.log('🔍 handleSubmit POST - Sending JSON data only');
       console.log('🔍 handleSubmit POST - formData.profileImage:', formData.profileImage);
 
-      const rdRes = await fetch('/api/resume-deposit', {
+      const res = await fetch('/api/resume-deposit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(resumePayload)
       });
-      const rdJson = await rdRes.json().catch(() => ({}));
-      if (!rdRes.ok) {
-        console.error('❌ ResumeDeposit create failed:', rdRes.status, rdJson);
-        alert(rdJson?.message || 'ไม่สามารถบันทึกข้อมูลฝากประวัติได้');
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error('❌ ResumeDeposit create failed:', res.status, json);
+        alert(json?.message || 'ไม่สามารถบันทึกข้อมูลฝากประวัติได้');
         setIsSaving(false);
         return;
       }
 
-      // เก็บข้อมูลที่บันทึกสำเร็จมาแสดงบนหน้า และเติมค่ากลับลงฟอร์ม
-      // พยายามดึงข้อมูลล่าสุดจาก API โดยใช้ id เพื่อให้แน่ใจว่าได้โครงสร้างครบ relations
-      let saved = rdJson?.data || rdJson;
-      const savedId = saved?.id;
-      try {
-        if (savedId) {
-          const getRes = await fetch(`/api/resume-deposit/${savedId}`);
-          if (getRes.ok) {
-            const getJson = await getRes.json().catch(() => ({}));
-            saved = getJson?.data || getJson || saved;
-          }
-        } else {
-          // ไม่มี id จาก POST: พยายามค้นจากอีเมลล่าสุด
-          let candidate: any = null;
-          try {
-            const byEmail = await fetch(`/api/resume-deposit?email=${encodeURIComponent(formData.email || '')}`);
-            if (byEmail.ok) {
-              const emailJson = await byEmail.json().catch(() => ({}));
-              const list = (emailJson?.data || emailJson || []) as any[];
-              const filtered = Array.isArray(list)
-                ? list.filter((r) => (r?.email || '').toLowerCase() === (formData.email || '').toLowerCase())
-                : [];
-              if (filtered.length > 0) {
-                filtered.sort((a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime());
-                candidate = filtered[0];
-              }
-            }
-          } catch (_) {}
+      const resumeId = json?.data?.id;
+      console.log('✅ ResumeDeposit created:', resumeId);
 
-          if (!candidate) {
-            // fallback สุดท้าย: ดึงทั้งหมดแล้วกรองในฝั่งหน้า
-            try {
-              const allRes = await fetch('/api/resume-deposit');
-              if (allRes.ok) {
-                const allJson = await allRes.json().catch(() => ({}));
-                const listAll = (allJson?.data || allJson || []) as any[];
-                const filteredAll = Array.isArray(listAll)
-                  ? listAll.filter((r) => (r?.email || '').toLowerCase() === (formData.email || '').toLowerCase())
-                  : [];
-                if (filteredAll.length > 0) {
-                  filteredAll.sort((a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime());
-                  candidate = filteredAll[0];
-                }
-              }
-            } catch (_) {}
-          }
-
-          if (candidate?.id) {
-            // ถ้าได้ id จากการค้นหา คิวรี่รายละเอียดเต็มอีกครั้ง
-            try {
-              const getRes2 = await fetch(`/api/resume-deposit/${candidate.id}`);
-              if (getRes2.ok) {
-                const getJson2 = await getRes2.json().catch(() => ({}));
-                saved = getJson2?.data || getJson2 || candidate;
-              } else {
-                saved = candidate;
-              }
-            } catch (_) {
-              saved = candidate;
-            }
-          }
-        }
-      } catch (_) {}
-
-      setSavedResume(saved);
-      try {
-        applyResumeToFormInputs(saved);
-      } catch (_) {}
-      alert('บันทึกข้อมูลฝากประวัติเรียบร้อยแล้ว');
-      setIsSaving(false);
-      return;
-      /* disabled legacy flow
-      
-      // Validate required fields for create API
-      if (!formData.firstName?.trim() || !formData.lastName?.trim() || !formData.email?.trim()) {
-        alert('กรุณากรอก ชื่อ นามสกุล และอีเมล ให้ครบถ้วน');
-        setIsSaving(false);
-        return;
-      }
-
-      // 1) สร้างใบสมัครในฐานข้อมูลก่อน เพื่อให้ได้ applicationId จริง
-      const createRes = await fetch('/api/prisma/applications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // ส่งข้อมูลหลักที่จำเป็นขั้นต่ำให้ API สร้างเรคคอร์ด
-        prefix: formData.prefix,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-          idNumber: formData.idNumber,
-          department: formData.department,
-          appliedPosition: formData.appliedPosition,
-          status: 'PENDING',
-          submittedAt: timestamp
-        })
-      });
-      const createdApp = await createRes.json();
-      if (!createRes.ok) {
-        console.error('❌ Create application failed:', createRes.status, createdApp);
-        alert(createdApp?.message || 'ไม่สามารถสร้างใบสมัครได้');
-        setIsSaving(false);
-        return;
-      }
-      const createdId = createdApp?.id || createdApp?.data?.id;
-      if (!createdId) {
-        console.error('❌ Missing application id in response:', createdApp);
-        alert('การสร้างใบสมัครสำเร็จแต่ไม่ได้รับรหัสอ้างอิง (id)');
-        setIsSaving(false);
-        return;
-      }
-      const applicationId = createdId as string;
-
-      const applicationData = {
-        id: applicationId,
-        submittedAt: timestamp,
-        status: "pending",
-        prefix: formData.prefix,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        idNumber: formData.idNumber,
-        idCardIssuedAt: formData.idCardIssuedAt,
-        idCardIssueDate: formData.idCardIssueDate,
-        idCardExpiryDate: formData.idCardExpiryDate,
-        birthDate: formData.birthDate,
-        age: formData.age,
-        race: formData.race,
-        placeOfBirth: formData.placeOfBirth,
-        placeOfBirthProvince: formData.placeOfBirthProvince,
-        gender: formData.gender,
-        nationality: formData.nationality,
-        religion: formData.religion,
-        maritalStatus: formData.maritalStatus,
-        addressAccordingToHouseRegistration: formData.addressAccordingToHouseRegistration,
-        currentAddress: formData.currentAddress,
-        phone: formData.phone,
-        email: formData.email,
-        emergencyContact: formData.emergencyContact,
-        emergencyPhone: formData.emergencyPhone,
-        emergencyRelationship: formData.emergencyRelationship,
-        emergencyAddress: formData.emergencyAddress,
-        emergencyWorkplace: formData.emergencyWorkplace,
-        appliedPosition: formData.appliedPosition,
-        expectedSalary: formData.expectedSalary,
-        availableDate: formData.availableDate,
-        currentWork: formData.currentWork,
-        department: formData.department,
-        education: formData.education,
-        workExperience: formData.workExperience,
-        skills: formData.skills,
-        languages: formData.languages,
-        computerSkills: formData.computerSkills,
-        certificates: formData.certificates,
-        references: formData.references,
-        spouseInfo: formData.spouseInfo,
-        registeredAddress: formData.registeredAddress,
-        currentAddressDetail: formData.currentAddressDetail,
-        medicalRights: formData.medicalRights,
-        multipleEmployers: formData.multipleEmployers,
-        staffInfo: formData.staffInfo,
-        profileImage: '',
-        documents: {},
-        updatedAt: timestamp
-      };
-
-      // อัปโหลดรูปโปรไฟล์
-      let profileImageName = '';
-      if (formData.profileImage) {
-        const fileExtension = formData.profileImage.name.split('.').pop();
-        profileImageName = `profile_${applicationId}.${fileExtension}`;
-        
-        // สร้าง FormData สำหรับอัปโหลดรูปภาพ
-        const imageFormData = new FormData();
-        imageFormData.append('file', formData.profileImage);
-        imageFormData.append('filename', profileImageName);
-        
+      // 2. อัปโหลดรูปโปรไฟล์ (ถ้ามี)
+      if (formData.profileImage && formData.profileImage instanceof File) {
         try {
-          const imageResponse = await fetch('/api/upload-image', {
-            method: 'POST',
-            body: imageFormData
-          });
-          
-          if (!imageResponse.ok) {
-            throw new Error('Failed to upload profile image');
-          }
-          
-          applicationData.profileImage = profileImageName;
-        } catch (error) {
-          console.error('Error uploading profile image:', error);
-          alert('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
-          return;
-        }
-      }
+          const imgFd = new FormData();
+          imgFd.append('profileImage', formData.profileImage);
+          imgFd.append('resumeId', resumeId);
 
-      // อัปโหลดเอกสาร
-      const documents: any = {};
-      if (formData.documents) {
-        for (const [docType, file] of Object.entries(formData.documents)) {
-          if (file) {
-            if (Array.isArray(file)) {
-              // สำหรับไฟล์หลายไฟล์
-              const fileNames: string[] = [];
-              for (let i = 0; i < file.length; i++) {
-                const singleFile = file[i];
-                const docFormData = new FormData();
-                docFormData.append('file', singleFile);
-                docFormData.append('documentType', docType);
-                docFormData.append('applicationId', applicationId);
-                try {
-                  const docResponse = await fetch('/api/documents/upload', {
-                    method: 'POST',
-                    body: docFormData
-                  });
-                  const result = await docResponse.json();
-                  if (!docResponse.ok || !result?.success) {
-                    throw new Error(result?.message || `Failed to upload ${docType} document`);
-                  }
-                  fileNames.push(result.data?.fileName || '');
-                } catch (error) {
-                  console.error(`Error uploading ${docType} document:`, error);
-                  alert(`เกิดข้อผิดพลาดในการอัปโหลดเอกสาร ${docType}`);
-                  return;
-                }
-              }
-              documents[docType] = fileNames;
-            } else {
-              // สำหรับไฟล์เดียว
-              const docFormData = new FormData();
-              docFormData.append('file', file);
-              docFormData.append('documentType', docType);
-              docFormData.append('applicationId', applicationId);
-              try {
-                const docResponse = await fetch('/api/documents/upload', {
-                  method: 'POST',
-                  body: docFormData
-                });
-                const result = await docResponse.json();
-                if (!docResponse.ok || !result?.success) {
-                  throw new Error(result?.message || `Failed to upload ${docType} document`);
-                }
-                documents[docType] = result.data?.fileName;
-              } catch (error) {
-                console.error(`Error uploading ${docType} document:`, error);
-                alert(`เกิดข้อผิดพลาดในการอัปโหลดเอกสาร ${docType}`);
-                return;
-              }
-            }
-          }
-        }
-      }
-      
-      applicationData.documents = documents;
-
-      // Debug: ตรวจสอบข้อมูลก่อนแปลง
-      console.log('🔍 Application Data before conversion:', applicationData);
-      console.log('📚 Education data:', applicationData.education);
-      console.log('💼 Work Experience data:', applicationData.workExperience);
-      console.log('📅 Date fields:', {
-        idCardIssueDate: applicationData.idCardIssueDate,
-        idCardExpiryDate: applicationData.idCardExpiryDate,
-        birthDate: applicationData.birthDate,
-        availableDate: applicationData.availableDate
-      });
-
-      // แปลงข้อมูลเป็น Prisma format
-      const prismaData = {
-        userId: null,
-        prefix: applicationData.prefix,
-        firstName: applicationData.firstName,
-        lastName: applicationData.lastName,
-        idNumber: applicationData.idNumber,
-        idCardIssuedAt: applicationData.idCardIssuedAt,
-        idCardIssueDate: applicationData.idCardIssueDate ? new Date(applicationData.idCardIssueDate) : null,
-        idCardExpiryDate: applicationData.idCardExpiryDate ? new Date(applicationData.idCardExpiryDate) : null,
-        birthDate: applicationData.birthDate ? new Date(applicationData.birthDate) : null,
-        age: applicationData.age ? parseInt(applicationData.age) : null,
-        race: applicationData.race,
-        placeOfBirth: applicationData.placeOfBirth,
-        placeOfBirthProvince: applicationData.placeOfBirthProvince,
-        gender: applicationData.gender === 'ชาย' ? 'MALE' : applicationData.gender === 'หญิง' ? 'FEMALE' : 'UNKNOWN',
-        nationality: applicationData.nationality,
-        religion: applicationData.religion,
-        maritalStatus: applicationData.maritalStatus === 'โสด' ? 'SINGLE' : 
-                      applicationData.maritalStatus === 'สมรส' ? 'MARRIED' : 
-                      applicationData.maritalStatus === 'หย่า' ? 'DIVORCED' : 
-                      applicationData.maritalStatus === 'หม้าย' ? 'WIDOWED' : 'UNKNOWN',
-        addressAccordingToHouseRegistration: applicationData.addressAccordingToHouseRegistration,
-        currentAddress: applicationData.currentAddress,
-        phone: applicationData.phone,
-        email: applicationData.email,
-        emergencyContact: applicationData.emergencyContact,
-        emergencyPhone: applicationData.emergencyPhone,
-        emergencyRelationship: applicationData.emergencyRelationship,
-        appliedPosition: applicationData.appliedPosition,
-        expectedSalary: applicationData.expectedSalary,
-        availableDate: applicationData.availableDate ? new Date(applicationData.availableDate) : null,
-        currentWork: applicationData.currentWork || false,
-        department: applicationData.department,
-        skills: applicationData.skills,
-        languages: applicationData.languages,
-        computerSkills: applicationData.computerSkills,
-        certificates: applicationData.certificates,
-        references: applicationData.references,
-        profileImage: applicationData.profileImage,
-        status: 'PENDING',
-        // Education data
-        education: applicationData.education?.map((edu: any) => ({
-          level: edu.level,
-          institution: edu.institution || edu.school,
-          major: edu.major,
-          year: edu.year || edu.graduationYear,
-          gpa: edu.gpa ? parseFloat(edu.gpa) : null
-        })) || [],
-        // Work experience data
-        workExperience: applicationData.workExperience?.map((work: any) => ({
-          position: work.position,
-          company: work.company,
-          startDate: work.startDate ? new Date(work.startDate) : null,
-          endDate: work.endDate ? new Date(work.endDate) : null,
-          salary: work.salary,
-          reason: work.reason
-        })) || [],
-        
-        // Address details - ที่อยู่ตามทะเบียนบ้าน
-        house_registration_house_number: applicationData.registeredAddress?.houseNumber || '',
-        house_registration_village_number: applicationData.registeredAddress?.villageNumber || '',
-        house_registration_alley: applicationData.registeredAddress?.alley || '',
-        house_registration_road: applicationData.registeredAddress?.road || '',
-        house_registration_sub_district: applicationData.registeredAddress?.subDistrict || '',
-        house_registration_district: applicationData.registeredAddress?.district || '',
-        house_registration_province: applicationData.registeredAddress?.province || '',
-        house_registration_postal_code: applicationData.registeredAddress?.postalCode || '',
-        house_registration_phone: applicationData.registeredAddress?.phone || '',
-        house_registration_mobile: applicationData.registeredAddress?.mobile || '',
-        
-        // Address details - ที่อยู่ปัจจุบัน
-        current_address_house_number: applicationData.currentAddressDetail?.houseNumber || '',
-        current_address_village_number: applicationData.currentAddressDetail?.villageNumber || '',
-        current_address_alley: applicationData.currentAddressDetail?.alley || '',
-        current_address_road: applicationData.currentAddressDetail?.road || '',
-        current_address_sub_district: applicationData.currentAddressDetail?.subDistrict || '',
-        current_address_district: applicationData.currentAddressDetail?.district || '',
-        current_address_province: applicationData.currentAddressDetail?.province || '',
-        current_address_postal_code: applicationData.currentAddressDetail?.postalCode || '',
-        current_address_phone: applicationData.currentAddressDetail?.homePhone || '',
-        current_address_mobile: applicationData.currentAddressDetail?.mobilePhone || '',
-        
-        // Address details - ที่อยู่ผู้ติดต่อฉุกเฉิน
-        emergency_address_house_number: applicationData.emergencyAddress?.houseNumber || '',
-        emergency_address_village_number: applicationData.emergencyAddress?.villageNumber || '',
-        emergency_address_alley: applicationData.emergencyAddress?.alley || '',
-        emergency_address_road: applicationData.emergencyAddress?.road || '',
-        emergency_address_sub_district: applicationData.emergencyAddress?.subDistrict || '',
-        emergency_address_district: applicationData.emergencyAddress?.district || '',
-        emergency_address_province: applicationData.emergencyAddress?.province || '',
-        emergency_address_postal_code: applicationData.emergencyAddress?.postalCode || '',
-        emergency_address_phone: applicationData.emergencyAddress?.phone || '',
-        
-        // Spouse information
-        spouse_first_name: applicationData.spouseInfo?.firstName || '',
-        spouse_last_name: applicationData.spouseInfo?.lastName || ''
-      };
-
-      // Debug: ตรวจสอบข้อมูลหลังแปลง
-      console.log('🔍 Prisma Data after conversion:', prismaData);
-      console.log('📚 Prisma Education data:', prismaData.education);
-      console.log('💼 Prisma Work Experience data:', prismaData.workExperience);
-      console.log('🏠 Address Data:');
-      console.log('  House Registration:', {
-        houseNumber: prismaData.house_registration_house_number,
-        villageNumber: prismaData.house_registration_village_number,
-        alley: prismaData.house_registration_alley,
-        road: prismaData.house_registration_road,
-        subDistrict: prismaData.house_registration_sub_district,
-        district: prismaData.house_registration_district,
-        province: prismaData.house_registration_province,
-        postalCode: prismaData.house_registration_postal_code,
-        phone: prismaData.house_registration_phone,
-        mobile: prismaData.house_registration_mobile
-      });
-      console.log('  Current Address:', {
-        houseNumber: prismaData.current_address_house_number,
-        villageNumber: prismaData.current_address_village_number,
-        alley: prismaData.current_address_alley,
-        road: prismaData.current_address_road,
-        subDistrict: prismaData.current_address_sub_district,
-        district: prismaData.current_address_district,
-        province: prismaData.current_address_province,
-        postalCode: prismaData.current_address_postal_code,
-        phone: prismaData.current_address_phone,
-        mobile: prismaData.current_address_mobile
-      });
-      console.log('  Emergency Address:', {
-        houseNumber: prismaData.emergency_address_house_number,
-        villageNumber: prismaData.emergency_address_village_number,
-        alley: prismaData.emergency_address_alley,
-        road: prismaData.emergency_address_road,
-        subDistrict: prismaData.emergency_address_sub_district,
-        district: prismaData.emergency_address_district,
-        province: prismaData.emergency_address_province,
-        postalCode: prismaData.emergency_address_postal_code,
-        phone: prismaData.emergency_address_phone
-      });
-      // บันทึกข้อมูลไปยังฐานข้อมูล MySQL ผ่าน Prisma
-      try {
-        const saveResponse = await fetch('/api/prisma/applications', {
+          const imgRes = await fetch('/api/profile-image/upload', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-          body: JSON.stringify(prismaData)
-        });
-        
-        if (!saveResponse.ok) {
-          const errorData = await saveResponse.json();
-          throw new Error(errorData.message || 'Failed to save application data');
-        }
-        
-        const result = await saveResponse.json();
-        
-        // Debug: ตรวจสอบ response จาก API
-        console.log('📡 API Response:', result);
-        
-        if (result.success) {
-          console.log('✅ Data saved successfully');
-          alert('บันทึกข้อมูลเรียบร้อยแล้ว');
-        // รีเซ็ตฟอร์ม
-        setFormData({
-            profileImage: undefined,
-            prefix: '',
-            firstName: '',
-            lastName: '',
-            idNumber: '',
-            idCardIssuedAt: '',
-            idCardIssueDate: '',
-            idCardExpiryDate: '',
-            birthDate: '',
-            age: '',
-            race: '',
-            placeOfBirth: '',
-            gender: '',
-            nationality: '',
-            religion: '',
-            maritalStatus: '',
-            addressAccordingToHouseRegistration: '',
-            currentAddress: '',
-            phone: '',
-            email: '',
-            emergencyContact: '',
-            emergencyContactFirstName: '',
-            emergencyContactLastName: '',
-            emergencyPhone: '',
-            emergencyRelationship: '',
-            emergencyAddress: {
-              houseNumber: '',
-              villageNumber: '',
-              alley: '',
-              road: '',
-              subDistrict: '',
-              district: '',
-              province: '',
-              postalCode: '',
-              phone: '',
-            },
-            emergencyWorkplace: {
-              name: '',
-              district: '',
-              province: '',
-              phone: '',
-            },
-            education: [],
-            workExperience: [],
-            previousGovernmentService: [],
-            skills: '',
-            languages: '',
-            computerSkills: '',
-            certificates: '',
-            references: '',
-            appliedPosition: '',
-            expectedSalary: '',
-            availableDate: '',
-            currentWork: false,
-            department: '',
-            applicantSignature: '',
-            applicationDate: '',
-            documents: {},
-            multipleEmployers: [],
-            spouseInfo: {
-              firstName: '',
-              lastName: '',
-            },
-            registeredAddress: {
-              houseNumber: '',
-              villageNumber: '',
-              alley: '',
-              road: '',
-              subDistrict: '',
-              district: '',
-              province: '',
-              postalCode: '',
-              phone: '',
-              mobile: '',
-            },
-            currentAddressDetail: {
-              houseNumber: '',
-              villageNumber: '',
-              alley: '',
-              road: '',
-              subDistrict: '',
-              district: '',
-              province: '',
-              postalCode: '',
-              homePhone: '',
-              mobilePhone: '',
-            },
-            medicalRights: {
-              hasUniversalHealthcare: false,
-              universalHealthcareHospital: '',
-              hasSocialSecurity: false,
-              socialSecurityHospital: '',
-              dontWantToChangeHospital: false,
-              wantToChangeHospital: false,
-              newHospital: '',
-              hasCivilServantRights: false,
-              otherRights: '',
-            },
-            staffInfo: {
-              position: '',
-              department: '',
-              startWork: '',
-            }
+            body: imgFd
           });
-          
-          // ล้างรูปภาพและเอกสาร
-          setProfileImage(null);
-          
-          // กลับไปหน้า dashboard
-          router.push('/dashboard');
-      } else {
-          throw new Error(result.message || 'Failed to save application');
+
+          if (!imgRes.ok) {
+            console.error('❌ Profile image upload failed');
+          } else {
+            console.log('✅ Profile image uploaded');
+          }
+        } catch (err) {
+          console.error('❌ Error uploading profile image:', err);
+        }
       }
-    } catch (error) {
-        console.error('Error saving application data:', error);
-        alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+
+      // 3. อัปโหลดเอกสารแนบ (ถ้ามี)
+      if (formData.documents) {
+        const docTypes = [
+          'idCard',
+          'houseRegistration',
+          'educationCertificate',
+          'militaryCertificate',
+          'medicalCertificate',
+          'drivingLicense',
+          'otherDocuments'
+        ];
+
+        for (const docType of docTypes) {
+          const doc = formData.documents[docType as keyof typeof formData.documents];
+          if (doc && doc instanceof File) {
+            try {
+              const docFd = new FormData();
+              docFd.append('file', doc);
+              docFd.append('resumeId', resumeId);
+              docFd.append('documentType', docType);
+
+              const docRes = await fetch('/api/documents', {
+                    method: 'POST',
+                body: docFd
+              });
+
+              if (!docRes.ok) {
+                console.error(`❌ Document ${docType} upload failed`);
+            } else {
+                console.log(`✅ Document ${docType} uploaded`);
+              }
+            } catch (err) {
+              console.error(`❌ Error uploading document ${docType}:`, err);
+            }
+          }
+        }
       }
-*/
+
+      console.log('✅ ResumeDeposit saved successfully');
+      alert('บันทึกข้อมูลฝากประวัติเรียบร้อยแล้ว');
+      
     } catch (error) {
-      console.error('Error submitting form:', error);
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      console.error('❌ Error saving to ResumeDeposit:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูลฝากประวัติ');
     } finally {
-      // ปิด loading state
       setIsSaving(false);
     }
   };
+
 
   // ฟังก์ชันสำหรับสร้างข้อมูล random
   const generateRandomData = () => {
@@ -5943,17 +5409,29 @@ export default function ApplicationForm() {
                               ✓ อัปโหลดแล้ว
                             </span>
                           </div>
+                            <div className="flex gap-2">
                             <Button
                               color="secondary"
                               variant="bordered"
                               size="sm"
-                              className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                                className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
                               onClick={() => {
                                 window.open(doc.filePath, '_blank');
                               }}
                             >
                               ดูตัวอย่าง
                             </Button>
+                              <Button
+                                color="danger"
+                                variant="bordered"
+                                size="sm"
+                                className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                                onClick={() => handleDeleteDocument(doc.id, 'idCard')}
+                                disabled={isUploading}
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                            </Button>
+                            </div>
                         </div>
                       ))}
                       
@@ -5980,11 +5458,12 @@ export default function ApplicationForm() {
                               รออัปโหลด
                             </span>
                           </div>
+                          <div className="flex gap-2">
                           <Button
                             color="secondary"
                             variant="bordered"
                             size="sm"
-                            className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                              className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
                             onClick={() => {
                               if (formData.documents!.idCard instanceof File) {
                                 handlePreviewFile(formData.documents!.idCard, 'สำเนาบัตรประชาชน');
@@ -5994,6 +5473,17 @@ export default function ApplicationForm() {
                           >
                             {isUploading ? 'กำลังอัปโหลด...' : 'ดูตัวอย่าง'}
                           </Button>
+                            <Button
+                              color="danger"
+                              variant="bordered"
+                              size="sm"
+                              className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                              onClick={() => handleDeleteNewDocument('idCard')}
+                              disabled={isUploading}
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                          </Button>
+                          </div>
                       </div>
                     )}
                     </div>
@@ -6057,17 +5547,29 @@ export default function ApplicationForm() {
                               ✓ อัปโหลดแล้ว
                             </span>
                           </div>
+                            <div className="flex gap-2">
                             <Button
                               color="secondary"
                               variant="bordered"
                               size="sm"
-                              className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                                className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
                               onClick={() => {
                                 window.open(doc.filePath, '_blank');
                               }}
                             >
                               ดูตัวอย่าง
                             </Button>
+                              <Button
+                                color="danger"
+                                variant="bordered"
+                                size="sm"
+                                className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                                onClick={() => handleDeleteDocument(doc.id, 'houseRegistration')}
+                                disabled={isUploading}
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                            </Button>
+                            </div>
                         </div>
                       ))}
                       
@@ -6094,11 +5596,12 @@ export default function ApplicationForm() {
                               รออัปโหลด
                             </span>
                           </div>
+                          <div className="flex gap-2">
                           <Button
                             color="secondary"
                             variant="bordered"
                             size="sm"
-                            className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                              className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
                             onClick={() => {
                               if (formData.documents!.houseRegistration instanceof File) {
                                 handlePreviewFile(formData.documents!.houseRegistration, 'สำเนาทะเบียนบ้าน');
@@ -6108,6 +5611,17 @@ export default function ApplicationForm() {
                           >
                             {isUploading ? 'กำลังอัปโหลด...' : 'ดูตัวอย่าง'}
                           </Button>
+                            <Button
+                              color="danger"
+                              variant="bordered"
+                              size="sm"
+                              className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                              onClick={() => handleDeleteNewDocument('houseRegistration')}
+                              disabled={isUploading}
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                          </Button>
+                          </div>
                       </div>
                     )}
                     </div>
@@ -6173,17 +5687,29 @@ export default function ApplicationForm() {
                               ✓ อัปโหลดแล้ว
                             </span>
                           </div>
+                            <div className="flex gap-2">
                             <Button
                               color="secondary"
                               variant="bordered"
                               size="sm"
-                              className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                                className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
                               onClick={() => {
                                 window.open(doc.filePath, '_blank');
                               }}
                             >
                               ดูตัวอย่าง
                             </Button>
+                              <Button
+                                color="danger"
+                                variant="bordered"
+                                size="sm"
+                                className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                                onClick={() => handleDeleteDocument(doc.id, 'educationCertificate')}
+                                disabled={isUploading}
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                            </Button>
+                            </div>
                         </div>
                       ))}
                       
@@ -6210,11 +5736,12 @@ export default function ApplicationForm() {
                               รออัปโหลด
                             </span>
                           </div>
+                          <div className="flex gap-2">
                           <Button
                             color="secondary"
                             variant="bordered"
                             size="sm"
-                            className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                              className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
                             onClick={() => {
                               if (formData.documents!.educationCertificate instanceof File) {
                                 handlePreviewFile(formData.documents!.educationCertificate, 'ใบรับรองการศึกษา');
@@ -6224,6 +5751,17 @@ export default function ApplicationForm() {
                           >
                             {isUploading ? 'กำลังอัปโหลด...' : 'ดูตัวอย่าง'}
                           </Button>
+                            <Button
+                              color="danger"
+                              variant="bordered"
+                              size="sm"
+                              className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                              onClick={() => handleDeleteNewDocument('educationCertificate')}
+                              disabled={isUploading}
+                            >
+                              <TrashIcon className="w-4 h-4" />
+                          </Button>
+                          </div>
                       </div>
                     )}
                     </div>
@@ -6291,11 +5829,12 @@ export default function ApplicationForm() {
                               </span>
                             )}
                           </div>
+                        <div className="flex gap-2">
                         <Button
                           color="secondary"
                           variant="bordered"
                           size="sm"
-                          className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                            className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
                             onClick={() => {
                               if (formData.documents!.militaryCertificate instanceof File) {
                                 handlePreviewFile(formData.documents!.militaryCertificate, 'ใบรับรองทหาร');
@@ -6306,6 +5845,17 @@ export default function ApplicationForm() {
                         >
                           ดูตัวอย่าง
                         </Button>
+                          <Button
+                            color="danger"
+                            variant="bordered"
+                            size="sm"
+                            className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                            onClick={() => handleDeleteNewDocument('militaryCertificate')}
+                            disabled={isUploading}
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                        </Button>
+                        </div>
                         </div>
                       )}
                     </div>
@@ -6375,11 +5925,12 @@ export default function ApplicationForm() {
                               </span>
                             )}
                           </div>
+                        <div className="flex gap-2">
                         <Button
                           color="secondary"
                           variant="bordered"
                           size="sm"
-                          className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                            className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
                         onClick={() => {
                               if (formData.documents!.medicalCertificate instanceof File) {
                                 handlePreviewFile(formData.documents!.medicalCertificate, 'ใบรับรองแพทย์');
@@ -6390,6 +5941,17 @@ export default function ApplicationForm() {
                         >
                           ดูตัวอย่าง
                         </Button>
+                          <Button
+                            color="danger"
+                            variant="bordered"
+                            size="sm"
+                            className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                            onClick={() => handleDeleteNewDocument('medicalCertificate')}
+                            disabled={isUploading}
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                        </Button>
+                        </div>
                       </div>
                     )}
                     </div>
@@ -6455,11 +6017,12 @@ export default function ApplicationForm() {
                               </span>
                             )}
                           </div>
+                        <div className="flex gap-2">
                         <Button
                           color="secondary"
                           variant="bordered"
                           size="sm"
-                          className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                            className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
                             onClick={() => {
                               if (formData.documents!.drivingLicense instanceof File) {
                                 handlePreviewFile(formData.documents!.drivingLicense, 'ใบขับขี่');
@@ -6470,6 +6033,17 @@ export default function ApplicationForm() {
                         >
                           ดูตัวอย่าง
                         </Button>
+                          <Button
+                            color="danger"
+                            variant="bordered"
+                            size="sm"
+                            className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                            onClick={() => handleDeleteNewDocument('drivingLicense')}
+                            disabled={isUploading}
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                        </Button>
+                        </div>
                       </div>
                     )}
                     </div>
@@ -6517,12 +6091,12 @@ export default function ApplicationForm() {
                       {formData.documents?.otherDocuments && Array.isArray(formData.documents.otherDocuments) && formData.documents.otherDocuments.length > 0 && (
                         <div className="space-y-1">
                           {formData.documents.otherDocuments.map((file, index) => (
+                            <div key={index} className="flex gap-2">
                             <Button
-                              key={index}
                               color="secondary"
                               variant="bordered"
                               size="sm"
-                              className="w-full bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200 text-xs"
+                                className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200 text-xs"
                               onClick={() => {
                                 if (file instanceof File) {
                                   handlePreviewFile(file, `เอกสารอื่นๆ ${index + 1}`);
@@ -6535,6 +6109,26 @@ export default function ApplicationForm() {
                             >
                               ดูตัวอย่าง {index + 1}
                             </Button>
+                              <Button
+                                color="danger"
+                                variant="bordered"
+                                size="sm"
+                                className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                                onClick={() => {
+                                  const newFiles = formData.documents?.otherDocuments?.filter((_, i) => i !== index);
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    documents: {
+                                      ...prev.documents,
+                                      otherDocuments: newFiles
+                                    }
+                                  }));
+                                }}
+                                disabled={isUploading}
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </Button>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -7010,7 +6604,9 @@ export default function ApplicationForm() {
             </div>
           </div>
         </div>
+        
       )}
     </div>
   );
 } 
+

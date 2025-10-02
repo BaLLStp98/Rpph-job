@@ -1,273 +1,128 @@
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
+import { PrismaClient } from '@prisma/client'
 
-// Simple file-based storage for demonstration
-const DATA_FILE = path.join(process.cwd(), 'data', 'register.json')
+const prisma = new PrismaClient()
 
-// Ensure data directory exists
-const ensureDataDir = () => {
-  const dataDir = path.join(process.cwd(), 'data')
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true })
-  }
-}
-
-// // Ensure public/image directory exists
-// const ensureImageDir = () => {
-//   const imageDir = path.join(process.cwd(), 'public', 'image')
-//   if (!fs.existsSync(imageDir)) {
-//     fs.mkdirSync(imageDir, { recursive: true })
-//   }
-//   return imageDir
-// }
-
-// Read applications from file
-const readApplications = () => {
-  ensureDataDir()
-  if (!fs.existsSync(DATA_FILE)) {
-    return []
-  }
+export async function POST(request: NextRequest) {
   try {
-    const data = fs.readFileSync(DATA_FILE, 'utf8')
-    return JSON.parse(data)
+    const applicationData = await request.json()
+    
+    // Create application in database
+    const application = await prisma.applicationForm.create({
+      data: {
+        firstName: applicationData.firstName || '',
+        lastName: applicationData.lastName || '',
+        email: applicationData.email || '',
+        phone: applicationData.phone || '',
+        idNumber: applicationData.idNumber || null,
+        prefix: applicationData.prefix || null,
+        gender: applicationData.gender || 'UNKNOWN',
+        maritalStatus: applicationData.maritalStatus || 'UNKNOWN',
+        birthDate: applicationData.birthDate ? new Date(applicationData.birthDate) : null,
+        idCardIssueDate: applicationData.idCardIssueDate ? new Date(applicationData.idCardIssueDate) : null,
+        idCardExpiryDate: applicationData.idCardExpiryDate ? new Date(applicationData.idCardExpiryDate) : null,
+        availableDate: applicationData.availableDate ? new Date(applicationData.availableDate) : null,
+        expectedSalary: applicationData.expectedSalary || null,
+        department: applicationData.department || null,
+        departmentId: applicationData.departmentId || null,
+        appliedPosition: applicationData.appliedPosition || null,
+        currentAddress: applicationData.currentAddress || null,
+        current_address_house_number: applicationData.current_address_house_number || null,
+        current_address_village_number: applicationData.current_address_village_number || null,
+        current_address_alley: applicationData.current_address_alley || null,
+        current_address_road: applicationData.current_address_road || null,
+        current_address_sub_district: applicationData.current_address_sub_district || null,
+        current_address_district: applicationData.current_address_district || null,
+        current_address_province: applicationData.current_address_province || null,
+        current_address_postal_code: applicationData.current_address_postal_code || null,
+        current_address_phone: applicationData.current_address_phone || null,
+        current_address_mobile: applicationData.current_address_mobile || null,
+        addressAccordingToHouseRegistration: applicationData.addressAccordingToHouseRegistration || null,
+        house_registration_house_number: applicationData.house_registration_house_number || null,
+        house_registration_village_number: applicationData.house_registration_village_number || null,
+        house_registration_alley: applicationData.house_registration_alley || null,
+        house_registration_road: applicationData.house_registration_road || null,
+        house_registration_sub_district: applicationData.house_registration_sub_district || null,
+        house_registration_district: applicationData.house_registration_district || null,
+        house_registration_province: applicationData.house_registration_province || null,
+        house_registration_postal_code: applicationData.house_registration_postal_code || null,
+        house_registration_phone: applicationData.house_registration_phone || null,
+        house_registration_mobile: applicationData.house_registration_mobile || null,
+        emergencyContact: applicationData.emergencyContact || null,
+        emergencyPhone: applicationData.emergencyPhone || null,
+        emergencyRelationship: applicationData.emergencyRelationship || null,
+        emergency_address_house_number: applicationData.emergency_address_house_number || null,
+        emergency_address_village_number: applicationData.emergency_address_village_number || null,
+        emergency_address_alley: applicationData.emergency_address_alley || null,
+        emergency_address_road: applicationData.emergency_address_road || null,
+        emergency_address_sub_district: applicationData.emergency_address_sub_district || null,
+        emergency_address_district: applicationData.emergency_address_district || null,
+        emergency_address_province: applicationData.emergency_address_province || null,
+        emergency_address_postal_code: applicationData.emergency_address_postal_code || null,
+        emergency_address_phone: applicationData.emergency_address_phone || null,
+        spouseFirstName: applicationData.spouseFirstName || null,
+        spouseLastName: applicationData.spouseLastName || null,
+        skills: applicationData.skills || null,
+        languages: applicationData.languages || null,
+        computerSkills: applicationData.computerSkills || null,
+        certificates: applicationData.certificates || null,
+        references: applicationData.references || null,
+        profileImage: applicationData.profileImage || null,
+        status: 'PENDING'
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Application created successfully',
+      data: application
+    })
+
   } catch (error) {
-    console.error('Error reading applications:', error)
-    return []
+    console.error('Registration error:', error)
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'Failed to submit application',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    )
+  } finally {
+    await prisma.$disconnect()
   }
 }
-
-// Write applications to file
-const writeApplications = (applications: any[]) => {
-  ensureDataDir()
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(applications, null, 2))
-  } catch (error) {
-    console.error('Error writing applications:', error)
-    throw error
-  }
-}
-
-// export async function POST(request: NextRequest) {
-//   try {
-//     const contentType = request.headers.get('content-type')
-    
-//     let applicationData: any = {}
-    
-//     if (contentType?.includes('application/json')) {
-//       // Handle JSON data (from admin/members)
-//       applicationData = await request.json()
-//     } else {
-//       // Handle FormData (from register form)
-//       const formData = await request.formData()
-      
-//       // Extract form data
-//       const prefix = formData.get('prefix') as string
-//       const firstName = formData.get('firstName') as string
-//       const lastName = formData.get('lastName') as string
-//       const lineDisplayName = formData.get('lineDisplayName') as string
-//       const email = formData.get('email') as string
-//       const phone = formData.get('phone') as string
-//       const gender = formData.get('gender') as string
-//       const birthDate = formData.get('birthDate') as string
-//       const nationality = formData.get('nationality') as string
-//       const religion = formData.get('religion') as string
-//       const maritalStatus = formData.get('maritalStatus') as string
-//       const address = formData.get('address') as string
-//       const province = formData.get('province') as string
-//       const district = formData.get('district') as string
-//       const subDistrict = formData.get('subDistrict') as string
-//       const postalCode = formData.get('postalCode') as string
-//       const emergencyContact = formData.get('emergencyContact') as string
-//       const emergencyPhone = formData.get('emergencyPhone') as string
-//       const isHospitalStaff = formData.get('isHospitalStaff') === 'true'
-//       const hospitalDepartment = formData.get('hospitalDepartment') as string
-//       const username = formData.get('username') as string
-//       const password = formData.get('password') as string
-      
-//       // Parse JSON arrays
-//       const educationList = JSON.parse(formData.get('educationList') as string)
-//       const workList = JSON.parse(formData.get('workList') as string)
-      
-//       applicationData = {
-//         prefix,
-//         firstName,
-//         lastName,
-//         lineDisplayName,
-//         email,
-//         phone,
-//         gender,
-//         birthDate,
-//         nationality,
-//         religion,
-//         maritalStatus,
-//         address,
-//         province,
-//         district,
-//         subDistrict,
-//         postalCode,
-//         emergencyContact,
-//         emergencyPhone,
-//         isHospitalStaff,
-//         hospitalDepartment,
-//         username,
-//         password,
-//         educationList,
-//         workList
-//       }
-      
-//       // Handle profile image (save to public/image)
-//       const profileImage = formData.get('profileImage') as File | null
-//       let profileImageUrl: string | null = null
-
-//       // Pre-generate id for naming image file
-//       const generatedId = Date.now().toString()
-
-//       if (profileImage) {
-//         try {
-//           const imageDir = ensureImageDir()
-//           const arrayBuffer = await profileImage.arrayBuffer()
-//           const buffer = Buffer.from(arrayBuffer)
-//           // determine extension
-//           const originalName = (profileImage as any).name as string | undefined
-//           let ext = 'png'
-//           if (originalName && originalName.includes('.')) {
-//             ext = originalName.split('.').pop()!.toLowerCase()
-//           } else {
-//             const mime = (profileImage as any).type as string | undefined
-//             if (mime === 'image/jpeg' || mime === 'image/jpg') ext = 'jpg'
-//             else if (mime === 'image/webp') ext = 'webp'
-//             else if (mime === 'image/gif') ext = 'gif'
-//           }
-//           const fileName = `profile_${generatedId}.${ext}`
-//           const filePath = path.join(imageDir, fileName)
-//           fs.writeFileSync(filePath, buffer)
-//           profileImageUrl = fileName
-//         } catch (e) {
-//           console.error('Error saving profile image:', e)
-//         }
-//       }
-      
-//       applicationData.profileImageUrl = profileImageUrl
-//     }
-
-//     // Get Line ID from session (you might need to pass this from frontend)
-//     const lineId = applicationData.lineId || 'unknown';
-//     console.log('API Register - Received Line ID:', lineId);
-
-//     // Pre-generate id for naming image file
-//     const generatedId = applicationData.id || Date.now().toString()
-
-//     // Create application object (for create flow)
-//     const application = {
-//       id: generatedId,
-//       lineId,
-//       prefix: applicationData.prefix,
-//       firstName: applicationData.firstName,
-//       lastName: applicationData.lastName,
-//       lineDisplayName: applicationData.lineDisplayName,
-//       email: applicationData.email,
-//       phone: applicationData.phone,
-//       gender: applicationData.gender,
-//       birthDate: applicationData.birthDate,
-//       nationality: applicationData.nationality,
-//       religion: applicationData.religion,
-//       maritalStatus: applicationData.maritalStatus,
-//       address: applicationData.address,
-//       province: applicationData.province,
-//       district: applicationData.district,
-//       subDistrict: applicationData.subDistrict,
-//       postalCode: applicationData.postalCode,
-//       emergencyContact: applicationData.emergencyContact,
-//       emergencyPhone: applicationData.emergencyPhone,
-//       isHospitalStaff: applicationData.isHospitalStaff,
-//       hospitalDepartment: applicationData.hospitalDepartment,
-//       username: applicationData.username,
-//       password: applicationData.password,
-//       profileImageUrl: applicationData.profileImageUrl,
-//       educationList: applicationData.educationList || [],
-//       workList: applicationData.workList || [],
-//       createdAt: applicationData.createdAt || new Date().toISOString(),
-//       updatedAt: applicationData.updatedAt || new Date().toISOString(),
-//       status: applicationData.status || 'pending'
-//     }
-
-//     console.log('API Register - Created application with Line ID:', application.lineId);
-//     console.log('API Register - Application details:', {
-//       id: application.id,
-//       lineId: application.lineId,
-//       name: `${application.firstName} ${application.lastName}`,
-//       email: application.email
-//     });
-
-//     // Read existing applications
-//     const applications = readApplications()
-
-//     // Upsert by lineId
-//     let action: 'created' | 'updated' = 'created'
-//     let applicationIdToReturn = application.id
-//     const existingIndex = applications.findIndex((app: any) => app.lineId === lineId)
-
-//     if (existingIndex !== -1) {
-//       // Update existing application but keep original id/createdAt
-//       const existing = applications[existingIndex]
-//       const updated = {
-//         ...existing,
-//         ...application,
-//         id: existing.id,
-//         createdAt: existing.createdAt,
-//         updatedAt: new Date().toISOString(),
-//       }
-//       applications[existingIndex] = updated
-//       action = 'updated'
-//       applicationIdToReturn = existing.id
-//     } else {
-//       applications.push(application)
-//       action = 'created'
-//       applicationIdToReturn = application.id
-//     }
-
-//     // Write back to file
-//     writeApplications(applications)
-
-//     return NextResponse.json({
-//       success: true,
-//       message: action === 'created' ? 'Application created successfully' : 'Application updated successfully',
-//       applicationId: applicationIdToReturn,
-//       action,
-//     })
-
-//   } catch (error) {
-//     console.error('Registration error:', error)
-//     return NextResponse.json(
-//       {
-//         success: false,
-//         message: 'Failed to submit application',
-//         error: error instanceof Error ? error.message : 'Unknown error'
-//       },
-//       { status: 500 }
-//     )
-//   }
-// }
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const department = searchParams.get('department')
     
-    const applications = readApplications()
-    
-    // ถ้ามี department parameter ให้กรองข้อมูล
-    let filteredApplications = applications
+    let whereClause = {}
     if (department) {
-      filteredApplications = applications.filter((app: any) => 
-        app.hospitalDepartment === department || 
-        app.department === department ||
-        app.appliedDepartment === department
-      )
+      whereClause = {
+        OR: [
+          { department: { contains: department } },
+          { departmentId: { contains: department } }
+        ]
+      }
     }
     
-    return NextResponse.json(filteredApplications)
+    const applications = await prisma.applicationForm.findMany({
+      where: whereClause,
+      include: {
+        education: true,
+        workExperience: true,
+        documents: true
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+    
+    return NextResponse.json({
+      success: true,
+      data: applications
+    })
+    
   } catch (error) {
     console.error('Error fetching applications:', error)
     return NextResponse.json(
@@ -278,5 +133,7 @@ export async function GET(request: NextRequest) {
       },
       { status: 500 }
     )
+  } finally {
+    await prisma.$disconnect()
   }
 } 

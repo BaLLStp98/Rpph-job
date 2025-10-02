@@ -58,15 +58,24 @@ export async function POST(request: NextRequest) {
 		const buffer = Buffer.from(arrayBuffer)
 		fs.writeFileSync(filePath, buffer)
 
-		// อัปเดตฟิลด์ profileImageUrl ในตาราง resumeDeposit เพื่อให้หน้าอื่นดึงไปใช้ได้
+		// อัปเดตฟิลด์ profileImage ในตาราง ApplicationForm หรือ ResumeDeposit
 		try {
-			await prisma.resumeDeposit.update({
+			// ลองอัปเดต ApplicationForm ก่อน
+			await prisma.applicationForm.update({
 				where: { id: applicationId },
-				data: { profileImageUrl: fileName }
+				data: { profileImage: fileName }
 			})
 		} catch (e) {
-			console.error('Failed to update resumeDeposit profileImageUrl:', e)
-			// ไม่ fail การอัปโหลดรูป แม้จะอัปเดต DB ไม่สำเร็จ
+			// ถ้าไม่สำเร็จ ลองอัปเดต ResumeDeposit
+			try {
+				await prisma.resumeDeposit.update({
+					where: { id: applicationId },
+					data: { profileImageUrl: fileName }
+				})
+			} catch (e2) {
+				console.error('Failed to update profileImage in both ApplicationForm and ResumeDeposit:', e2)
+				// ไม่ fail การอัปโหลดรูป แม้จะอัปเดต DB ไม่สำเร็จ
+			}
 		}
 
 		return NextResponse.json({ success: true, profileImage: fileName })

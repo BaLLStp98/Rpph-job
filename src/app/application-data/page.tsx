@@ -1,78 +1,163 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Card,
-  CardHeader,
   CardBody,
-  Badge,
+  CardHeader, 
   Button,
-  Chip,
-  Avatar,
-  Spinner,
-  useDisclosure,
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
-  ModalFooter
-} from '@heroui/react';
+  ModalFooter,
+  useDisclosure,
+  Spinner,
+  Chip
+} from '@nextui-org/react';
 import {
   UserIcon,
   AcademicCapIcon,
   BriefcaseIcon,
   DocumentTextIcon,
   EyeIcon,
-  ArrowDownTrayIcon,
-  CalendarIcon,
-  MapPinIcon,
-  PhoneIcon,
-  EnvelopeIcon,
-  ExclamationTriangleIcon,
-  ArrowLeftIcon,
-  XMarkIcon,
-  DocumentIcon,
-  TrashIcon
+  PrinterIcon
 } from '@heroicons/react/24/outline';
-import flatpickr from 'flatpickr';
-import 'flatpickr/dist/flatpickr.css';
-import { Thai } from 'flatpickr/dist/l10n/th.js';
 
+// Interface สำหรับข้อมูลใบสมัครงาน
 interface ApplicationData {
   id: string;
-  submittedAt: string;
-  status: string;
-  prefix: string;
   firstName: string;
   lastName: string;
-  appliedPosition: string;
-  expectedSalary: string;
   email: string;
   phone: string;
-  currentAddress: string;
-  birthDate: string;
-  gender: string;
+  appliedPosition: string;
+  department: string;
+  status: string;
+  createdAt: string;
+  profileImage?: string;
+  // ข้อมูลส่วนตัว
+  prefix?: string;
+  birthDate?: string;
+  age?: string;
+  race?: string;
+  placeOfBirth?: string;
+  placeOfBirthProvince?: string;
+  gender?: string;
+  nationality?: string;
+  religion?: string;
+  maritalStatus?: string;
+  currentAddress?: string;
+  // ข้อมูลบัตรประชาชน
+  idNumber?: string;
+  idCardIssuedAt?: string;
+  idCardIssueDate?: string;
+  idCardExpiryDate?: string;
+  // ข้อมูลการติดต่อ
+  emergencyContact?: string;
+  emergencyPhone?: string;
+  emergencyRelationship?: string;
+  // ข้อมูลที่อยู่
+  registeredAddress?: {
+    houseNumber?: string;
+    villageNumber?: string;
+    alley?: string;
+    road?: string;
+    subDistrict?: string;
+    district?: string;
+    province?: string;
+    postalCode?: string;
+    phone?: string;
+    mobile?: string;
+  };
+  currentAddressDetail?: {
+    houseNumber?: string;
+    villageNumber?: string;
+    alley?: string;
+    road?: string;
+    subDistrict?: string;
+    district?: string;
+    province?: string;
+    postalCode?: string;
+    homePhone?: string;
+    mobilePhone?: string;
+  };
+  emergencyAddress?: {
+    houseNumber?: string;
+    villageNumber?: string;
+    alley?: string;
+    road?: string;
+    subDistrict?: string;
+    district?: string;
+    province?: string;
+    postalCode?: string;
+    phone?: string;
+  };
+  emergencyWorkplace?: {
+    name?: string;
+    district?: string;
+    province?: string;
+    phone?: string;
+  };
+  // ข้อมูลคู่สมรส
+  spouseInfo?: {
+    firstName?: string;
+    lastName?: string;
+  };
+  // ข้อมูลสิทธิการรักษา
+  medicalRights?: {
+    hasUniversalHealthcare?: boolean;
+    universalHealthcareHospital?: string;
+    hasSocialSecurity?: boolean;
+    socialSecurityHospital?: string;
+    dontWantToChangeHospital?: boolean;
+    wantToChangeHospital?: boolean;
+    newHospital?: string;
+    hasCivilServantRights?: boolean;
+    otherRights?: string;
+  };
+  // ข้อมูลการสมัครงาน
+  expectedSalary?: string;
+  availableDate?: string;
+  currentWork?: boolean;
+  unit?: string;
+  skills?: string;
+  languages?: string;
+  computerSkills?: string;
+  certificates?: string;
+  references?: string;
+  applicantSignature?: string;
+  applicationDate?: string;
+  // ข้อมูลการทำงานในภาครัฐ
+  previousGovernmentService?: Array<{
+    position?: string;
+    department?: string;
+    reason?: string;
+    date?: string;
+  }>;
+  // ข้อมูลนายจ้างหลายราย
+  multipleEmployers?: string[];
+  // ข้อมูลการศึกษา
   education: Array<{
     level?: string;
-    degree?: string;
     institution?: string;
     school?: string;
     major?: string;
     year?: string;
     graduationYear?: string;
-    gpa: string;
+    gpa?: string;
   }>;
+  // ข้อมูลประสบการณ์ทำงาน
   workExperience: Array<{
-    position: string;
-    company: string;
-    startDate: string;
-    endDate: string;
-    description?: string;
+    position?: string;
+    company?: string;
+    startDate?: string;
+    endDate?: string;
     salary?: string;
     reason?: string;
   }>;
-  profileImage?: string;
+  // ข้อมูลเอกสาร
   documents?: {
     idCard?: string;
     houseRegistration?: string;
@@ -84,262 +169,28 @@ interface ApplicationData {
   };
 }
 
-// Component สำหรับแสดงข้อมูลในรูปแบบเดียวกับหน้า application-form
+// Component สำหรับแสดงข้อมูลในรูปแบบเดียวกับหน้า register
 const ApplicationFormView = ({ 
   application, 
-  onUploadDocument,
-  onUpdateApplication,
   isEditing = false,
-  onToggleEdit,
-  onProfileImageUpdate
+  onInputChange
 }: { 
   application: ApplicationData;
-  onUploadDocument?: (documentType: string, file: File) => void;
-  onUpdateApplication?: (updatedApplication: ApplicationData) => void;
   isEditing?: boolean;
-  onToggleEdit?: () => void;
-  onProfileImageUpdate?: (newImageName: string) => void;
+  onInputChange?: (field: string, value: any) => void;
 }) => {
-  const [uploadingDocument, setUploadingDocument] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [previewDocument, setPreviewDocument] = useState<{url: string, name: string} | null>(null);
-  const { isOpen: isPreviewOpen, onOpen: onPreviewOpen, onClose: onPreviewClose } = useDisclosure();
-  const [editedApplication, setEditedApplication] = useState<ApplicationData>(application);
-  const [uploadingProfileImage, setUploadingProfileImage] = useState(false);
-  const [profileImageProgress, setProfileImageProgress] = useState(0);
-  // flatpickr refs for editing fields
-  const birthDateRef = useRef<HTMLInputElement | null>(null);
-  const workStartRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const workEndRefs = useRef<(HTMLInputElement | null)[]>([]);
-
-  // เพิ่ม state สำหรับการจัดการรูปภาพ
-  const [imageLoadStatus, setImageLoadStatus] = useState<{[key: string]: boolean}>({});
-  const [imageErrorStatus, setImageErrorStatus] = useState<{[key: string]: boolean}>({});
-
-  // ฟังก์ชันสำหรับจัดการการโหลดรูปภาพ
-  const handleImageLoad = (imageKey: string) => {
-    setImageLoadStatus(prev => ({ ...prev, [imageKey]: true }));
-    setImageErrorStatus(prev => ({ ...prev, [imageKey]: false }));
-    console.log(`✅ Image loaded successfully: ${imageKey}`);
-  };
-
-  // ฟังก์ชันสำหรับจัดการข้อผิดพลาดของรูปภาพ
-  const handleImageError = (imageKey: string) => {
-    setImageLoadStatus(prev => ({ ...prev, [imageKey]: false }));
-    setImageErrorStatus(prev => ({ ...prev, [imageKey]: true }));
-    console.error(`❌ Image failed to load: ${imageKey}`);
-  };
-
-  // อัพเดท editedApplication เมื่อ application เปลี่ยน
-  useEffect(() => {
-    setEditedApplication(application);
-  }, [application]);
-
-  // init flatpickr for editable date fields
-  useEffect(() => {
-    // birth date
-    if (birthDateRef.current) {
-      const inst: any = (birthDateRef.current as any)._flatpickr;
-      if (inst) inst.destroy();
-      flatpickr(birthDateRef.current, {
-        locale: Thai,
-        dateFormat: 'd/m/Y',
-        allowInput: true,
-        clickOpens: true,
-        onChange: (dates) => {
-          if (dates[0]) {
-            const d = dates[0];
-            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            handleInputChange('birthDate', iso);
-          }
-        }
-      });
-    }
-
-    // work dates
-    workStartRefs.current.forEach((ref, idx) => {
-      if (!ref) return;
-      const inst: any = (ref as any)._flatpickr;
-      if (inst) inst.destroy();
-      flatpickr(ref, {
-        locale: Thai,
-        dateFormat: 'd/m/Y',
-        allowInput: true,
-        clickOpens: true,
-        onChange: (dates) => {
-          if (dates[0]) {
-            const d = dates[0];
-            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            handleWorkExperienceChange(idx, 'startDate', iso);
-          }
-        }
-      });
-    });
-
-    workEndRefs.current.forEach((ref, idx) => {
-      if (!ref) return;
-      const inst: any = (ref as any)._flatpickr;
-      if (inst) inst.destroy();
-      flatpickr(ref, {
-        locale: Thai,
-        dateFormat: 'd/m/Y',
-        allowInput: true,
-        clickOpens: true,
-        onChange: (dates) => {
-          if (dates[0]) {
-            const d = dates[0];
-            const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            handleWorkExperienceChange(idx, 'endDate', iso);
-          }
-        }
-      });
-    });
-  }, [isEditing, editedApplication.workExperience]);
-
-  const handleFileUpload = async (documentType: string, file: File) => {
-    if (!onUploadDocument) return;
-    
+  // ฟังก์ชันสำหรับจัดรูปแบบวันที่
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     try {
-      setUploadingDocument(documentType);
-      setUploadProgress(0);
-      
-      // Simulate upload progress
-      const interval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(interval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 100);
-
-      // Call the upload function
-      await onUploadDocument(documentType, file);
-      
-      setUploadProgress(100);
-      setTimeout(() => {
-        setUploadingDocument(null);
-        setUploadProgress(0);
-      }, 500);
-      
-    } catch (error) {
-      console.error('Upload error:', error);
-      setUploadingDocument(null);
-      setUploadProgress(0);
-    }
-  };
-
-  const handlePreviewDocument = (fileName: string, documentName: string) => {
-    // ตรวจสอบว่าเป็นรูปภาพหรือเอกสาร PDF
-    const isImage = /\.(jpg|jpeg|png|gif)$/i.test(fileName);
-    const fileUrl = isImage ? `/api/image?file=${fileName}` : `/api/uploads?file=${fileName}`;
-    setPreviewDocument({ url: fileUrl, name: documentName });
-    onPreviewOpen();
-  };
-
-  const handleDownloadDocument = (fileName: string, documentName: string) => {
-    const link = document.createElement('a');
-    // ตรวจสอบว่าเป็นรูปภาพหรือเอกสาร PDF
-    const isImage = /\.(jpg|jpeg|png|gif)$/i.test(fileName);
-    link.href = isImage ? `/api/image?file=${fileName}` : `/api/uploads?file=${fileName}`;
-    link.download = documentName;
-    link.click();
-  };
-
-  const getDocumentDisplayName = (docType: string) => {
-    const names: { [key: string]: string } = {
-      idCard: 'สำเนาบัตรประชาชน',
-      houseRegistration: 'สำเนาทะเบียนบ้าน',
-      militaryCertificate: 'สำเนาหลักฐานการเกณฑ์ทหาร',
-      educationCertificate: 'สำเนาหลักฐานการศึกษา',
-      medicalCertificate: 'ใบรับรองแพทย์',
-      drivingLicense: 'ใบอนุญาตขับขี่',
-      nameChangeCertificate: 'ใบเปลี่ยนชื่อ'
-    };
-    return names[docType] || docType;
-  };
-
-  // ฟังก์ชันสำหรับการแก้ไขข้อมูล
-  const handleInputChange = (field: string, value: string) => {
-    setEditedApplication(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleEducationChange = (index: number, field: string, value: string) => {
-    setEditedApplication(prev => ({
-      ...prev,
-      education: prev.education.map((edu, i) => 
-        i === index ? { ...edu, [field]: value } : edu
-      )
-    }));
-  };
-
-  const handleWorkExperienceChange = (index: number, field: string, value: string) => {
-    setEditedApplication(prev => ({
-      ...prev,
-      workExperience: prev.workExperience.map((work, i) => 
-        i === index ? { ...work, [field]: value } : work
-      )
-    }));
-  };
-
-  // ฟังก์ชันสำหรับการอัปโหลดรูปภาพโปรไฟล์
-  const handleProfileImageUpload = async (file: File) => {
-    if (!onUploadDocument) return;
-    
-    try {
-      setUploadingProfileImage(true);
-      setProfileImageProgress(0);
-      
-      // Simulate upload progress
-      const interval = setInterval(() => {
-        setProfileImageProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(interval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 100);
-
-      // Call the upload function with 'profileImage' as document type
-      const result = await onUploadDocument('profileImage', file);
-      
-      // ถ้ามี callback function ให้เรียกเพื่ออัปเดตรูปภาพทันที
-      if (onProfileImageUpdate && typeof result === 'string') {
-        onProfileImageUpdate(result);
-      }
-      
-      setProfileImageProgress(100);
-      setTimeout(() => {
-        setUploadingProfileImage(false);
-        setProfileImageProgress(0);
-      }, 500);
-      
-    } catch (error) {
-      setUploadingProfileImage(false);
-      setProfileImageProgress(0);
-    }
-  };
-
-  const handleSaveChanges = () => {
-    if (onUpdateApplication) {
-      // รวมการอัปเดตรูปภาพโปรไฟล์ด้วย
-      const updatedApplication = {
-        ...editedApplication,
-        profileImage: editedApplication.profileImage || application.profileImage
-      };
-      onUpdateApplication(updatedApplication);
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setEditedApplication(application);
-    if (onToggleEdit) {
-      onToggleEdit();
+      const date = new Date(dateString);
+      return date.toLocaleDateString('th-TH', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
     }
   };
 
@@ -347,330 +198,1248 @@ const ApplicationFormView = ({
     <div className="space-y-8">
       {/* ข้อมูลส่วนตัว */}
       <Card className="shadow-xl border-0">
-                 <CardHeader className="bg-gradient-to-r from-blue-500 via-purple-500 to-blue-600 text-white relative overflow-hidden">
-           <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-purple-400/20"></div>
-           <div className="relative flex items-center justify-between">
-             <div className="flex items-center gap-3">
+        <CardHeader className="bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600 text-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-indigo-400/20"></div>
+          <div className="relative flex items-center gap-3">
                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                  <UserIcon className="w-6 h-6" />
                </div>
                <h2 className="text-xl font-semibold">ข้อมูลส่วนตัว</h2>
-             </div>
-             {onToggleEdit && (
-               <div className="flex gap-2">
-                 {!isEditing ? (
-                   <Button
-                     size="sm"
-                     variant="ghost"
-                     color="warning"
-                     onClick={onToggleEdit}
-                     className="bg-white/20 text-white hover:bg-white/30"
-                   >
-                     แก้ไข
-                   </Button>
-                 ) : (
-                   <>
-                     <Button
-                       size="sm"
-                       variant="ghost"
-                       color="success"
-                       onClick={handleSaveChanges}
-                       className="bg-white/20 text-white hover:bg-white/30"
-                     >
-                       บันทึก
-                     </Button>
-                     <Button
-                       size="sm"
-                       variant="ghost"
-                       color="danger"
-                       onClick={handleCancelEdit}
-                       className="bg-white/20 text-white hover:bg-white/30"
-                     >
-                       ยกเลิก
-                     </Button>
-                   </>
-                 )}
-               </div>
-             )}
            </div>
          </CardHeader>
         <CardBody className="p-8">
-          {/* Profile Image */}
-          {(application.profileImage || isEditing) && (
-            <div className="mb-8 p-6 border border-gray-200 rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 shadow-lg">
-              <h3 className="text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
-                รูปถ่ายประจำตัว
+          {/* ๑. ประวัติส่วนตัว */}
+          <div className="mb-8">
+            <h3 className="text-lg font-bold text-gray-800 mb-6 border-b-2 border-dotted border-gray-400 pb-2">
+              ๑. ประวัติส่วนตัว
               </h3>
-              <div className="flex items-center gap-6">
-                <div className="relative group w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg cursor-pointer hover:scale-105 transition-transform duration-200">
-                  {(editedApplication.profileImage || application.profileImage) ? (
+            
+            {/* รูปโปรไฟล์ */}
+            <div className="mb-6">
+              <h4 className="text-md font-semibold text-gray-700 mb-4 text-left">
+                รูปโปรไฟล์
+              </h4>
+              
+              <div className="flex justify-center mb-6">
+                <div className="relative">
+                  {application.profileImage ? (
                     <img
-                      src={`/api/image?file=${editedApplication.profileImage || application.profileImage}`}
-                      alt="Profile"
-                      className="w-full h-full object-cover"
-                      data-image-id={`modal-${application.id}`}
-                      style={{
-                        display: 'block',
-                        maxWidth: 'none',
-                        maxHeight: 'none',
-                        backgroundColor: '#f3f4f6',
-                        position: 'relative',
-                        zIndex: 10
-                      }}
-                      onClick={() => handlePreviewDocument(editedApplication.profileImage || application.profileImage!, 'รูปถ่ายประจำตัว')}
-                      onError={(e) => {
-                        const img = e.currentTarget as HTMLImageElement;
-                        console.error(`❌ Failed to load modal image: ${editedApplication.profileImage || application.profileImage} for modal-${application.id}`);
-                        // แสดง fallback avatar ทันทีเมื่อรูปโหลดไม่สำเร็จ
-                        img.style.display = 'none';
-                        const fallback = img.parentElement?.querySelector('.modal-fallback-avatar') as HTMLElement;
-                        if (fallback) fallback.style.display = 'flex';
-                        handleImageError(`modal-${application.id}`);
-                      }}
-                      onLoad={() => {
-                        console.log(`✅ Modal image loaded successfully: ${editedApplication.profileImage || application.profileImage} for modal-${application.id}`);
-                        handleImageLoad(`modal-${application.id}`);
-                      }}
+                      src={application.profileImage}
+                      alt="รูปโปรไฟล์"
+                      className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 shadow-lg"
                     />
                   ) : (
-                    <div className="w-24 h-24 rounded-full border-4 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center">
-                      <UserIcon className="w-8 h-8 text-gray-400" />
+                    <div className="w-32 h-32 rounded-full bg-gray-200 border-4 border-gray-300 shadow-lg flex items-center justify-center">
+                      <UserIcon className="w-16 h-16 text-gray-400" />
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-full transition-all duration-200 flex items-center justify-center pointer-events-none">
-                    <EyeIcon className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                   </div>
-                  
-                  {/* Fallback avatar for modal */}
-                  <div 
-                    className="modal-fallback-avatar w-full h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-2xl absolute inset-0"
-                    data-fallback-id={`modal-${application.id}`}
-                    style={{ display: 'none' }}
-                  >
-                    {application.firstName.charAt(0)}{application.lastName.charAt(0)}
                   </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-600 mb-2">รูปถ่ายประจำตัว</p>
-                  {/* แสดงสถานะรูปภาพใน modal */}
-                  {(editedApplication.profileImage || application.profileImage) && (
-                    <div className="flex items-center gap-2 mb-2">
-                      {imageLoadStatus[`modal-${application.id}`] ? (
-                        <span className="text-xs text-green-600">✅ รูปภาพโหลดสำเร็จ</span>
-                      ) : imageErrorStatus[`modal-${application.id}`] ? (
-                        <span className="text-xs text-red-600">❌ รูปภาพโหลดไม่สำเร็จ</span>
-                      ) : (
-                        <span className="text-xs text-gray-500">⏳ กำลังโหลดรูปภาพ...</span>
-                      )}
+
+            {/* ๑.๑ ชื่อ (นาย/นาง/นางสาว) */}
+            <div className="mb-6">
+              <h4 className="text-md font-semibold text-gray-700 mb-4 text-left">
+                ๑.๑ ชื่อ (นาย/นาง/นางสาว)
+              </h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">คำนำหน้า</label>
+                   {isEditing ? (
+                     <select
+                       value={application.prefix || ''}
+                       onChange={(e) => onInputChange?.('prefix', e.target.value)}
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     >
+                       <option value="">เลือกคำนำหน้า</option>
+                       <option value="นาย">นาย</option>
+                       <option value="นาง">นาง</option>
+                       <option value="นางสาว">นางสาว</option>
+                       <option value="เด็กชาย">เด็กชาย</option>
+                       <option value="เด็กหญิง">เด็กหญิง</option>
+                       <option value="ด.ช.">ด.ช.</option>
+                       <option value="ด.ญ.">ด.ญ.</option>
+                       <option value="ผศ.">ผศ.</option>
+                       <option value="รศ.">รศ.</option>
+                       <option value="ศ.">ศ.</option>
+                     </select>
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.prefix || '-'}
+                    </div>
+                   )}
+                </div>
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">ชื่อ</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.firstName || ''}
+                       onChange={(e) => onInputChange?.('firstName', e.target.value)}
+                       placeholder="กรอกชื่อ (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.firstName || '-'}
+                     </div>
+               )}
+             </div>
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">นามสกุล</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.lastName || ''}
+                       onChange={(e) => onInputChange?.('lastName', e.target.value)}
+                       placeholder="กรอกนามสกุล (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.lastName || '-'}
+                     </div>
+                   )}
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">วัน เดือน ปีเกิด</label>
+                   {isEditing ? (
+                     <input
+                       type="date"
+                       value={application.birthDate || ''}
+                       onChange={(e) => onInputChange?.('birthDate', e.target.value)}
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {formatDate(application.birthDate || '') || '-'}
+                     </div>
+                   )}
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">อายุ</label>
+                   {isEditing ? (
+                     <input
+                       type="number"
+                       value={application.age || ''}
+                       onChange={(e) => onInputChange?.('age', e.target.value)}
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.age || '-'}
+                     </div>
+                   )}
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">เพศ</label>
+                   {isEditing ? (
+                     <div className="flex gap-4">
+                       <label className="flex items-center gap-2">
+                         <input 
+                           type="radio" 
+                           name="gender" 
+                           value="ชาย"
+                           checked={application.gender === 'ชาย'}
+                           onChange={(e) => onInputChange?.('gender', e.target.value)}
+                           className="w-4 h-4" 
+                         />
+                         <span>ชาย</span>
+                       </label>
+                       <label className="flex items-center gap-2">
+                         <input 
+                           type="radio" 
+                           name="gender" 
+                           value="หญิง"
+                           checked={application.gender === 'หญิง'}
+                           onChange={(e) => onInputChange?.('gender', e.target.value)}
+                           className="w-4 h-4" 
+                         />
+                         <span>หญิง</span>
+                       </label>
+                     </div>
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.gender || '-'}
+                     </div>
+                   )}
+                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">สัญชาติ</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.nationality || ''}
+                       onChange={(e) => onInputChange?.('nationality', e.target.value)}
+                       placeholder="กรอกสัญชาติ (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.nationality || '-'}
                     </div>
                   )}
-                  {isEditing ? (
-                    <div className="space-y-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            handleProfileImageUpload(file);
-                          }
-                        }}
-                        className="hidden"
-                        id="profile-image-upload"
-                      />
-                      <label
-                        htmlFor="profile-image-upload"
-                        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md cursor-pointer hover:bg-blue-600 transition-colors"
-                      >
-                        {uploadingProfileImage ? (
-                          <>
-                            <Spinner size="sm" />
-                            อัปโหลด... {profileImageProgress}%
-                          </>
-                        ) : (
-                          <>
-                            <ArrowDownTrayIcon className="w-4 h-4" />
-                            อัปโหลดรูปใหม่
-                          </>
-                        )}
-                      </label>
-                                             {(editedApplication.profileImage || application.profileImage) && (
-                         <Button
-                           size="sm"
-                           variant="ghost"
-                           color="primary"
-                           startContent={<ArrowDownTrayIcon className="w-4 h-4" />}
-                           onClick={() => handleDownloadDocument(editedApplication.profileImage || application.profileImage!, 'รูปถ่ายประจำตัว.png')}
-                         >
-                           ดาวน์โหลด
-                         </Button>
-                       )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ศาสนา</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.religion || ''}
+                       onChange={(e) => onInputChange?.('religion', e.target.value)}
+                       placeholder="กรอกศาสนา (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.religion || '-'}
                     </div>
-                                     ) : (
-                     (editedApplication.profileImage || application.profileImage) && (
-                       <Button
-                         size="sm"
-                         variant="ghost"
-                         color="primary"
-                         startContent={<ArrowDownTrayIcon className="w-4 h-4" />}
-                         onClick={() => handleDownloadDocument(editedApplication.profileImage || application.profileImage!, 'รูปถ่ายประจำตัว.png')}
-                       >
-                         ดาวน์โหลด
-                       </Button>
-                     )
+                  )}
+                </div>
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">สถานภาพสมรส</label>
+                   {isEditing ? (
+                     <div className="flex gap-6">
+                       <label className="flex items-center gap-2">
+                         <input 
+                           type="radio" 
+                           name="maritalStatus" 
+                           value="โสด"
+                           checked={application.maritalStatus === 'โสด'}
+                           onChange={(e) => onInputChange?.('maritalStatus', e.target.value)}
+                           className="w-4 h-4" 
+                         />
+                         <span>โสด</span>
+                       </label>
+                       <label className="flex items-center gap-2">
+                         <input 
+                           type="radio" 
+                           name="maritalStatus" 
+                           value="สมรส"
+                           checked={application.maritalStatus === 'สมรส'}
+                           onChange={(e) => onInputChange?.('maritalStatus', e.target.value)}
+                           className="w-4 h-4" 
+                         />
+                         <span>สมรส</span>
+                       </label>
+                       <label className="flex items-center gap-2">
+                         <input 
+                           type="radio" 
+                           name="maritalStatus" 
+                           value="หย่าร้าง"
+                           checked={application.maritalStatus === 'หย่าร้าง'}
+                           onChange={(e) => onInputChange?.('maritalStatus', e.target.value)}
+                           className="w-4 h-4" 
+                         />
+                         <span>หย่าร้าง</span>
+                       </label>
+                       <label className="flex items-center gap-2">
+                         <input 
+                           type="radio" 
+                           name="maritalStatus" 
+                           value="หม้าย"
+                           checked={application.maritalStatus === 'หม้าย'}
+                           onChange={(e) => onInputChange?.('maritalStatus', e.target.value)}
+                           className="w-4 h-4" 
+                         />
+                         <span>หม้าย</span>
+                       </label>
+                     </div>
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.maritalStatus || '-'}
+                     </div>
                    )}
+                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">เชื้อชาติ</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.race || ''}
+                       onChange={(e) => onInputChange?.('race', e.target.value)}
+                       placeholder="กรอกเชื้อชาติ (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.race || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">สถานที่เกิด</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.placeOfBirth || ''}
+                       onChange={(e) => onInputChange?.('placeOfBirth', e.target.value)}
+                       placeholder="กรอกสถานที่เกิด (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.placeOfBirth || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">จังหวัดที่เกิด</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.placeOfBirthProvince || ''}
+                       onChange={(e) => onInputChange?.('placeOfBirthProvince', e.target.value)}
+                       placeholder="กรอกจังหวัด (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.placeOfBirthProvince || '-'}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-          )}
+             </div>
+             
+          {/* ๒. ข้อมูลบัตรประชาชน */}
+          <div className="mb-8">
+            <h3 className="text-lg font-bold text-gray-800 mb-6 border-b-2 border-dotted border-gray-400 pb-2">
+              ๒. ข้อมูลบัตรประชาชน
+            </h3>
+            
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">เลขบัตรประชาชน</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.idNumber || ''}
+                       onChange={(e) => onInputChange?.('idNumber', e.target.value)}
+                       placeholder="กรอกเลขบัตรประชาชน (เฉพาะตัวเลข)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {application.idNumber || '-'}
+                   </div>
+                 )}
+               </div>
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">ออกโดย</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.idCardIssuedAt || ''}
+                       onChange={(e) => onInputChange?.('idCardIssuedAt', e.target.value)}
+                       placeholder="กรอกออกโดย (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {application.idCardIssuedAt || '-'}
+                   </div>
+                 )}
+               </div>
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">วันที่ออกบัตร</label>
+                 {isEditing ? (
+                   <input
+                     type="date"
+                     value={application.idCardIssueDate || ''}
+                     onChange={(e) => onInputChange?.('idCardIssueDate', e.target.value)}
+                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   />
+                 ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {formatDate(application.idCardIssueDate || '') || '-'}
+                   </div>
+                 )}
+               </div>
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">วันที่บัตรหมดอายุ</label>
+                 {isEditing ? (
+                   <input
+                     type="date"
+                     value={application.idCardExpiryDate || ''}
+                     onChange={(e) => onInputChange?.('idCardExpiryDate', e.target.value)}
+                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   />
+                 ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {formatDate(application.idCardExpiryDate || '') || '-'}
+                   </div>
+                 )}
+               </div>
+             </div>
+          </div>
 
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-             <div>
-               <p className="text-sm font-medium text-gray-600 mb-1">คำนำหน้า</p>
-               {isEditing ? (
-                 <input
-                   type="text"
-                   value={editedApplication.prefix || ''}
-                   onChange={(e) => handleInputChange('prefix', e.target.value)}
-                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 />
-               ) : (
-                 <p className="text-gray-800">{application.prefix || '-'}</p>
-               )}
-             </div>
-             
-             <div>
-               <p className="text-sm font-medium text-gray-600 mb-1">ชื่อ</p>
-               {isEditing ? (
-                 <input
-                   type="text"
-                   value={editedApplication.firstName}
-                   onChange={(e) => handleInputChange('firstName', e.target.value)}
-                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 />
-               ) : (
-                 <p className="text-gray-800">{application.firstName}</p>
-               )}
-             </div>
-             
-             <div>
-               <p className="text-sm font-medium text-gray-600 mb-1">นามสกุล</p>
-               {isEditing ? (
-                 <input
-                   type="text"
-                   value={editedApplication.lastName}
-                   onChange={(e) => handleInputChange('lastName', e.target.value)}
-                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 />
-               ) : (
-                 <p className="text-gray-800">{application.lastName}</p>
-               )}
-             </div>
-             
-             {/* <div>
-               <p className="text-sm font-medium text-gray-600 mb-1">อีเมล</p>
-               {isEditing ? (
-                 <input
-                   type="email"
-                   value={editedApplication.email}
-                   onChange={(e) => handleInputChange('email', e.target.value)}
-                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 />
-               ) : (
-                 <p className="text-gray-800">{application.email}</p>
-               )}
-             </div> */}
-             
-             <div>
-               <p className="text-sm font-medium text-gray-600 mb-1">เบอร์โทรศัพท์</p>
-               {isEditing ? (
-                 <input
-                   type="tel"
-                   value={editedApplication.phone}
-                   onChange={(e) => handleInputChange('phone', e.target.value)}
-                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 />
-               ) : (
-                 <p className="text-gray-800">{application.phone}</p>
-               )}
-             </div>
-             
-             <div>
-               <p className="text-sm font-medium text-gray-600 mb-1">วันเกิด</p>
-               {isEditing ? (
-                 <input
-                   type="date"
-                   value={editedApplication.birthDate}
-                   onChange={(e) => handleInputChange('birthDate', e.target.value)}
-                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 />
-               ) : (
-                 <p className="text-gray-800">{application.birthDate}</p>
-               )}
-             </div>
-             
-             <div>
-               <p className="text-sm font-medium text-gray-600 mb-1">เพศ</p>
-               {isEditing ? (
-                 <select
-                   value={editedApplication.gender}
-                   onChange={(e) => handleInputChange('gender', e.target.value)}
-                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 >
-                   <option value="ชาย">ชาย</option>
-                   <option value="หญิง">หญิง</option>
-                 </select>
-               ) : (
-                 <p className="text-gray-800">{application.gender}</p>
-               )}
-             </div>
-             
-             <div>
-               <p className="text-sm font-medium text-gray-600 mb-1">ตำแหน่งที่สมัคร</p>
-               {isEditing ? (
-                 <input
-                   type="text"
-                   value={editedApplication.appliedPosition}
-                   onChange={(e) => handleInputChange('appliedPosition', e.target.value)}
-                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 />
-               ) : (
-                 <p className="text-gray-800">{application.appliedPosition}</p>
-               )}
-             </div>
-             
-             <div>
-               <p className="text-sm font-medium text-gray-600 mb-1">เงินเดือนที่คาดหวัง</p>
-               {isEditing ? (
-                 <input
-                   type="text"
-                   value={editedApplication.expectedSalary}
-                   onChange={(e) => handleInputChange('expectedSalary', e.target.value)}
-                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                 />
-               ) : (
-                 <p className="text-gray-800">{application.expectedSalary}</p>
-               )}
-             </div>
-           </div>
+          {/* ๓. ข้อมูลการติดต่อ */}
+          <div className="mb-8">
+            <h3 className="text-lg font-bold text-gray-800 mb-6 border-b-2 border-dotted border-gray-400 pb-2">
+              ๓. ข้อมูลการติดต่อ
+            </h3>
+            
+            {/* ๓.๑ ที่อยู่ตามทะเบียนบ้าน */}
+            <div className="mb-6">
+              <h4 className="text-md font-semibold text-gray-700 mb-4 text-left">
+                ๓.๑ ที่อยู่ตามทะเบียนบ้าน
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">เลขที่</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.houseNumber || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.houseNumber', e.target.value)}
+                      placeholder="กรอกเลขที่"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.houseNumber || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">หมู่ที่</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.villageNumber || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.villageNumber', e.target.value)}
+                      placeholder="กรอกหมู่ที่"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.villageNumber || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ตรอก/ซอย</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.alley || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.alley', e.target.value)}
+                      placeholder="กรอกตรอก/ซอย"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.alley || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ถนน</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.road || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.road', e.target.value)}
+                      placeholder="กรอกถนน"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.road || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ตำบล/แขวง</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.subDistrict || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.subDistrict', e.target.value)}
+                      placeholder="กรอกตำบล/แขวง"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.subDistrict || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">อำเภอ/เขต</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.district || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.district', e.target.value)}
+                      placeholder="กรอกอำเภอ/เขต"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.district || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">จังหวัด</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.province || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.province', e.target.value)}
+                      placeholder="กรอกจังหวัด"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.province || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">รหัสไปรษณีย์</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.postalCode || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.postalCode', e.target.value)}
+                      placeholder="กรอกรหัสไปรษณีย์"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.postalCode || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">โทรศัพท์บ้าน</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.phone || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.phone', e.target.value)}
+                      placeholder="กรอกโทรศัพท์บ้าน"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.phone || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">โทรศัพท์มือถือ</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.registeredAddress?.mobile || ''}
+                      onChange={(e) => onInputChange?.('registeredAddress.mobile', e.target.value)}
+                      placeholder="กรอกโทรศัพท์มือถือ"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.registeredAddress?.mobile || '-'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
-                     <div className="mt-6">
-             <p className="text-sm font-medium text-gray-600 mb-1">ที่อยู่ปัจจุบัน</p>
-             {isEditing ? (
-               <textarea
-                 value={editedApplication.currentAddress}
-                 onChange={(e) => handleInputChange('currentAddress', e.target.value)}
-                 rows={3}
-                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-               />
-             ) : (
-               <p className="text-gray-800">{application.currentAddress}</p>
-             )}
-           </div>
+            {/* ๓.๒ ที่อยู่ปัจจุบัน */}
+            <div className="mb-6">
+              <h4 className="text-md font-semibold text-gray-700 mb-4 text-left">
+                ๓.๒ ที่อยู่ปัจจุบัน
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">เลขที่</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.houseNumber || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.houseNumber', e.target.value)}
+                      placeholder="กรอกเลขที่"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.houseNumber || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">หมู่ที่</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.villageNumber || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.villageNumber', e.target.value)}
+                      placeholder="กรอกหมู่ที่"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.villageNumber || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ตรอก/ซอย</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.alley || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.alley', e.target.value)}
+                      placeholder="กรอกตรอก/ซอย"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.alley || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ถนน</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.road || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.road', e.target.value)}
+                      placeholder="กรอกถนน"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.road || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ตำบล/แขวง</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.subDistrict || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.subDistrict', e.target.value)}
+                      placeholder="กรอกตำบล/แขวง"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.subDistrict || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">อำเภอ/เขต</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.district || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.district', e.target.value)}
+                      placeholder="กรอกอำเภอ/เขต"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.district || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">จังหวัด</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.province || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.province', e.target.value)}
+                      placeholder="กรอกจังหวัด"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.province || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">รหัสไปรษณีย์</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.postalCode || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.postalCode', e.target.value)}
+                      placeholder="กรอกรหัสไปรษณีย์"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.postalCode || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">โทรศัพท์บ้าน</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.homePhone || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.homePhone', e.target.value)}
+                      placeholder="กรอกโทรศัพท์บ้าน"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.homePhone || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">โทรศัพท์มือถือ</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.currentAddressDetail?.mobilePhone || ''}
+                      onChange={(e) => onInputChange?.('currentAddressDetail.mobilePhone', e.target.value)}
+                      placeholder="กรอกโทรศัพท์มือถือ"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.currentAddressDetail?.mobilePhone || '-'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ๓.๓ ข้อมูลการติดต่อ */}
+            <div className="mb-6">
+              <h4 className="text-md font-semibold text-gray-700 mb-4 text-left">
+                ๓.๓ ข้อมูลการติดต่อ
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">เบอร์โทรศัพท์</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.phone || ''}
+                       onChange={(e) => onInputChange?.('phone', e.target.value)}
+                       placeholder="กรอกเบอร์โทรศัพท์ (เฉพาะตัวเลข)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.phone || '-'}
+                     </div>
+               )}
+             </div>
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">อีเมล</label>
+                   {isEditing ? (
+                     <input
+                       type="email"
+                       value={application.email || ''}
+                       onChange={(e) => onInputChange?.('email', e.target.value)}
+                       placeholder="กรอกอีเมล"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.email || '-'}
+                     </div>
+                   )}
+                 </div>
+              </div>
+            </div>
+             </div>
+             
+          {/* ๔. ข้อมูลผู้ติดต่อฉุกเฉิน */}
+          <div className="mb-8">
+            <h3 className="text-lg font-bold text-gray-800 mb-6 border-b-2 border-dotted border-gray-400 pb-2">
+              ๔. ข้อมูลผู้ติดต่อฉุกเฉิน
+            </h3>
+            
+            {/* ๔.๑ ข้อมูลผู้ติดต่อฉุกเฉิน */}
+            <div className="mb-6">
+              <h4 className="text-md font-semibold text-gray-700 mb-4 text-left">
+                ๔.๑ ข้อมูลผู้ติดต่อฉุกเฉิน
+              </h4>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">ชื่อ-นามสกุล</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.emergencyContact || ''}
+                       onChange={(e) => onInputChange?.('emergencyContact', e.target.value)}
+                       placeholder="กรอกชื่อ-นามสกุล (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.emergencyContact || '-'}
+                     </div>
+                   )}
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">เบอร์โทรศัพท์</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.emergencyPhone || ''}
+                       onChange={(e) => onInputChange?.('emergencyPhone', e.target.value)}
+                       placeholder="กรอกเบอร์โทรศัพท์ (เฉพาะตัวเลข)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.emergencyPhone || '-'}
+                     </div>
+                   )}
+                 </div>
+                 <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">ความสัมพันธ์</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.emergencyRelationship || ''}
+                       onChange={(e) => onInputChange?.('emergencyRelationship', e.target.value)}
+                       placeholder="กรอกความสัมพันธ์ (เฉพาะตัวอักษร)"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                     <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                       {application.emergencyRelationship || '-'}
+                     </div>
+                   )}
+                 </div>
+               </div>
+             </div>
+             
+            {/* ๔.๒ ที่อยู่ฉุกเฉิน */}
+            <div className="mb-6">
+              <h4 className="text-md font-semibold text-gray-700 mb-4 text-left">
+                ๔.๒ ที่อยู่ฉุกเฉิน
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">เลขที่</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyAddress?.houseNumber || ''}
+                      onChange={(e) => onInputChange?.('emergencyAddress.houseNumber', e.target.value)}
+                      placeholder="กรอกเลขที่"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyAddress?.houseNumber || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">หมู่ที่</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyAddress?.villageNumber || ''}
+                      onChange={(e) => onInputChange?.('emergencyAddress.villageNumber', e.target.value)}
+                      placeholder="กรอกหมู่ที่"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyAddress?.villageNumber || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ตรอก/ซอย</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyAddress?.alley || ''}
+                      onChange={(e) => onInputChange?.('emergencyAddress.alley', e.target.value)}
+                      placeholder="กรอกตรอก/ซอย"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyAddress?.alley || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ถนน</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyAddress?.road || ''}
+                      onChange={(e) => onInputChange?.('emergencyAddress.road', e.target.value)}
+                      placeholder="กรอกถนน"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyAddress?.road || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ตำบล/แขวง</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyAddress?.subDistrict || ''}
+                      onChange={(e) => onInputChange?.('emergencyAddress.subDistrict', e.target.value)}
+                      placeholder="กรอกตำบล/แขวง"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyAddress?.subDistrict || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">อำเภอ/เขต</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyAddress?.district || ''}
+                      onChange={(e) => onInputChange?.('emergencyAddress.district', e.target.value)}
+                      placeholder="กรอกอำเภอ/เขต"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyAddress?.district || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">จังหวัด</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyAddress?.province || ''}
+                      onChange={(e) => onInputChange?.('emergencyAddress.province', e.target.value)}
+                      placeholder="กรอกจังหวัด"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyAddress?.province || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">รหัสไปรษณีย์</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyAddress?.postalCode || ''}
+                      onChange={(e) => onInputChange?.('emergencyAddress.postalCode', e.target.value)}
+                      placeholder="กรอกรหัสไปรษณีย์"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyAddress?.postalCode || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">โทรศัพท์</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyAddress?.phone || ''}
+                      onChange={(e) => onInputChange?.('emergencyAddress.phone', e.target.value)}
+                      placeholder="กรอกโทรศัพท์"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyAddress?.phone || '-'}
+                    </div>
+                  )}
+                </div>
+              </div>
+             </div>
+             
+            {/* ๔.๓ ที่ทำงานฉุกเฉิน */}
+            <div className="mb-6">
+              <h4 className="text-md font-semibold text-gray-700 mb-4 text-left">
+                ๔.๓ ที่ทำงานฉุกเฉิน
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">ชื่อที่ทำงาน</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyWorkplace?.name || ''}
+                      onChange={(e) => onInputChange?.('emergencyWorkplace.name', e.target.value)}
+                      placeholder="กรอกชื่อที่ทำงาน"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyWorkplace?.name || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">อำเภอ/เขต</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyWorkplace?.district || ''}
+                      onChange={(e) => onInputChange?.('emergencyWorkplace.district', e.target.value)}
+                      placeholder="กรอกอำเภอ/เขต"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyWorkplace?.district || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">จังหวัด</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyWorkplace?.province || ''}
+                      onChange={(e) => onInputChange?.('emergencyWorkplace.province', e.target.value)}
+                      placeholder="กรอกจังหวัด"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyWorkplace?.province || '-'}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">โทรศัพท์</label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={application.emergencyWorkplace?.phone || ''}
+                      onChange={(e) => onInputChange?.('emergencyWorkplace.phone', e.target.value)}
+                      placeholder="กรอกโทรศัพท์"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                      {application.emergencyWorkplace?.phone || '-'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </CardBody>
       </Card>
 
+      {/* ข้อมูลคู่สมรส */}
+      {(application.spouseInfo?.firstName || application.spouseInfo?.lastName) && (
+        <Card className="shadow-xl border-0">
+          <CardHeader className="bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-pink-400/20 to-rose-400/20"></div>
+            <div className="relative flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <UserIcon className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-semibold">ข้อมูลคู่สมรส</h2>
+            </div>
+          </CardHeader>
+          <CardBody className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">ชื่อ</label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={application.spouseInfo?.firstName || ''}
+                    onChange={(e) => onInputChange?.('spouseInfo.firstName', e.target.value)}
+                    placeholder="กรอกชื่อคู่สมรส"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                ) : (
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                    {application.spouseInfo?.firstName || '-'}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">นามสกุล</label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={application.spouseInfo?.lastName || ''}
+                    onChange={(e) => onInputChange?.('spouseInfo.lastName', e.target.value)}
+                    placeholder="กรอกนามสกุลคู่สมรส"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                ) : (
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                    {application.spouseInfo?.lastName || '-'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* ข้อมูลสิทธิการรักษา */}
+      {(application.medicalRights?.hasUniversalHealthcare || application.medicalRights?.hasSocialSecurity || application.medicalRights?.hasCivilServantRights) && (
+        <Card className="shadow-xl border-0">
+          <CardHeader className="bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-600 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-teal-400/20 to-cyan-400/20"></div>
+            <div className="relative flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <DocumentTextIcon className="w-6 h-6" />
+             </div>
+              <h2 className="text-xl font-semibold">ข้อมูลสิทธิการรักษา</h2>
+           </div>
+          </CardHeader>
+          <CardBody className="p-8">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">สิทธิหลักประกันสุขภาพถ้วนหน้า</label>
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                    {application.medicalRights?.hasUniversalHealthcare ? 'มี' : 'ไม่มี'}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">โรงพยาบาลหลักประกันสุขภาพ</label>
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                    {application.medicalRights?.universalHealthcareHospital || '-'}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">สิทธิประกันสังคม</label>
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                    {application.medicalRights?.hasSocialSecurity ? 'มี' : 'ไม่มี'}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">โรงพยาบาลประกันสังคม</label>
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                    {application.medicalRights?.socialSecurityHospital || '-'}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">สิทธิข้าราชการ</label>
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                    {application.medicalRights?.hasCivilServantRights ? 'มี' : 'ไม่มี'}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">สิทธิอื่นๆ</label>
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                    {application.medicalRights?.otherRights || '-'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* ข้อมูลการทำงานในภาครัฐ */}
+      {application.previousGovernmentService && application.previousGovernmentService.length > 0 && (
+        <Card className="shadow-xl border-0">
+          <CardHeader className="bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-400/20 to-purple-400/20"></div>
+            <div className="relative flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <BriefcaseIcon className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-semibold">ข้อมูลการทำงานในภาครัฐ</h2>
+            </div>
+          </CardHeader>
+          <CardBody className="p-8">
+            <div className="space-y-6">
+              {application.previousGovernmentService.map((gov, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-gray-700 mb-4">การทำงานในภาครัฐ {index + 1}</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">ตำแหน่ง</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {gov.position || '-'}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">หน่วยงาน</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {gov.department || '-'}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">เหตุผลที่ออก</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {gov.reason || '-'}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">วันที่ออก</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {formatDate(gov.date || '') || '-'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* ข้อมูลนายจ้างหลายราย */}
+      {application.multipleEmployers && application.multipleEmployers.length > 0 && (
+        <Card className="shadow-xl border-0">
+          <CardHeader className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-amber-400/20 to-yellow-400/20"></div>
+            <div className="relative flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <BriefcaseIcon className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-semibold">ข้อมูลนายจ้างหลายราย</h2>
+            </div>
+          </CardHeader>
+          <CardBody className="p-8">
+            <div className="space-y-4">
+              {application.multipleEmployers.map((employer, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                    {employer || '-'}
+                  </div>
+                </div>
+              ))}
+           </div>
+        </CardBody>
+      </Card>
+      )}
+
       {/* ข้อมูลการศึกษา */}
+      {application.education && application.education.length > 0 && (
       <Card className="shadow-xl border-0">
         <CardHeader className="bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 text-white relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-green-400/20 to-emerald-400/20"></div>
@@ -682,469 +1451,749 @@ const ApplicationFormView = ({
           </div>
         </CardHeader>
         <CardBody className="p-8">
-          {application.education.length > 0 ? (
             <div className="space-y-6">
               {application.education.map((edu, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-6 bg-gradient-to-r from-green-50 to-emerald-50">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4">การศึกษา #{index + 1}</h3>
-                  
-                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">ระดับการศึกษา</p>
-                       {isEditing ? (
-                         <input
-                           type="text"
-                           value={editedApplication.education[index]?.level || ''}
-                           onChange={(e) => handleEducationChange(index, 'level', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{edu.level || '-'}</p>
-                       )}
+                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-gray-700 mb-4">ระดับการศึกษา {index + 1}</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">ระดับการศึกษา</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {edu.level || '-'}
                      </div>
-                     
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">สถาบันการศึกษา</p>
-                       {isEditing ? (
-                         <input
-                           type="text"
-                           value={editedApplication.education[index]?.institution || editedApplication.education[index]?.school || ''}
-                           onChange={(e) => handleEducationChange(index, 'institution', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{edu.institution || edu.school || '-'}</p>
-                       )}
                      </div>
-                     
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">สาขาวิชา</p>
-                       {isEditing ? (
-                         <input
-                           type="text"
-                           value={editedApplication.education[index]?.major || ''}
-                           onChange={(e) => handleEducationChange(index, 'major', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{edu.major || '-'}</p>
-                       )}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">สถาบัน</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {edu.institution || edu.school || '-'}
                      </div>
-                     
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">ปีที่จบ</p>
-                       {isEditing ? (
-                         <input
-                           type="text"
-                           value={editedApplication.education[index]?.year || editedApplication.education[index]?.graduationYear || ''}
-                           onChange={(e) => handleEducationChange(index, 'year', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{edu.year || edu.graduationYear || '-'}</p>
-                       )}
                      </div>
-                     
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">เกรดเฉลี่ย</p>
-                       {isEditing ? (
-                         <input
-                           type="text"
-                           value={editedApplication.education[index]?.gpa || ''}
-                           onChange={(e) => handleEducationChange(index, 'gpa', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{edu.gpa || '-'}</p>
-                       )}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">สาขาวิชา</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {edu.major || '-'}
                      </div>
                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">ปีที่จบ</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {edu.year || edu.graduationYear || '-'}
+                </div>
+            </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">เกรดเฉลี่ย</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {edu.gpa || '-'}
+            </div>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-8">
-              <AcademicCapIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">ไม่มีข้อมูลการศึกษา</p>
-            </div>
-          )}
         </CardBody>
       </Card>
+      )}
 
-      {/* ข้อมูลประสบการณ์การทำงาน */}
+      {/* ข้อมูลประสบการณ์ทำงาน */}
+      {application.workExperience && application.workExperience.length > 0 && (
+      <Card className="shadow-xl border-0">
+          <CardHeader className="bg-gradient-to-r from-purple-500 via-violet-500 to-purple-600 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 to-violet-400/20"></div>
+          <div className="relative flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+              <BriefcaseIcon className="w-6 h-6" />
+            </div>
+              <h2 className="text-xl font-semibold">ข้อมูลประสบการณ์ทำงาน</h2>
+          </div>
+        </CardHeader>
+        <CardBody className="p-8">
+            <div className="space-y-6">
+              {application.workExperience.map((work, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="text-md font-semibold text-gray-700 mb-4">ประสบการณ์ทำงาน {index + 1}</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">ตำแหน่ง</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {work.position || '-'}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">บริษัท</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {work.company || '-'}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">วันที่เริ่มงาน</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {formatDate(work.startDate || '') || '-'}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">วันที่สิ้นสุด</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {formatDate(work.endDate || '') || '-'}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">เงินเดือน</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {work.salary || '-'}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">เหตุผลที่ออก</label>
+                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                        {work.reason || '-'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* ข้อมูลการสมัครงาน */}
       <Card className="shadow-xl border-0">
         <CardHeader className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-orange-400/20 to-amber-400/20"></div>
           <div className="relative flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-              <BriefcaseIcon className="w-6 h-6" />
+              <DocumentTextIcon className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-semibold">ข้อมูลประสบการณ์การทำงาน</h2>
+            <h2 className="text-xl font-semibold">ข้อมูลการสมัครงาน</h2>
           </div>
         </CardHeader>
         <CardBody className="p-8">
-          {application.workExperience.length > 0 ? (
-            <div className="space-y-6">
-              {application.workExperience.map((work, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-6 bg-gradient-to-r from-orange-50 to-amber-50">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4">ประสบการณ์การทำงาน #{index + 1}</h3>
-                  
-                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">ตำแหน่ง</p>
-                       {isEditing ? (
-                         <input
-                           type="text"
-                           value={editedApplication.workExperience[index]?.position || ''}
-                           onChange={(e) => handleWorkExperienceChange(index, 'position', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{work.position}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             <div className="space-y-2">
+               <label className="text-sm font-medium text-gray-700">ตำแหน่งที่สมัคร</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.appliedPosition || ''}
+                       onChange={(e) => onInputChange?.('appliedPosition', e.target.value)}
+                       placeholder="กรอกตำแหน่งที่สมัคร"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                 <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                   {application.appliedPosition || '-'}
+                 </div>
                        )}
+                     </div>
+             <div className="space-y-2">
+               <label className="text-sm font-medium text-gray-700">เงินเดือนที่คาดหวัง</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.expectedSalary || ''}
+                       onChange={(e) => onInputChange?.('expectedSalary', e.target.value)}
+                       placeholder="กรอกเงินเดือนที่คาดหวัง"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                 <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                   {application.expectedSalary || '-'}
+                     </div>
+               )}
+             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">วันที่พร้อมเริ่มงาน</label>
+              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                {formatDate(application.availableDate || '') || '-'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">แผนก</label>
+              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                {application.department || '-'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">หน่วยงาน</label>
+              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                {application.unit || '-'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">ทำงานปัจจุบัน</label>
+              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                {application.currentWork ? 'ใช่' : 'ไม่'}
+              </div>
+            </div>
                      </div>
                      
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">บริษัท</p>
-                       {isEditing ? (
-                         <input
-                           type="text"
-                           value={editedApplication.workExperience[index]?.company || ''}
-                           onChange={(e) => handleWorkExperienceChange(index, 'company', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{work.company}</p>
-                       )}
+          {/* ทักษะและความสามารถ */}
+          <div className="mt-8 space-y-4">
+            <h4 className="text-md font-semibold text-gray-700">ทักษะและความสามารถ</h4>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">ทักษะ</label>
+                   {isEditing ? (
+                     <textarea
+                       value={application.skills || ''}
+                       onChange={(e) => onInputChange?.('skills', e.target.value)}
+                       placeholder="กรุณากรอกความรู้ ความสามารถ และทักษะพิเศษของท่าน"
+                       rows={3}
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                     />
+                   ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {application.skills || '-'}
+                   </div>
+                 )}
+               </div>
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">ภาษา</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.languages || ''}
+                       onChange={(e) => onInputChange?.('languages', e.target.value)}
+                       placeholder="กรอกภาษาที่ใช้ได้"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {application.languages || '-'}
+                   </div>
+                 )}
+               </div>
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">ทักษะคอมพิวเตอร์</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.computerSkills || ''}
+                       onChange={(e) => onInputChange?.('computerSkills', e.target.value)}
+                       placeholder="กรอกทักษะคอมพิวเตอร์"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {application.computerSkills || '-'}
+                   </div>
+                 )}
+               </div>
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">ใบรับรอง</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.certificates || ''}
+                       onChange={(e) => onInputChange?.('certificates', e.target.value)}
+                       placeholder="กรอกใบรับรอง"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {application.certificates || '-'}
+                   </div>
+                 )}
+               </div>
+             </div>
                      </div>
                      
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">วันที่เริ่มงาน</p>
-                       {isEditing ? (
-                         <input
-                           type="date"
-                           value={editedApplication.workExperience[index]?.startDate || ''}
-                           onChange={(e) => handleWorkExperienceChange(index, 'startDate', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{work.startDate}</p>
-                       )}
-                     </div>
-                     
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">วันที่สิ้นสุด</p>
-                       {isEditing ? (
-                         <input
-                           type="date"
-                           value={editedApplication.workExperience[index]?.endDate || ''}
-                           onChange={(e) => handleWorkExperienceChange(index, 'endDate', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{work.endDate}</p>
-                       )}
-                     </div>
-                     
-                     <div>
-                       <p className="text-sm font-medium text-gray-600 mb-1">เงินเดือน</p>
-                       {isEditing ? (
-                         <input
-                           type="text"
-                           value={editedApplication.workExperience[index]?.salary || ''}
-                           onChange={(e) => handleWorkExperienceChange(index, 'salary', e.target.value)}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{work.salary || '-'}</p>
-                       )}
-                     </div>
+          {/* ข้อมูลผู้แนะนำ */}
+          <div className="mt-8 space-y-4">
+            <h4 className="text-md font-semibold text-gray-700">ข้อมูลผู้แนะนำ</h4>
+             <div className="space-y-2">
+               <label className="text-sm font-medium text-gray-700">ผู้แนะนำ</label>
+                   {isEditing ? (
+                     <textarea
+                       value={application.references || ''}
+                       onChange={(e) => onInputChange?.('references', e.target.value)}
+                       placeholder="กรุณากรอกข้อมูลผู้แนะนำ"
+                       rows={3}
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                     />
+                   ) : (
+                 <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                   {application.references || '-'}
+                 </div>
+               )}
+             </div>
                    </div>
                   
-                                     {(work.description || work.reason) && (
-                     <div className="mt-4">
-                       <p className="text-sm font-medium text-gray-600 mb-1">รายละเอียดงาน</p>
-                       {isEditing ? (
-                         <textarea
-                           value={editedApplication.workExperience[index]?.description || editedApplication.workExperience[index]?.reason || ''}
-                           onChange={(e) => handleWorkExperienceChange(index, 'description', e.target.value)}
-                           rows={3}
-                           className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                         />
-                       ) : (
-                         <p className="text-gray-800">{work.description || work.reason}</p>
-                       )}
-                     </div>
-                   )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <BriefcaseIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">ไม่มีข้อมูลประสบการณ์การทำงาน</p>
-            </div>
-          )}
+          {/* ข้อมูลการสมัคร */}
+          <div className="mt-8 space-y-4">
+            <h4 className="text-md font-semibold text-gray-700">ข้อมูลการสมัคร</h4>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">วันที่สมัคร</label>
+                 {isEditing ? (
+                   <input
+                     type="date"
+                     value={application.applicationDate || ''}
+                     onChange={(e) => onInputChange?.('applicationDate', e.target.value)}
+                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   />
+                 ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {formatDate(application.applicationDate || '') || '-'}
+                   </div>
+                 )}
+               </div>
+               <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">ลายมือชื่อผู้สมัคร</label>
+                   {isEditing ? (
+                     <input
+                       type="text"
+                       value={application.applicantSignature || ''}
+                       onChange={(e) => onInputChange?.('applicantSignature', e.target.value)}
+                       placeholder="กรอกลายมือชื่อผู้สมัคร"
+                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     />
+                   ) : (
+                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                     {application.applicantSignature || '-'}
+                   </div>
+                 )}
+               </div>
+             </div>
+          </div>
         </CardBody>
       </Card>
 
-      {/* เอกสารแนบ */}
+      {/* ข้อมูลแนบเอกสาร */}
       <Card className="shadow-xl border-0">
-        <CardHeader className="bg-gradient-to-r from-indigo-500 via-blue-500 to-indigo-600 text-white relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-indigo-400/20 to-blue-400/20"></div>
+        <CardHeader className="bg-gradient-to-r from-gray-500 via-slate-500 to-gray-600 text-white relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-gray-400/20 to-slate-400/20"></div>
           <div className="relative flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
               <DocumentTextIcon className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-semibold">เอกสารแนบ</h2>
+            <h2 className="text-xl font-semibold">ข้อมูลแนบเอกสาร</h2>
           </div>
         </CardHeader>
         <CardBody className="p-8">
-          {/* ส่วนอัพโหลดเอกสารใหม่ */}
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h3 className="text-lg font-semibold text-blue-800 mb-3">อัพโหลดเอกสารใหม่</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* ๔. เอกสารแนบ */}
+          <div className="mb-6">
+            <h3 className="text-lg font-bold text-gray-800 mb-6 border-b-2 border-dotted border-gray-400 pb-2">
+              ๔. เอกสารแนบ
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* สำเนาบัตรประชาชน */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-r from-red-50 to-pink-50">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-gray-800">สำเนาบัตรประชาชน</h4>
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">จำเป็น</span>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <div className="mb-2">
+                  <span className="inline-block px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
+                    จำเป็น
+                  </span>
                 </div>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                  id="upload-idCard"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileUpload('idCard', file);
-                  }}
-                />
+                <h4 className="font-semibold text-gray-700 mb-2">สำเนาบัตรประชาชน</h4>
+                <p className="text-sm text-gray-500 mb-3">สำเนาบัตรประชาชน</p>
+                <div className="space-y-2">
+                  {application.documents?.idCard ? (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <DocumentTextIcon className="w-5 h-5 text-green-600" />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-green-700 font-medium">
+                              {application.documents.idCard.split('/').pop() || 'บัตรประชาชน'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          ✓ อัปโหลดแล้ว
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
                 <Button
-                  color="primary"
-                  variant="ghost"
+                          color="secondary"
+                          variant="bordered"
                   size="sm"
-                  isLoading={uploadingDocument === 'idCard'}
-                  onClick={() => document.getElementById('upload-idCard')?.click()}
-                  className="w-full"
+                          className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => window.open(application.documents?.idCard, '_blank')}
                 >
-                  {uploadingDocument === 'idCard' ? 'กำลังอัพโหลด...' : 'อัพโหลดไฟล์'}
+                          ดูตัวอย่าง
                 </Button>
-                {uploadingDocument === 'idCard' && (
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
+                        <Button
+                          color="danger"
+                          variant="bordered"
+                          size="sm"
+                          className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => {
+                            if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
+                              // TODO: เพิ่มฟังก์ชันลบไฟล์
+                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                            }
+                          }}
+                        >
+                          ลบ
+                        </Button>
                     </div>
-                    <p className="text-xs text-gray-600 mt-1">{uploadProgress}%</p>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
                   </div>
                 )}
+                </div>
               </div>
 
               {/* สำเนาทะเบียนบ้าน */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-r from-blue-50 to-indigo-50">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-gray-800">สำเนาทะเบียนบ้าน</h4>
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">จำเป็น</span>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <div className="mb-2">
+                  <span className="inline-block px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
+                    จำเป็น
+                  </span>
                 </div>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                  id="upload-houseRegistration"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileUpload('houseRegistration', file);
-                  }}
-                />
+                <h4 className="font-semibold text-gray-700 mb-2">สำเนาทะเบียนบ้าน</h4>
+                <p className="text-sm text-gray-500 mb-3">สำเนาทะเบียนบ้าน</p>
+                <div className="space-y-2">
+                  {application.documents?.houseRegistration ? (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <DocumentTextIcon className="w-5 h-5 text-green-600" />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-green-700 font-medium">
+                              {application.documents.houseRegistration.split('/').pop() || 'ทะเบียนบ้าน'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          ✓ อัปโหลดแล้ว
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
                 <Button
-                  color="primary"
-                  variant="ghost"
+                          color="secondary"
+                          variant="bordered"
                   size="sm"
-                  isLoading={uploadingDocument === 'houseRegistration'}
-                  onClick={() => document.getElementById('upload-houseRegistration')?.click()}
-                  className="w-full"
+                          className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => window.open(application.documents?.houseRegistration, '_blank')}
                 >
-                  {uploadingDocument === 'houseRegistration' ? 'กำลังอัพโหลด...' : 'อัพโหลดไฟล์'}
+                          ดูตัวอย่าง
                 </Button>
-                {uploadingDocument === 'houseRegistration' && (
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
+                        <Button
+                          color="danger"
+                          variant="bordered"
+                          size="sm"
+                          className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => {
+                            if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
+                              // TODO: เพิ่มฟังก์ชันลบไฟล์
+                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                            }
+                          }}
+                        >
+                          ลบ
+                        </Button>
                     </div>
-                    <p className="text-xs text-gray-600 mt-1">{uploadProgress}%</p>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
                   </div>
                 )}
+                </div>
               </div>
 
-              {/* สำเนาหลักฐานการศึกษา */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-r from-purple-50 to-pink-50">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-gray-800">สำเนาหลักฐานการศึกษา</h4>
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">จำเป็น</span>
+              {/* ใบรับรองการศึกษา */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <div className="mb-2">
+                  <span className="inline-block px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                    จำเป็น
+                  </span>
                 </div>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                  id="upload-educationCertificate"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileUpload('educationCertificate', file);
-                  }}
-                />
-                <Button
-                  color="primary"
-                  variant="ghost"
-                  size="sm"
-                  isLoading={uploadingDocument === 'educationCertificate'}
-                  onClick={() => document.getElementById('upload-educationCertificate')?.click()}
-                  className="w-full"
-                >
-                  {uploadingDocument === 'educationCertificate' ? 'กำลังอัพโหลด...' : 'อัพโหลดไฟล์'}
-                </Button>
-                {uploadingDocument === 'educationCertificate' && (
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
+                <h4 className="font-semibold text-gray-700 mb-2">ใบรับรองการศึกษา</h4>
+                <p className="text-sm text-gray-500 mb-3">ใบรับรองการศึกษา</p>
+                <div className="space-y-2">
+                  {application.documents?.educationCertificate ? (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <DocumentTextIcon className="w-5 h-5 text-green-600" />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-green-700 font-medium">
+                              {application.documents.educationCertificate.split('/').pop() || 'ใบรับรองการศึกษา'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          ✓ อัปโหลดแล้ว
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          color="secondary"
+                          variant="bordered"
+                          size="sm"
+                          className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => window.open(application.documents?.educationCertificate, '_blank')}
+                        >
+                          ดูตัวอย่าง
+                        </Button>
+                        <Button
+                          color="danger"
+                          variant="bordered"
+                          size="sm"
+                          className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => {
+                            if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
+                              // TODO: เพิ่มฟังก์ชันลบไฟล์
+                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                            }
+                          }}
+                        >
+                          ลบ
+                        </Button>
+                      </div>
                     </div>
-                    <p className="text-xs text-gray-600 mt-1">{uploadProgress}%</p>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ใบรับรองการเกณฑ์ทหาร */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <div className="mb-2">
+                  <span className="inline-block px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                    ตามความเหมาะสม
+                  </span>
+                </div>
+                <h4 className="font-semibold text-gray-700 mb-2">ใบรับรองการเกณฑ์ทหาร</h4>
+                <p className="text-sm text-gray-500 mb-3">ใบรับรองการเกณฑ์ทหาร</p>
+                <div className="space-y-2">
+                  {application.documents?.militaryCertificate ? (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <DocumentTextIcon className="w-5 h-5 text-green-600" />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-green-700 font-medium">
+                              {application.documents.militaryCertificate.split('/').pop() || 'ใบรับรองการเกณฑ์ทหาร'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          ✓ อัปโหลดแล้ว
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                <Button
+                          color="secondary"
+                          variant="bordered"
+                  size="sm"
+                          className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => window.open(application.documents?.militaryCertificate, '_blank')}
+                >
+                          ดูตัวอย่าง
+                </Button>
+                        <Button
+                          color="danger"
+                          variant="bordered"
+                          size="sm"
+                          className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => {
+                            if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
+                              // TODO: เพิ่มฟังก์ชันลบไฟล์
+                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                            }
+                          }}
+                        >
+                          ลบ
+                        </Button>
+                    </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
                   </div>
                 )}
+                </div>
               </div>
 
               {/* ใบรับรองแพทย์ */}
-              <div className="border border-gray-200 rounded-lg p-4 bg-gradient-to-r from-yellow-50 to-orange-50">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-gray-800">ใบรับรองแพทย์</h4>
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">จำเป็น</span>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <div className="mb-2">
+                  <span className="inline-block px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                    ตามความเหมาะสม
+                  </span>
                 </div>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                  id="upload-medicalCertificate"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileUpload('medicalCertificate', file);
-                  }}
-                />
+                <h4 className="font-semibold text-gray-700 mb-2">ใบรับรองแพทย์</h4>
+                <p className="text-sm text-gray-500 mb-3">ใบรับรองแพทย์</p>
+                <div className="space-y-2">
+                  {application.documents?.medicalCertificate ? (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <DocumentTextIcon className="w-5 h-5 text-green-600" />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-green-700 font-medium">
+                              {application.documents.medicalCertificate.split('/').pop() || 'ใบรับรองแพทย์'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          ✓ อัปโหลดแล้ว
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
                 <Button
-                  color="primary"
-                  variant="ghost"
+                          color="secondary"
+                          variant="bordered"
                   size="sm"
-                  isLoading={uploadingDocument === 'medicalCertificate'}
-                  onClick={() => document.getElementById('upload-medicalCertificate')?.click()}
-                  className="w-full"
+                          className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => window.open(application.documents?.medicalCertificate, '_blank')}
                 >
-                  {uploadingDocument === 'medicalCertificate' ? 'กำลังอัพโหลด...' : 'อัพโหลดไฟล์'}
+                          ดูตัวอย่าง
                 </Button>
-                {uploadingDocument === 'medicalCertificate' && (
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
+                        <Button
+                          color="danger"
+                          variant="bordered"
+                          size="sm"
+                          className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => {
+                            if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
+                              // TODO: เพิ่มฟังก์ชันลบไฟล์
+                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                            }
+                          }}
+                        >
+                          ลบ
+                        </Button>
                     </div>
-                    <p className="text-xs text-gray-600 mt-1">{uploadProgress}%</p>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
                   </div>
                 )}
-              </div>
             </div>
           </div>
 
-          {/* แสดงเอกสารที่มีอยู่ */}
-          {application.documents && Object.keys(application.documents).length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">เอกสารที่มีอยู่</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.entries(application.documents).map(([docType, fileName]) => (
-                  <div key={docType} className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                    <div className="flex items-center gap-3">
-                      <DocumentIcon className="w-5 h-5 text-blue-600" />
-                      <span className="text-sm font-medium text-gray-700">{getDocumentDisplayName(docType)}</span>
+              {/* ใบขับขี่ */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <div className="mb-2">
+                  <span className="inline-block px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                    ตามความเหมาะสม
+                  </span>
+                </div>
+                <h4 className="font-semibold text-gray-700 mb-2">ใบขับขี่</h4>
+                <p className="text-sm text-gray-500 mb-3">ใบขับขี่</p>
+                <div className="space-y-2">
+                  {application.documents?.drivingLicense ? (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <DocumentTextIcon className="w-5 h-5 text-green-600" />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-green-700 font-medium">
+                              {application.documents.drivingLicense.split('/').pop() || 'ใบขับขี่'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          ✓ อัปโหลดแล้ว
+                        </span>
                     </div>
                     <div className="flex gap-2">
                       <Button 
+                          color="secondary"
+                          variant="bordered"
                         size="sm" 
-                        variant="ghost" 
-                        color="primary" 
-                        startContent={<EyeIcon className="w-4 h-4" />}
-                        onClick={() => handlePreviewDocument(fileName, getDocumentDisplayName(docType))}
-                      >
-                        ดูไฟล์
+                          className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => window.open(application.documents?.drivingLicense, '_blank')}
+                        >
+                          ดูตัวอย่าง
                       </Button>
                       <Button 
+                          color="danger"
+                          variant="bordered"
                         size="sm" 
-                        variant="ghost" 
-                        color="primary" 
-                        startContent={<ArrowDownTrayIcon className="w-4 h-4" />} 
-                        onClick={() => handleDownloadDocument(fileName, `${getDocumentDisplayName(docType)}.pdf`)}
-                      >
-                        ดาวน์โหลด
+                          className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => {
+                            if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
+                              // TODO: เพิ่มฟังก์ชันลบไฟล์
+                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                            }
+                          }}
+                        >
+                          ลบ
                       </Button>
                     </div>
                   </div>
-                ))}
-              </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
             </div>
           )}
-        </CardBody>
-      </Card>
+                </div>
+              </div>
 
-      {/* Modal สำหรับ Preview เอกสาร */}
-      <Modal 
-        isOpen={isPreviewOpen} 
-        onClose={onPreviewClose} 
-        size="5xl"
-        scrollBehavior="inside"
-        classNames={{
-          base: "max-h-[90vh] bg-white",
-          body: "overflow-y-auto max-h-[calc(90vh-120px)] bg-white",
-          header: "bg-white",
-          footer: "bg-white"
-        }}
-      >
-        <ModalContent className="bg-white">
-          <ModalHeader className="flex flex-col gap-1 sticky top-0 bg-white z-10">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">ดูเอกสาร: {previewDocument?.name}</h3>
+              {/* ใบเปลี่ยนชื่อ */}
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <div className="mb-2">
+                  <span className="inline-block px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                    ตามความเหมาะสม
+                  </span>
+                </div>
+                <h4 className="font-semibold text-gray-700 mb-2">ใบเปลี่ยนชื่อ</h4>
+                <p className="text-sm text-gray-500 mb-3">ใบเปลี่ยนชื่อ</p>
+                <div className="space-y-2">
+                  {application.documents?.nameChangeCertificate ? (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <DocumentTextIcon className="w-5 h-5 text-green-600" />
+                          <div className="flex flex-col">
+                            <span className="text-sm text-green-700 font-medium">
+                              {application.documents.nameChangeCertificate.split('/').pop() || 'ใบเปลี่ยนชื่อ'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                          ✓ อัปโหลดแล้ว
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          color="secondary"
+                          variant="bordered"
+                          size="sm"
+                          className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => window.open(application.documents?.nameChangeCertificate, '_blank')}
+                        >
+                          ดูตัวอย่าง
+                        </Button>
               <Button
-                isIconOnly
-                variant="light"
-                onClick={onPreviewClose}
-              >
-                <XMarkIcon className="w-5 h-5" />
+                          color="danger"
+                          variant="bordered"
+                          size="sm"
+                          className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
+                          onClick={() => {
+                            if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
+                              // TODO: เพิ่มฟังก์ชันลบไฟล์
+                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                            }
+                          }}
+                        >
+                          ลบ
               </Button>
             </div>
-          </ModalHeader>
-          <ModalBody className="overflow-y-auto bg-white">
-            {previewDocument && (
-              <div className="w-full h-[70vh]">
-                <iframe
-                  src={previewDocument.url}
-                  className="w-full h-full border-0 rounded-lg"
-                  title={previewDocument.name}
-                />
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
               </div>
             )}
-          </ModalBody>
-          <ModalFooter className="bg-white">
-            <Button color="primary" onClick={onPreviewClose}>
-              ปิด
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
     </div>
   );
 };
@@ -1153,832 +2202,465 @@ export default function ApplicationData() {
   const [applications, setApplications] = useState<ApplicationData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingApplication, setEditingApplication] = useState<ApplicationData | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const searchParams = useSearchParams();
   const departmentName = searchParams.get('department');
-  const [selectedApplication, setSelectedApplication] = useState<ApplicationData | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const { isOpen, onOpen, onClose } = useDisclosure();
   
-  // Profile image preview state
-  const [previewProfileImage, setPreviewProfileImage] = useState<{url: string, name: string} | null>(null);
+  // Modal states
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [selectedApplication, setSelectedApplication] = useState<ApplicationData | null>(null);
 
-  // Delete confirmation state
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, application: ApplicationData | null}>({
-    isOpen: false,
-    application: null
-  });
-
-  // เพิ่ม state สำหรับการดูเอกสารแนบ
-  const [documentsView, setDocumentsView] = useState<{isOpen: boolean, application: ApplicationData | null}>({
-    isOpen: false,
-    application: null
-  });
-
-  // เพิ่ม state สำหรับ preview เอกสาร
-  const [previewDocument, setPreviewDocument] = useState<{url: string, name: string} | null>(null);
-  const { isOpen: isPreviewOpen, onOpen: onPreviewOpen, onClose: onPreviewClose } = useDisclosure();
-
-  // เพิ่ม state สำหรับการจัดการรูปภาพ
-  const [imageLoadStatus, setImageLoadStatus] = useState<{[key: string]: boolean}>({});
-  const [imageErrorStatus, setImageErrorStatus] = useState<{[key: string]: boolean}>({});
-
-  // ฟังก์ชันสำหรับจัดการการโหลดรูปภาพ
-  const handleImageLoad = (imageKey: string) => {
-    setImageLoadStatus(prev => ({ ...prev, [imageKey]: true }));
-    setImageErrorStatus(prev => ({ ...prev, [imageKey]: false }));
-    console.log(`✅ Image loaded successfully: ${imageKey}`);
-  };
-
-  // ฟังก์ชันสำหรับจัดการข้อผิดพลาดของรูปภาพ
-  const handleImageError = (imageKey: string) => {
-    setImageLoadStatus(prev => ({ ...prev, [imageKey]: false }));
-    setImageErrorStatus(prev => ({ ...prev, [imageKey]: true }));
-    console.error(`❌ Image failed to load: ${imageKey}`);
-  };
-
-  // ฟังก์ชันสำหรับบังคับแสดงรูปภาพ
-  const forceShowImages = () => {
-    applications.forEach(app => {
-      if (app.profileImage) {
-        // Force show image in card
-        const cardImg = document.querySelector(`[data-image-id="card-${app.id}"]`) as HTMLImageElement;
-        if (cardImg) {
-          cardImg.style.display = 'block';
-          cardImg.style.visibility = 'visible';
-          cardImg.style.opacity = '1';
-        }
+  // ฟังก์ชันสำหรับดึงข้อมูลใบสมัครงาน
+  const fetchApplications = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/resume-deposit');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch applications');
+      }
+      
+      const responseData = await response.json();
+      
+      // ตรวจสอบว่า API ส่งข้อมูลสำเร็จหรือไม่
+      if (!responseData.success) {
+        throw new Error(responseData.message || 'Failed to fetch applications');
+      }
+      
+      const data = responseData.data || [];
+      
+      // แปลงข้อมูลจาก ResumeDeposit เป็น ApplicationData
+      const applicationsData: ApplicationData[] = data.map((app: any) => ({
+          id: app.id,
+          firstName: app.firstName || '',
+          lastName: app.lastName || '',
+        appliedPosition: app.expectedPosition || 'ไม่ระบุ',
+          email: app.email || '',
+          phone: app.phone || '',
+        currentAddress: app.address || '',
+          birthDate: app.birthDate || '',
+        gender: app.gender === 'MALE' ? 'ชาย' : app.gender === 'FEMALE' ? 'หญิง' : app.gender || '',
+        education: (app.education || []).map((edu: any) => ({
+          level: edu.level || '',
+          institution: edu.school || '',
+          school: edu.school || '',
+          major: edu.major || '',
+          year: edu.endYear || '',
+          graduationYear: edu.endYear || '',
+          gpa: edu.gpa?.toString() || ''
+        })),
+        workExperience: (app.workExperience || []).map((work: any) => ({
+          position: work.position || '',
+          company: work.company || '',
+          startDate: work.startDate || '',
+          endDate: work.endDate || '',
+          salary: work.salary || '',
+          reason: work.description || ''
+        })),
+        profileImage: app.profileImageUrl ? `/api/image?file=${encodeURIComponent(app.profileImageUrl)}` : '',
+        documents: (app.documents || []).reduce((acc: any, doc: any) => {
+          acc[doc.documentType] = doc.filePath;
+          return acc;
+        }, {}),
+        // ข้อมูลเพิ่มเติม
+        prefix: app.prefix || '',
+        age: app.age?.toString() || '',
+        race: app.race || '',
+        placeOfBirth: app.placeOfBirth || '',
+        placeOfBirthProvince: app.placeOfBirthProvince || '',
+        nationality: app.nationality || '',
+        religion: app.religion || '',
+        maritalStatus: app.maritalStatus === 'SINGLE' ? 'โสด' : 
+                      app.maritalStatus === 'MARRIED' ? 'สมรส' : 
+                      app.maritalStatus === 'DIVORCED' ? 'หย่า' : 
+                      app.maritalStatus === 'WIDOWED' ? 'หม้าย' : app.maritalStatus || '',
+        idNumber: app.idNumber || '',
+        idCardIssuedAt: app.idCardIssuedAt || '',
+        idCardIssueDate: app.idCardIssueDate || '',
+        idCardExpiryDate: app.idCardExpiryDate || '',
+        emergencyContact: app.emergencyContact || '',
+        emergencyPhone: app.emergencyPhone || '',
+        emergencyRelationship: app.emergencyRelationship || '',
+        // ข้อมูลที่อยู่
+        registeredAddress: {
+          houseNumber: app.house_registration_house_number || '',
+          villageNumber: app.house_registration_village_number || '',
+          alley: app.house_registration_alley || '',
+          road: app.house_registration_road || '',
+          subDistrict: app.house_registration_sub_district || '',
+          district: app.house_registration_district || '',
+          province: app.house_registration_province || '',
+          postalCode: app.house_registration_postal_code || '',
+          phone: app.house_registration_phone || '',
+          mobile: app.house_registration_mobile || ''
+        },
+        currentAddressDetail: {
+          houseNumber: app.current_address_house_number || '',
+          villageNumber: app.current_address_village_number || '',
+          alley: app.current_address_alley || '',
+          road: app.current_address_road || '',
+          subDistrict: app.current_address_sub_district || '',
+          district: app.current_address_district || '',
+          province: app.current_address_province || '',
+          postalCode: app.current_address_postal_code || '',
+          homePhone: app.current_address_phone || '',
+          mobilePhone: app.current_address_mobile || ''
+        },
+        emergencyAddress: {
+          houseNumber: app.emergency_address_house_number || '',
+          villageNumber: app.emergency_address_village_number || '',
+          alley: app.emergency_address_alley || '',
+          road: app.emergency_address_road || '',
+          subDistrict: app.emergency_address_sub_district || '',
+          district: app.emergency_address_district || '',
+          province: app.emergency_address_province || '',
+          postalCode: app.emergency_address_postal_code || '',
+          phone: app.emergency_address_phone || ''
+        },
+        emergencyWorkplace: {
+          name: app.emergency_workplace_name || '',
+          district: app.emergency_workplace_district || '',
+          province: app.emergency_workplace_province || '',
+          phone: app.emergency_workplace_phone || ''
+        },
+        // ข้อมูลคู่สมรส
+        spouseInfo: {
+          firstName: app.spouse_first_name || '',
+          lastName: app.spouse_last_name || ''
+        },
+        // ข้อมูลสิทธิการรักษา
+        medicalRights: {
+          hasUniversalHealthcare: app.medical_rights_has_universal_healthcare || false,
+          universalHealthcareHospital: app.medical_rights_universal_healthcare_hospital || '',
+          hasSocialSecurity: app.medical_rights_has_social_security || false,
+          socialSecurityHospital: app.medical_rights_social_security_hospital || '',
+          dontWantToChangeHospital: app.medical_rights_dont_want_to_change_hospital || false,
+          wantToChangeHospital: app.medical_rights_want_to_change_hospital || false,
+          newHospital: app.medical_rights_new_hospital || '',
+          hasCivilServantRights: app.medical_rights_has_civil_servant_rights || false,
+          otherRights: app.medical_rights_other_rights || ''
+        },
+        expectedSalary: app.expectedSalary || '',
+        availableDate: app.availableDate || '',
+        currentWork: false, // ไม่มีข้อมูลใน API
+        department: app.department || '',
+        unit: app.unit || '',
+        skills: app.skills || '',
+        languages: app.languages || '',
+        computerSkills: app.computerSkills || '',
+        certificates: app.certificates || '',
+        references: app.references || '',
+        applicantSignature: app.applicantSignature || '',
+        applicationDate: app.applicationDate || '',
+        // ข้อมูลการทำงานในภาครัฐ
+        previousGovernmentService: (app.previousGovernmentService || []).map((gov: any) => ({
+          position: gov.position || '',
+          department: gov.department || '',
+          reason: gov.reason || '',
+          date: gov.date || ''
+        })),
+        // ข้อมูลนายจ้างหลายราย
+        multipleEmployers: app.multiple_employers ? JSON.parse(app.multiple_employers) : [],
+        status: app.status?.toLowerCase() || 'pending',
+        createdAt: app.createdAt || new Date().toISOString()
+      }));
         
-        // Hide fallback avatar
-        const fallback = document.querySelector(`[data-fallback-id="card-${app.id}"]`) as HTMLElement;
-        if (fallback) {
-          fallback.style.display = 'none';
+        setApplications(applicationsData);
+    } catch (err) {
+      console.error('Error fetching applications:', err);
+      setError('เกิดข้อผิดพลาดในการดึงข้อมูล');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ฟังก์ชันสำหรับเปิด modal ดูรายละเอียด
+  const handleViewDetails = (application: ApplicationData) => {
+    setSelectedApplication(application);
+    onOpen();
+  };
+
+  // ฟังก์ชันสำหรับปิด modal
+  const handleCloseDetails = () => {
+    setSelectedApplication(null);
+    setEditingApplication(null);
+    setIsEditing(false);
+    onClose();
+  };
+
+  // ฟังก์ชันเริ่มแก้ไขข้อมูล
+  const handleEditApplication = (application: ApplicationData) => {
+    setEditingApplication({ ...application });
+    setIsEditing(true);
+  };
+
+  // ฟังก์ชันยกเลิกการแก้ไข
+  const handleCancelEdit = () => {
+    setEditingApplication(null);
+    setIsEditing(false);
+  };
+
+  // ฟังก์ชันบันทึกข้อมูล
+  const handleSaveApplication = async () => {
+    if (!editingApplication) return;
+
+    try {
+      setIsSaving(true);
+      
+      const response = await fetch(`/api/resume-deposit/${editingApplication.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editingApplication),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update application');
+      }
+
+      // อัปเดตข้อมูลใน state
+      setApplications(prev => 
+        prev.map(app => 
+          app.id === editingApplication.id ? editingApplication : app
+        )
+      );
+
+      // อัปเดต selectedApplication ถ้าเป็นตัวเดียวกัน
+      if (selectedApplication?.id === editingApplication.id) {
+        setSelectedApplication(editingApplication);
+      }
+
+      setIsEditing(false);
+      setEditingApplication(null);
+      alert('บันทึกข้อมูลเรียบร้อยแล้ว');
+    } catch (error) {
+      console.error('Error saving application:', error);
+      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ฟังก์ชันอัปเดตข้อมูลที่กำลังแก้ไข (รองรับ path ของ array เช่น education[0].level)
+  const handleInputChange = (field: string, value: any) => {
+    if (!editingApplication) return;
+
+    // จัดการกรณี path เป็นรูปแบบ parent[index].child เช่น education[0].level
+    const arrayPathMatch = field.match(/^(\w+)\[(\d+)\]\.([\w.]+)$/);
+    if (arrayPathMatch) {
+      const parentKey = arrayPathMatch[1];
+      const index = parseInt(arrayPathMatch[2], 10);
+      const childKey = arrayPathMatch[3];
+
+      setEditingApplication(prev => {
+        const previous = prev as any;
+        const parentArray = Array.isArray(previous[parentKey]) ? [...previous[parentKey]] : [];
+        const targetItem = { ...(parentArray[index] || {}) };
+        targetItem[childKey] = value;
+        parentArray[index] = targetItem;
+
+        return {
+          ...(previous as any),
+          [parentKey]: parentArray
+        } as any;
+      });
+      return;
+    }
+
+    // จัดการกรณี path เป็นรูปแบบ parent.child
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      setEditingApplication(prev => ({
+        ...prev!,
+        [parent]: {
+          ...(prev as any)[parent],
+          [child]: value
         }
-      }
-    });
+      }));
+      return;
+    }
+
+    // คีย์ปกติระดับบนสุด
+    setEditingApplication(prev => ({
+      ...prev!,
+      [field]: value
+    }));
   };
 
-  // ฟังก์ชันสำหรับบังคับแสดงรูปภาพเฉพาะตัว
-  const forceShowSpecificImage = (imageKey: string) => {
-    const appId = imageKey.replace('card-', '').replace('modal-', '');
-    if (imageKey.startsWith('card-')) {
-      const cardImg = document.querySelector(`[data-image-id="card-${appId}"]`) as HTMLImageElement;
-      const fallback = document.querySelector(`[data-fallback-id="card-${appId}"]`) as HTMLElement;
-      
-      if (cardImg) {
-        cardImg.style.display = 'block';
-        cardImg.style.visibility = 'visible';
-        cardImg.style.opacity = '1';
-      }
-      
-      if (fallback) {
-        fallback.style.display = 'none';
-      }
+  // ฟังก์ชันสำหรับพิมพ์เอกสาร
+  const handlePrintDocument = (application: ApplicationData) => {
+    const params = new URLSearchParams();
+    params.append('firstName', application.firstName || '');
+    params.append('lastName', application.lastName || '');
+    params.append('email', application.email || '');
+    params.append('phone', application.phone || '');
+    params.append('appliedPosition', application.appliedPosition || '');
+    params.append('department', application.department || '');
+    params.append('expectedSalary', application.expectedSalary || '');
+    params.append('availableDate', application.availableDate || '');
+    params.append('currentAddress', application.currentAddress || '');
+    params.append('birthDate', application.birthDate || '');
+    params.append('age', application.age || '');
+    params.append('gender', application.gender || '');
+    params.append('nationality', application.nationality || '');
+    params.append('religion', application.religion || '');
+    params.append('maritalStatus', application.maritalStatus || '');
+    params.append('idNumber', application.idNumber || '');
+    params.append('idCardIssuedAt', application.idCardIssuedAt || '');
+    params.append('idCardIssueDate', application.idCardIssueDate || '');
+    params.append('idCardExpiryDate', application.idCardExpiryDate || '');
+    params.append('emergencyContact', application.emergencyContact || '');
+    params.append('emergencyPhone', application.emergencyPhone || '');
+    params.append('emergencyRelationship', application.emergencyRelationship || '');
+    params.append('skills', application.skills || '');
+    params.append('languages', application.languages || '');
+    params.append('computerSkills', application.computerSkills || '');
+    params.append('certificates', application.certificates || '');
+    
+    // เพิ่มข้อมูลการศึกษา
+    if (application.education && application.education.length > 0) {
+      application.education.forEach((edu, index) => {
+        params.append(`education[${index}][level]`, edu.level || '');
+        params.append(`education[${index}][institution]`, edu.institution || edu.school || '');
+        params.append(`education[${index}][major]`, edu.major || '');
+        params.append(`education[${index}][year]`, edu.year || edu.graduationYear || '');
+        params.append(`education[${index}][gpa]`, edu.gpa || '');
+      });
     }
-  };
-
-  // ฟังก์ชันสำหรับบังคับแสดงรูปภาพเฉพาะตัว (สำหรับ modal)
-  const forceShowModalImage = (imageKey: string) => {
-    const appId = imageKey.replace('card-', '').replace('modal-', '');
-    if (imageKey.startsWith('modal-')) {
-      const modalImg = document.querySelector(`[data-image-id="modal-${appId}"]`) as HTMLImageElement;
-      const fallback = document.querySelector(`[data-fallback-id="modal-${appId}"]`) as HTMLElement;
-      
-      if (modalImg) {
-        modalImg.style.display = 'block';
-        modalImg.style.visibility = 'visible';
-        modalImg.style.opacity = '1';
-      }
-      
-      if (fallback) {
-        fallback.style.display = 'none';
-      }
+    
+    // เพิ่มข้อมูลประสบการณ์ทำงาน
+    if (application.workExperience && application.workExperience.length > 0) {
+      application.workExperience.forEach((work, index) => {
+        params.append(`workExperience[${index}][position]`, work.position || '');
+        params.append(`workExperience[${index}][company]`, work.company || '');
+        params.append(`workExperience[${index}][startDate]`, work.startDate || '');
+        params.append(`workExperience[${index}][endDate]`, work.endDate || '');
+        params.append(`workExperience[${index}][salary]`, work.salary || '');
+        params.append(`workExperience[${index}][reason]`, work.reason || '');
+      });
     }
+    
+    const printUrl = `/official-documents/print-all?${params.toString()}`;
+    window.open(printUrl, '_blank');
   };
 
   useEffect(() => {
     fetchApplications();
   }, []);
 
-  const fetchApplications = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      // สร้าง URL สำหรับดึงข้อมูลตาม department
-      let apiUrl = '/api/prisma/applications';
-      if (departmentName) {
-        apiUrl += `?department=${encodeURIComponent(departmentName)}`;
-      }
-      
-      console.log('🔄 Fetching data from:', apiUrl);
-      
-      const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data && data.data && data.data.length > 0) {
-        console.log('📋 Found data from /api/prisma/applications:', data.data.length, 'applications');
-        
-        // แปลงข้อมูลจาก prisma applications API ให้ตรงกับ interface
-        const applicationsData = data.data.map((app: any) => ({
-          id: app.id,
-          submittedAt: app.createdAt,
-          status: app.status || 'pending',
-          prefix: app.prefix || '',
-          firstName: app.firstName || '',
-          lastName: app.lastName || '',
-          appliedPosition: app.appliedPosition || 'ไม่ระบุ',
-          expectedSalary: app.expectedSalary || 'ไม่ระบุ',
-          email: app.email || '',
-          phone: app.phone || '',
-          currentAddress: app.currentAddress || '',
-          birthDate: app.birthDate || '',
-          gender: app.gender || '',
-          education: app.education || [],
-          workExperience: app.workExperience || [],
-          profileImage: app.profileImage || '',
-          documents: app.documents || {}
-        }));
-        
-        console.log('🔄 Converted applications data:', applicationsData);
-        console.log('📸 Profile images found:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-        console.log('🔍 Original prisma data:', data.data.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-        console.log('🔍 Mapped profileImage:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-        
-        setApplications(applicationsData);
-        
-        // โหลดรูปภาพทันทีหลังจากได้ข้อมูล
-        if (applicationsData.length > 0) {
-          console.log('🔍 Found applications with profile images:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-          
-          const profileImages = applicationsData
-            .filter((app: any) => app.profileImage)
-            .map((app: any) => app.profileImage!);
-          
-          console.log('📸 Profile images to load:', profileImages);
-          
-          if (profileImages.length > 0) {
-            // เรียก API รูปภาพเพื่อตรวจสอบ - ใช้ /api/image เท่านั้น
-            const imagePromises = profileImages.map(async (imageName: string) => {
-              try {
-                console.log(`🔄 Testing image from /api/image: ${imageName}`);
-                const response = await fetch(`/api/image?file=${imageName}&t=${Date.now()}`);
-                console.log(`📡 /api/image response for ${imageName}:`, response.status, response.ok);
-                
-                if (response.ok) {
-                  return { success: true, imageName, source: 'image' };
-                }
-                
-                return { success: false, imageName, source: 'image-failed' };
-              } catch (error) {
-                console.error(`❌ Error testing image ${imageName}:`, error);
-                return { success: false, imageName, source: 'error' };
-              }
-            });
-            
-            Promise.all(imagePromises).then((results) => {
-              console.log('📊 Image test results:', results);
-              results.forEach((result) => {
-                const app = applicationsData.find((app: any) => app.profileImage === result.imageName);
-                if (app) {
-                  if (result.success) {
-                    setImageLoadStatus(prev => ({ ...prev, [`card-${app.id}`]: true }));
-                    setImageErrorStatus(prev => ({ ...prev, [`card-${app.id}`]: false }));
-                    console.log(`✅ Image status updated for ${app.id}: ${result.imageName} (source: ${result.source})`);
-                  } else {
-                    setImageLoadStatus(prev => ({ ...prev, [`card-${app.id}`]: false }));
-                    setImageErrorStatus(prev => ({ ...prev, [`card-${app.id}`]: true }));
-                    console.log(`❌ Image failed for ${app.id}: ${result.imageName} (source: ${result.source})`);
-                  }
-                }
-              });
-              
-              // บังคับแสดงรูปภาพหลังจากโหลดเสร็จ
-              setTimeout(() => {
-                console.log('🚀 Force showing images...');
-                forceShowImages();
-                
-                // บังคับแสดงรูปภาพทันทีสำหรับแต่ละ application
-                applicationsData.forEach((app: any) => {
-                  if (app.profileImage) {
-                    const cardImg = document.querySelector(`[data-image-id="card-${app.id}"]`) as HTMLImageElement;
-                    const fallback = document.querySelector(`[data-fallback-id="card-${app.id}"]`) as HTMLElement;
-                    
-                    if (cardImg) {
-                      cardImg.style.display = 'block';
-                      cardImg.style.visibility = 'visible';
-                      cardImg.style.opacity = '1';
-                      console.log(`🎯 Forced show image for ${app.id}: ${app.profileImage}`);
-                    }
-                    
-                    if (fallback) {
-                      fallback.style.display = 'none';
-                    }
-                  }
-                });
-              }, 100);
-            });
-          }
-        }
-        return;
-      }
-      
-      // ถ้าไม่มีข้อมูลใน applications.json ให้ดึงจาก application-form
-      const applicationFormResponse = await fetch('/api/application-form');
-      if (!applicationFormResponse.ok) {
-        throw new Error(`HTTP error! status: ${applicationFormResponse.status}`);
-      }
-      
-      const applicationFormData = await applicationFormResponse.json();
-      
-      if (applicationFormData.applications && applicationFormData.applications.length > 0) {
-        console.log('📋 Found data in application-forms.json:', applicationFormData.applications.length, 'applications');
-        
-        const applicationsData = applicationFormData.applications.map((app: any) => ({
-          id: app.id,
-          submittedAt: app.submittedAt || app.createdAt || new Date().toISOString(),
-          status: app.status || 'pending',
-          prefix: app.personalInfo?.prefix || app.prefix || '',
-          firstName: app.personalInfo?.firstName || app.firstName || '',
-          lastName: app.personalInfo?.lastName || app.lastName || '',
-          appliedPosition: app.appliedPosition || app.personalInfo?.appliedPosition || 'ไม่ระบุ',
-          expectedSalary: app.expectedSalary || app.personalInfo?.expectedSalary || 'ไม่ระบุ',
-          email: app.personalInfo?.email || app.email || '',
-          phone: app.personalInfo?.phone || app.phone || '',
-          currentAddress: app.personalInfo?.currentAddress || app.currentAddress || '',
-          birthDate: app.personalInfo?.birthDate || app.birthDate || '',
-          gender: app.personalInfo?.gender || app.gender || '',
-          education: app.education || [],
-          workExperience: app.workExperience || [],
-          profileImage: app.profileImage, // ใช้ profileImage โดยตรง
-          documents: app.documents || {}
-        }));
-        
-        console.log('🔄 Converted application-forms data:', applicationsData);
-        console.log('📸 Profile images found:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-        console.log('🔍 Original application-forms data:', applicationFormData.applications.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-        
-        setApplications(applicationsData);
-        
-        // โหลดรูปภาพทันทีหลังจากได้ข้อมูล
-        if (applicationsData.length > 0) {
-          console.log('🔍 Found applications with profile images:', applicationsData.map((app: any) => ({ id: app.id, profileImage: app.profileImage })));
-          
-          const profileImages = applicationsData
-            .filter((app: any) => app.profileImage)
-            .map((app: any) => app.profileImage!);
-          
-          console.log('📸 Profile images to load:', profileImages);
-          
-          if (profileImages.length > 0) {
-            // เรียก API รูปภาพเพื่อตรวจสอบ - ใช้ /api/image เท่านั้น
-            const imagePromises = profileImages.map(async (imageName: string) => {
-              try {
-                console.log(`🔄 Testing image from /api/image: ${imageName}`);
-                const response = await fetch(`/api/image?file=${imageName}&t=${Date.now()}`);
-                console.log(`📡 /api/image response for ${imageName}:`, response.status, response.ok);
-                
-                if (response.ok) {
-                  return { success: true, imageName, source: 'image' };
-                }
-                
-                return { success: false, imageName, source: 'image-failed' };
-              } catch (error) {
-                console.error(`❌ Error testing image ${imageName}:`, error);
-                return { success: false, imageName, source: 'error' };
-              }
-            });
-            
-            Promise.all(imagePromises).then((results) => {
-              console.log('📊 Image test results:', results);
-              results.forEach((result) => {
-                const app = applicationsData.find((app: any) => app.profileImage === result.imageName);
-                if (app) {
-                  if (result.success) {
-                    setImageLoadStatus(prev => ({ ...prev, [`card-${app.id}`]: true }));
-                    setImageErrorStatus(prev => ({ ...prev, [`card-${app.id}`]: false }));
-                    console.log(`✅ Image status updated for ${app.id}: ${result.imageName} (source: ${result.source})`);
-                  } else {
-                    setImageLoadStatus(prev => ({ ...prev, [`card-${app.id}`]: false }));
-                    setImageErrorStatus(prev => ({ ...prev, [`card-${app.id}`]: true }));
-                    console.log(`❌ Image failed for ${app.id}: ${result.imageName} (source: ${result.source})`);
-                  }
-                }
-              });
-              
-              // บังคับแสดงรูปภาพหลังจากโหลดเสร็จ
-              setTimeout(() => {
-                console.log('🚀 Force showing images...');
-                forceShowImages();
-                
-                // บังคับแสดงรูปภาพทันทีสำหรับแต่ละ application
-                applicationsData.forEach((app: any) => {
-                  if (app.profileImage) {
-                    const cardImg = document.querySelector(`[data-image-id="card-${app.id}"]`) as HTMLImageElement;
-                    const fallback = document.querySelector(`[data-fallback-id="card-${app.id}"]`) as HTMLElement;
-                    
-                    if (cardImg) {
-                      cardImg.style.display = 'block';
-                      cardImg.style.visibility = 'visible';
-                      cardImg.style.opacity = '1';
-                      console.log(`🎯 Forced show image for ${app.id}: ${app.profileImage}`);
-                    }
-                    
-                    if (fallback) {
-                      fallback.style.display = 'none';
-                    }
-                  }
-                });
-              }, 100);
-            });
-          }
-        }
-        return;
-      }
-    } catch (error) {
-      setError('ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getStatusColor = (status: string | undefined) => {
-    if (!status) return 'default';
-    switch (status.toLowerCase()) {
-      case 'pending': return 'warning';
-      case 'approved': return 'success';
-      case 'rejected': return 'danger';
-      default: return 'default';
-    }
-  };
-
-  const getStatusText = (status: string | undefined) => {
-    if (!status) return 'ไม่ทราบสถานะ';
-    switch (status.toLowerCase()) {
-      case 'pending': return 'รอพิจารณา';
-      case 'approved': return 'ผ่านการคัดเลือก';
-      case 'rejected': return 'ไม่ผ่าน';
-      default: return 'ไม่ทราบสถานะ';
-    }
-  };
-
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return 'ไม่ระบุวันที่';
-    try {
-      return new Date(dateString).toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (error) {
-      return dateString;
-    }
-  };
-
-  const handleViewDetails = (application: ApplicationData) => {
-    setSelectedApplication(application);
-    onOpen();
-  };
-
-  const handleCloseDetails = () => {
-    setSelectedApplication(null);
-    setIsEditing(false);
-    onClose();
-  };
-
-  const handleToggleEdit = () => {
-    setIsEditing(!isEditing);
-  };
-
-  const handlePreviewProfileImage = (fileName: string, name: string) => {
-    setPreviewProfileImage({
-      url: `/api/image?file=${fileName}`,
-      name: name
-    });
-    onPreviewOpen();
-  };
-
-  const handleUpdateApplication = async (updatedApplication: ApplicationData) => {
-    try {
-      const response = await fetch(`/api/application-form/${updatedApplication.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatedApplication),
-      });
-
-      if (response.ok) {
-        // Refresh applications to get updated data
-        await fetchApplications();
-        setIsEditing(false);
-        alert('บันทึกการแก้ไขสำเร็จ');
-      } else {
-        throw new Error('Failed to update application');
-      }
-    } catch (error) {
-      alert('เกิดข้อผิดพลาดในการบันทึกการแก้ไข');
-    }
-  };
-
-  // ฟังก์ชันสำหรับการลบ card
-  const handleDeleteApplication = async (application: ApplicationData) => {
-    try {
-      const response = await fetch(`/api/application-form/${application.id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        // Refresh applications to get updated data
-        await fetchApplications();
-        setDeleteConfirmation({ isOpen: false, application: null });
-        alert('ลบใบสมัครงานสำเร็จ');
-      } else {
-        throw new Error('Failed to delete application');
-      }
-    } catch (error) {
-      alert('เกิดข้อผิดพลาดในการลบใบสมัครงาน');
-    }
-  };
-
-  // ฟังก์ชันสำหรับเปิด modal ยืนยันการลบ
-  const openDeleteConfirmation = (application: ApplicationData) => {
-    setDeleteConfirmation({ isOpen: true, application });
-  };
-
-  // ฟังก์ชันสำหรับปิด modal ยืนยันการลบ
-  const closeDeleteConfirmation = () => {
-    setDeleteConfirmation({ isOpen: false, application: null });
-  };
-
-  // ฟังก์ชันสำหรับเปิด modal ดูเอกสารแนบ
-  const handleViewDocuments = (application: ApplicationData) => {
-    setDocumentsView({ isOpen: true, application });
-  };
-
-  // ฟังก์ชันสำหรับปิด modal ดูเอกสารแนบ
-  const closeDocumentsView = () => {
-    setDocumentsView({ isOpen: false, application: null });
-  };
-
-  // ฟังก์ชันสำหรับแปลงชื่อเอกสารเป็นภาษาไทย (สำหรับใช้ใน Modal ดูเอกสาร)
-  const getDocumentDisplayName = (docType: string) => {
-    const names: { [key: string]: string } = {
-      idCard: 'สำเนาบัตรประชาชน',
-      houseRegistration: 'สำเนาทะเบียนบ้าน',
-      militaryCertificate: 'สำเนาหลักฐานการเกณฑ์ทหาร',
-      educationCertificate: 'สำเนาหลักฐานการศึกษา',
-      medicalCertificate: 'ใบรับรองแพทย์',
-      drivingLicense: 'ใบอนุญาตขับขี่',
-      nameChangeCertificate: 'ใบเปลี่ยนชื่อ'
-    };
-    return names[docType] || docType;
-  };
-
-  const handleUploadDocument = async (documentType: string, file: File) => {
-    try {
-      const formData = new FormData();
-      formData.append('documentType', documentType);
-      formData.append('file', file);
-      
-      // เพิ่ม applicationId สำหรับรูปภาพโปรไฟล์
-      if (documentType === 'profileImage' && selectedApplication) {
-        formData.append('applicationId', selectedApplication.id);
-      }
-      
-      // ใช้ endpoint ที่แตกต่างกันสำหรับรูปภาพโปรไฟล์
-      const endpoint = documentType === 'profileImage' ? '/api/profile-image/upload' : '/api/documents/upload';
-      
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.ok) {
-        if (documentType === 'profileImage') {
-          // สำหรับรูปภาพโปรไฟล์ ให้อัปเดตทันที
-          const data = await response.json();
-          if (data.profileImage) {
-            // อัปเดต selectedApplication และ editedApplication ทันที
-            setSelectedApplication(prev => prev ? { ...prev, profileImage: data.profileImage } : null);
-            // อัปเดต applications list ด้วย
-            setApplications(prev => prev.map(app => 
-              app.id === selectedApplication?.id 
-                ? { ...app, profileImage: data.profileImage }
-                : app
-            ));
-            // ส่งข้อมูลรูปภาพกลับไป
-            return data.profileImage;
-          }
-        } else {
-          // สำหรับเอกสารอื่นๆ ให้ refresh applications
-          await fetchApplications();
-        }
-        alert('อัพโหลดสำเร็จ');
-      } else {
-        throw new Error('Failed to upload');
-      }
-    } catch (error) {
-      alert('เกิดข้อผิดพลาดในการอัพโหลด');
-    }
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-center min-h-screen">
-            <div className="text-center">
-              <Spinner size="lg" color="primary" className="mb-4" />
-              <p className="text-gray-600">กำลังโหลดข้อมูล...</p>
-            </div>
-          </div>
-        </div>
+      <div className="flex justify-center items-center min-h-screen">
+        <Spinner size="lg" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-center min-h-screen">
-            <Card className="max-w-md">
-              <CardBody className="text-center p-8">
-                <ExclamationTriangleIcon className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">เกิดข้อผิดพลาด</h3>
-                <p className="text-gray-600 mb-4">{error}</p>
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-500 text-lg">{error}</p>
                 <Button
                   color="primary"
                   onClick={fetchApplications}
-                  className="bg-gradient-to-r from-blue-500 to-purple-600"
+            className="mt-4"
                 >
                   ลองใหม่
                 </Button>
-              </CardBody>
-            </Card>
-          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
+    <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl">
-                <DocumentTextIcon className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">
                   ข้อมูลใบสมัครงาน
                 </h1>
-                <p className="text-gray-600">แสดงข้อมูลที่บันทึกจากใบสมัครงาน</p>
-              </div>
-            </div>
-            <Button
-              color="primary"
-              variant="ghost"
-              startContent={<ArrowLeftIcon className="w-5 h-5" />}
-              onClick={() => window.location.href = '/dashboard'}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700"
-            >
-              กลับไปหน้า Dashboard
-            </Button>
+        <p className="text-gray-600">
+          {departmentName ? `แผนก: ${departmentName}` : 'รายการใบสมัครงานทั้งหมด'}
+        </p>
           </div>
           
-          {/* สถานะรวมของรูปภาพ */}
-          {applications.some(app => app.profileImage) && (
-            <div className="mt-4">
-              <Card className="shadow-lg bg-blue-50 border-blue-200">
-                <CardBody className="p-4">
-                  <div className="flex items-center justify-center gap-6 text-sm mb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                      <span>จำนวนใบสมัคร: {applications.length} ใบ</span>
+      {applications.length === 0 ? (
+        <Card className="p-8 text-center">
+          <div className="text-gray-500">
+            <DocumentTextIcon className="w-16 h-16 mx-auto mb-4" />
+            <p className="text-lg">ไม่พบข้อมูลใบสมัครงาน</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-                      <span>รูปภาพโหลดสำเร็จ: {Object.values(imageLoadStatus).filter(Boolean).length} ตัว</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-                      <span>รูปภาพโหลดไม่สำเร็จ: {Object.values(imageErrorStatus).filter(Boolean).length} ตัว</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 bg-gray-500 rounded-full"></span>
-                      <span>กำลังโหลด: {applications.filter(app => app.profileImage).length - Object.values(imageLoadStatus).filter(Boolean).length - Object.values(imageErrorStatus).filter(Boolean).length} ตัว</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <Button
-                      size="sm"
-                      color="warning"
-                      variant="bordered"
-                      onClick={() => {
-                        setImageLoadStatus({});
-                        setImageErrorStatus({});
-                      }}
-                    >
-                      รีเซ็ตสถานะรูปภาพ
-                    </Button>
-                    <Button
-                      size="sm"
-                      color="success"
-                      variant="bordered"
-                      onClick={() => {
-                        alert(`สถานะรูปภาพ:\nโหลดสำเร็จ: ${Object.values(imageLoadStatus).filter(Boolean).length} ตัว\nเกิดข้อผิดพลาด: ${Object.values(imageErrorStatus).filter(Boolean).length} ตัว`);
-                      }}
-                    >
-                      ดูสถานะรูปภาพ
-                    </Button>
-                    <Button
-                      size="sm"
-                      color="primary"
-                      variant="bordered"
-                      onClick={forceShowImages}
-                    >
-                      บังคับแสดงรูปภาพ
-                    </Button>
-                  </div>
-                </CardBody>
-              </Card>
-            </div>
-          )}
-        </div>
-
-        {applications.length === 0 ? (
-          <Card className="shadow-lg border-0">
-            <CardBody className="p-8 text-center">
-              <DocumentTextIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-600 mb-2">ยังไม่มีข้อมูลใบสมัครงาน</h3>
-              <p className="text-gray-500 mb-4">คุณยังไม่ได้ส่งใบสมัครงานใดๆ</p>
-              
-              
-            </CardBody>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {applications.map((application, index) => (
-              <Card key={application.id} className="shadow-lg border-0 hover:shadow-xl transition-shadow duration-300">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {applications.map((application) => (
+            <Card key={application.id} className="shadow-lg hover:shadow-xl transition-shadow">
                 <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="relative group w-12 h-12 rounded-full overflow-hidden border-2 border-gray-200 shadow-md">
-                        {application.profileImage ? (
-                          <>
-                            <img
-                              src={`/api/image?file=${application.profileImage}`}
-                              alt={`${application.firstName} ${application.lastName}`}
-                              className="w-full h-full object-cover cursor-pointer"
-                              data-image-id={`card-${application.id}`}
-                              style={{
-                                display: 'block',
-                                backgroundColor: '#f3f4f6',
-                                position: 'relative',
-                                zIndex: 10
-                              }}
-                              onClick={() => {
-                                handlePreviewProfileImage(application.profileImage!, `${application.firstName} ${application.lastName}`);
-                              }}
-                              onError={(e) => {
-                                const img = e.currentTarget as HTMLImageElement;
-                                console.error(`❌ Failed to load image from /api/image: ${application.profileImage} for card-${application.id}`);
-                                // แสดง fallback avatar ทันทีเมื่อรูปโหลดไม่สำเร็จ
-                                img.style.display = 'none';
-                                const fallback = img.parentElement?.querySelector('.fallback-avatar') as HTMLElement;
-                                if (fallback) fallback.style.display = 'flex';
-                                handleImageError(`card-${application.id}`);
-                              }}
-                              onLoad={() => {
-                                console.log(`✅ Image loaded successfully from /api/image: ${application.profileImage} for card-${application.id}`);
-                                handleImageLoad(`card-${application.id}`);
-                              }}
-                            />
-                            <div 
-                              className="fallback-avatar w-full h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm absolute inset-0 cursor-pointer"
-                              data-fallback-id={`card-${application.id}`}
-                              style={{ display: 'none', zIndex: 5 }}
-                              onClick={() => {
-                                handlePreviewProfileImage(application.profileImage!, `${application.firstName} ${application.lastName}`);
-                              }}
-                            >
-                              {application.firstName.charAt(0)}{application.lastName.charAt(0)}
+                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
+                    {application.firstName?.charAt(0)}{application.lastName?.charAt(0)}
                             </div>
-                          </>
-                        ) : (
-                          <div 
-                            className="w-full h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm cursor-pointer"
-                            onClick={() => {
-                              // แสดงข้อความว่าไม่มีรูปโปรไฟล์
-                              alert('ไม่มีรูปโปรไฟล์');
-                            }}
-                          >
-                            {application.firstName.charAt(0)}{application.lastName.charAt(0)}
-                          </div>
-                        )}
-                        
-                        {/* Debug info - แสดงข้อมูลรูปภาพเพื่อตรวจสอบ */}
-                        <div className="absolute -bottom-6 left-0 text-xs text-gray-500 bg-white px-1 rounded">
-                          {application.profileImage ? `รูป: ${application.profileImage}` : 'ไม่มีรูป'}
-                        </div>
-                        <div className="absolute -bottom-12 left-0 text-xs text-blue-500 bg-white px-1 rounded">
-                          ID: {application.id}
-                        </div>
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-full transition-all duration-200 flex items-center justify-center pointer-events-none">
-                          <EyeIcon className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                        </div>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-800">
-                          {application.firstName} {application.lastName}
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      {application.prefix} {application.firstName} {application.lastName}
                         </h3>
-                        <p className="text-sm text-gray-600">{application.appliedPosition}</p>
-                        {/* แสดงสถานะรูปภาพ */}
-                        {application.profileImage && (
-                          <div className="flex items-center gap-1 mt-1">
-                            {imageLoadStatus[`card-${application.id}`] ? (
-                              <span className="text-xs text-green-600">✅ รูปภาพโหลดสำเร็จ</span>
-                            ) : imageErrorStatus[`card-${application.id}`] ? (
-                              <span className="text-xs text-red-600">❌ รูปภาพโหลดไม่สำเร็จ</span>
-                            ) : (
-                              <span className="text-xs text-gray-500">⏳ กำลังโหลดรูปภาพ...</span>
-                            )}
+                    <p className="text-sm text-gray-600">{application.email}</p>
                           </div>
-                        )}
-                        {/* แสดงข้อมูล debug */}
-                        <div className="text-xs text-gray-400 mt-1">
-                          Debug: {application.profileImage ? `มีรูป: ${application.profileImage}` : 'ไม่มีรูป'}
-                        </div>
-                        <div className="text-xs text-purple-400 mt-1">
-                          ID: {application.id} | Source: {application.profileImage?.includes('profile_') ? 'applications.json' : 'application-forms.json'}
-                        </div>
-                      </div>
-                    </div>
-                    <Badge
-                      color={getStatusColor(application.status)}
-                      variant="flat"
-                      className="text-xs"
-                    >
-                      {getStatusText(application.status)}
-                    </Badge>
                   </div>
                 </CardHeader>
                 <CardBody className="pt-0">
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="flex items-center gap-2">
-                        <EnvelopeIcon className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600 truncate">{application.email}</span>
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">ตำแหน่ง:</span>
+                    <span className="text-sm font-medium">{application.appliedPosition}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <PhoneIcon className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">{application.phone}</span>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">แผนก:</span>
+                    <span className="text-sm font-medium">{application.department || '-'}</span>
                       </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">เบอร์โทร:</span>
+                    <span className="text-sm font-medium">{application.phone}</span>
                     </div>
-                    
-                    <div className="flex items-center gap-2 text-sm">
-                      <CalendarIcon className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-600">สมัครเมื่อ: {formatDate(application.submittedAt)}</span>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">วันที่สมัคร:</span>
+                    <span className="text-sm font-medium">
+                      {new Date(application.createdAt).toLocaleDateString('th-TH')}
+                    </span>
+                    </div>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPinIcon className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-600 truncate">{application.currentAddress}</span>
-                    </div>
-
-                    <div className="flex items-center justify-end pt-2">
                       <div className="flex gap-2">
                         <Button
-                          size="sm"
-                          variant="ghost"
                           color="primary"
+                     variant="flat"
+                     size="sm"
                           startContent={<EyeIcon className="w-4 h-4" />}
                           onClick={() => handleViewDetails(application)}
+                     className="flex-1"
                         >
                           ดูรายละเอียด
                         </Button>
                         <Button
+                     color="warning"
+                     variant="flat"
                           size="sm"
-                          variant="ghost"
-                          color="danger"
-                          startContent={<TrashIcon className="w-4 h-4" />}
-                          onClick={() => openDeleteConfirmation(application)}
-                          className="hover:bg-red-50"
-                        >
-                          ลบ
+                     onClick={() => handleEditApplication(application)}
+                   >
+                     แก้ไข
+                   </Button>
+                   <Button
+                     color="secondary"
+                     variant="flat"
+                     size="sm"
+                     startContent={<PrinterIcon className="w-4 h-4" />}
+                     onClick={() => handlePrintDocument(application)}
+                   >
+                     พิมพ์
                         </Button>
-                      </div>
-                    </div>
                   </div>
                 </CardBody>
               </Card>
@@ -1986,7 +2668,7 @@ export default function ApplicationData() {
           </div>
         )}
 
-        {/* Detail Modal */}
+      {/* Modal ดูรายละเอียด */}
         <Modal 
           isOpen={isOpen} 
           onClose={handleCloseDetails} 
@@ -1999,371 +2681,68 @@ export default function ApplicationData() {
             footer: "bg-white"
           }}
         >
-          <ModalContent className="bg-white">
-            <ModalHeader className="flex flex-col gap-1 sticky top-0 bg-white z-10">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-800">
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            <h2 className="text-xl font-semibold">
                   รายละเอียดใบสมัครงาน
                 </h2>
-                <Button
-                  isIconOnly
-                  variant="light"
-                  onClick={handleCloseDetails}
-                >
-                  <XMarkIcon className="w-5 h-5" />
-                </Button>
-              </div>
+            <p className="text-sm text-gray-600">
+              {selectedApplication?.prefix} {selectedApplication?.firstName} {selectedApplication?.lastName}
+            </p>
             </ModalHeader>
-            <ModalBody className="overflow-y-auto bg-white">
+           <ModalBody>
                              {selectedApplication && (
                  <ApplicationFormView 
-                   application={selectedApplication} 
-                   onUploadDocument={handleUploadDocument}
-                   onUpdateApplication={handleUpdateApplication}
+                 application={isEditing ? editingApplication! : selectedApplication} 
                    isEditing={isEditing}
-                   onToggleEdit={handleToggleEdit}
-                   onProfileImageUpdate={(newImageName: string) => {
-                     // อัปเดตรูปภาพใน modal ทันที
-                     setSelectedApplication(prev => prev ? { ...prev, profileImage: newImageName } : null);
-                   }}
+                 onInputChange={handleInputChange}
                  />
                )}
             </ModalBody>
-          </ModalContent>
-        </Modal>
-
-        {/* Profile Image Preview Modal */}
-        <Modal 
-          isOpen={isPreviewOpen} 
-          onClose={onPreviewClose} 
-          size="2xl"
-          classNames={{
-            base: "bg-white",
-            body: "bg-white",
-            header: "bg-white",
-            footer: "bg-white"
-          }}
-        >
-          <ModalContent className="bg-white">
-            <ModalHeader className="flex flex-col gap-1 bg-white">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-800">
-                  รูปถ่ายประจำตัว - {previewProfileImage?.name}
-                </h2>
+           <ModalFooter>
+             {isEditing ? (
+               <>
                 <Button
-                  isIconOnly
+                   color="danger" 
                   variant="light"
-                  onClick={onPreviewClose}
+                   onPress={handleCancelEdit}
+                   disabled={isSaving}
                 >
-                  <XMarkIcon className="w-5 h-5" />
+                   ยกเลิก
                 </Button>
-              </div>
-            </ModalHeader>
-            <ModalBody className="bg-white">
-              {previewProfileImage && (
-                <div className="flex flex-col items-center gap-4">
-                  <img
-                    src={previewProfileImage.url}
-                    alt={previewProfileImage.name}
-                    className="max-w-full max-h-96 object-contain rounded-lg shadow-lg"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                      const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                      if (fallback) {
-                        fallback.style.display = 'block';
-                      }
-                    }}
-                  />
-                  <div 
-                    className="w-32 h-32 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-lg"
-                    style={{ display: 'none' }}
-                  >
-                    ไม่สามารถแสดงรูปภาพได้
-                  </div>
-                  <div className="flex gap-2">
                     <Button
-                      color="primary"
-                      variant="ghost"
-                      startContent={<ArrowDownTrayIcon className="w-4 h-4" />}
-                      onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = previewProfileImage.url;
-                        link.download = previewProfileImage.name;
-                        link.click();
-                      }}
-                    >
-                      ดาวน์โหลด
+                   color="success" 
+                   onPress={handleSaveApplication}
+                   disabled={isSaving}
+                   isLoading={isSaving}
+                 >
+                   {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
                     </Button>
-                    <Button
-                      color="secondary"
-                      variant="ghost"
-                      onClick={() => window.open(previewProfileImage.url, '_blank')}
-                    >
-                      เปิดในแท็บใหม่
+               </>
+             ) : (
+               <>
+                 <Button color="danger" variant="light" onPress={handleCloseDetails}>
+                   ปิด
                     </Button>
-                  </div>
-                </div>
-              )}
-            </ModalBody>
-          </ModalContent>
-        </Modal>
-
-        {/* Documents View Modal */}
-        <Modal
-          isOpen={documentsView.isOpen}
-          onClose={closeDocumentsView}
-          size="4xl"
-          scrollBehavior="inside"
-          classNames={{
-            base: "max-h-[90vh] bg-white",
-            body: "overflow-y-auto max-h-[calc(90vh-120px)] bg-white",
-            header: "bg-white",
-            footer: "bg-white"
-          }}
-        >
-          <ModalContent className="bg-white">
-            <ModalHeader className="flex flex-col gap-1 sticky top-0 bg-white z-10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <DocumentIcon className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-800">
-                    เอกสารแนบ - {documentsView.application?.firstName} {documentsView.application?.lastName}
-                  </h2>
-                </div>
                 <Button
-                  isIconOnly
-                  variant="light"
-                  onClick={closeDocumentsView}
-                >
-                  <XMarkIcon className="w-5 h-5" />
+                   color="warning" 
+                   variant="flat" 
+                   onPress={() => selectedApplication && handleEditApplication(selectedApplication)}
+                 >
+                   แก้ไข
                 </Button>
-              </div>
-            </ModalHeader>
-            <ModalBody className="overflow-y-auto bg-white">
-              {documentsView.application && documentsView.application.documents && (
-                <div className="space-y-6">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="text-lg font-semibold text-blue-800 mb-3">ข้อมูลผู้สมัคร</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium text-gray-700">ชื่อ:</span>
-                        <span className="ml-2 text-gray-600">
-                          {documentsView.application.firstName} {documentsView.application.lastName}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-700">ตำแหน่ง:</span>
-                        <span className="ml-2 text-gray-600">{documentsView.application.appliedPosition}</span>
-                      </div>
-                      {/* <div>
-                        <span className="font-medium text-gray-700">อีเมล:</span>
-                        <span className="ml-2 text-gray-600">{documentsView.application.email}</span>
-                      </div> */}
-                      <div>
-                        <span className="font-medium text-gray-700">เบอร์โทร:</span>
-                        <span className="ml-2 text-gray-600">{documentsView.application.phone}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-700 mb-4">เอกสารแนบทั้งหมด</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.entries(documentsView.application.documents).map(([docType, fileName]) => (
-                        <div key={docType} className="border border-gray-200 rounded-lg p-4 bg-gradient-to-r from-blue-50 to-indigo-50">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <DocumentIcon className="w-5 h-5 text-blue-600" />
-                              <span className="font-medium text-gray-700">{getDocumentDisplayName(docType)}</span>
-                            </div>
-                            <Badge color="success" variant="flat" size="sm">
-                              มีไฟล์
-                            </Badge>
-                          </div>
-                          <div className="text-sm text-gray-600 mb-3">
-                            <p>ชื่อไฟล์: {fileName}</p>
-                          </div>
-                          <div className="flex gap-2">
                             <Button
-                              size="sm"
-                              variant="ghost"
                               color="primary"
-                              startContent={<EyeIcon className="w-4 h-4" />}
-                              onClick={() => {
-                                const isImage = /\.(jpg|jpeg|png|gif)$/i.test(fileName);
-                                const fileUrl = isImage ? `/api/image?file=${fileName}` : `/api/uploads?file=${fileName}`;
-                                if (isImage) {
-                                  window.open(fileUrl, '_blank');
-                                } else {
-                                  // สำหรับ PDF ให้เปิดใน Modal preview
-                                  setPreviewDocument({ url: fileUrl, name: getDocumentDisplayName(docType) });
-                                  onPreviewOpen();
-                                }
-                              }}
-                            >
-                              ดูไฟล์
+                   onPress={() => selectedApplication && handlePrintDocument(selectedApplication)}
+                   startContent={<PrinterIcon className="w-4 h-4" />}
+                 >
+                   พิมพ์เอกสาร
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              color="secondary"
-                              startContent={<ArrowDownTrayIcon className="w-4 h-4" />}
-                              onClick={() => {
-                                const link = document.createElement('a');
-                                const isImage = /\.(jpg|jpeg|png|gif)$/i.test(fileName);
-                                link.href = isImage ? `/api/image?file=${fileName}` : `/api/uploads?file=${fileName}`;
-                                link.download = `${getDocumentDisplayName(docType)}.${isImage ? 'jpg' : 'pdf'}`;
-                                link.click();
-                              }}
-                            >
-                              ดาวน์โหลด
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </ModalBody>
-            <ModalFooter className="bg-white">
-              <Button color="primary" onClick={closeDocumentsView}>
-                ปิด
-              </Button>
+               </>
+             )}
             </ModalFooter>
           </ModalContent>
         </Modal>
-
-        {/* Document Preview Modal */}
-        <Modal 
-          isOpen={isPreviewOpen} 
-          onClose={onPreviewClose} 
-          size="5xl"
-          scrollBehavior="inside"
-          classNames={{
-            base: "max-h-[90vh] bg-white",
-            body: "overflow-y-auto max-h-[calc(90vh-120px)] bg-white",
-            header: "bg-white",
-            footer: "bg-white"
-          }}
-        >
-          <ModalContent className="bg-white">
-            <ModalHeader className="flex flex-col gap-1 sticky top-0 bg-white z-10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <DocumentIcon className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-800">
-                    ดูเอกสาร: {previewDocument?.name}
-                  </h2>
-                </div>
-                <Button
-                  isIconOnly
-                  variant="light"
-                  onClick={onPreviewClose}
-                >
-                  <XMarkIcon className="w-5 h-5" />
-                </Button>
-              </div>
-            </ModalHeader>
-            <ModalBody className="overflow-y-auto bg-white">
-              {previewDocument && (
-                <div className="w-full h-[70vh]">
-                  <iframe
-                    src={previewDocument.url}
-                    className="w-full h-full border-0 rounded-lg"
-                    title={previewDocument.name}
-                  />
-                </div>
-              )}
-            </ModalBody>
-            <ModalFooter className="bg-white">
-              <Button color="primary" onClick={onPreviewClose}>
-                ปิด
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
-
-        {/* Delete Confirmation Modal */}
-        <Modal 
-          isOpen={deleteConfirmation.isOpen} 
-          onClose={closeDeleteConfirmation} 
-          size="md"
-          classNames={{
-            base: "bg-white",
-            body: "bg-white",
-            header: "bg-white",
-            footer: "bg-white"
-          }}
-        >
-          <ModalContent className="bg-white">
-            <ModalHeader className="flex flex-col gap-1 bg-white">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <TrashIcon className="w-6 h-6 text-red-600" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-800">
-                  ยืนยันการลบ
-                </h2>
-              </div>
-            </ModalHeader>
-            <ModalBody className="bg-white">
-              {deleteConfirmation.application && (
-                <div className="text-center py-4">
-                  <div className="mb-4">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-r from-red-500 to-pink-600 flex items-center justify-center text-white font-semibold text-xl mx-auto mb-3">
-                      {deleteConfirmation.application.firstName.charAt(0)}{deleteConfirmation.application.lastName.charAt(0)}
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                      {deleteConfirmation.application.firstName} {deleteConfirmation.application.lastName}
-                    </h3>
-                    <p className="text-gray-600 mb-1">
-                      ตำแหน่ง: {deleteConfirmation.application.appliedPosition}
-                    </p>
-                    <p className="text-gray-600">
-                      สมัครเมื่อ: {formatDate(deleteConfirmation.application.submittedAt)}
-                    </p>
-                  </div>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                    <p className="text-red-700 font-medium">
-                      ⚠️ คุณแน่ใจหรือไม่ที่จะลบใบสมัครงานนี้?
-                    </p>
-                    <p className="text-red-600 text-sm mt-1">
-                      การดำเนินการนี้ไม่สามารถยกเลิกได้ และข้อมูลทั้งหมดจะถูกลบออกจากระบบ
-                    </p>
-                  </div>
-                </div>
-              )}
-            </ModalBody>
-            <ModalFooter className="bg-white">
-              <div className="flex gap-2 w-full">
-                <Button
-                  color="default"
-                  variant="bordered"
-                  onClick={closeDeleteConfirmation}
-                  className="flex-1"
-                >
-                  ยกเลิก
-                </Button>
-                <Button
-                  color="danger"
-                  onClick={() => deleteConfirmation.application && handleDeleteApplication(deleteConfirmation.application)}
-                  className="flex-1"
-                  startContent={<TrashIcon className="w-4 h-4" />}
-                >
-                  ลบใบสมัครงาน
-                </Button>
-              </div>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
-      </div>
     </div>
   );
-  
 } 
-
