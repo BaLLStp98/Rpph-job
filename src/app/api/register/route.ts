@@ -92,13 +92,19 @@ export async function POST(request: NextRequest) {
         },
         // ข้อมูลการรับราชการก่อนหน้า
         previousGovernmentService: {
-          create: (applicationData.previousGovernmentService || []).map((g: any) => ({
-            position: g.position,
-            department: g.department,
-            reason: g.reason,
-            date: g.date,
-            type: g.type || 'civilServant'
-          }))
+          create: (applicationData.previousGovernmentService || []).map((g: any) => {
+            const serviceData: any = {
+              position: g.position,
+              department: g.department,
+              reason: g.reason,
+              date: g.date
+            };
+            // เพิ่ม type field เฉพาะเมื่อมี
+            if (g.type) {
+              serviceData.type = g.type;
+            }
+            return serviceData;
+          })
         }
       }
     })

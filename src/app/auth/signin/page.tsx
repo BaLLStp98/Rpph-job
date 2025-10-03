@@ -11,16 +11,16 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (status === 'authenticated' && session) {
-      // หลังจาก login สำเร็จ ให้ไปหน้า Register
-      router.push('/register')
+      // หลังจาก login สำเร็จ ให้ไปหน้า Check Profile เพื่อตรวจว่าเคยฝากประวัติแล้วหรือยัง
+      router.push('/check-profile')
     }
   }, [session, status, router])
 
   const handleLineLogin = async () => {
     try {
-      // Callback ไปหน้า Register
+      // Callback ไปหน้า Check Profile เพื่อเช็คว่ามีข้อมูลแล้วหรือยัง
       const result = await signIn('line', { 
-        callbackUrl: '/register',
+        callbackUrl: '/check-profile',
         redirect: false 
       })
       
@@ -57,7 +57,7 @@ export default function SignInPage() {
     )
   }
 
-  // ถ้า login แล้ว ให้แสดง loading และ redirect ไปหน้า Register
+  // ถ้า login แล้ว ให้แสดง loading และ redirect ไปหน้า Check Profile
   if (status === 'authenticated') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -68,14 +68,14 @@ export default function SignInPage() {
                 size="lg"
                 color="success"
                 labelColor="success"
-                label="กำลังนำทางไปหน้า Register..."
+              label="กำลังตรวจสอบข้อมูลและนำทาง..."
               />
             </div>
             <h2 className="text-xl font-semibold text-gray-800 mb-2">
               เข้าสู่ระบบสำเร็จ
             </h2>
             <p className="text-gray-600">
-              กำลังนำทางไปหน้า Register...
+              กำลังตรวจสอบข้อมูลและนำทางไปหน้าที่เหมาะสม...
             </p>
           </CardBody>
         </Card>

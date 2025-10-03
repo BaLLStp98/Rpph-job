@@ -202,6 +202,7 @@ export default function PrintAllDocuments() {
   const [applicationData, setApplicationData] = useState<ApplicationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
   const searchParams = useSearchParams();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -332,6 +333,28 @@ export default function PrintAllDocuments() {
     }
 
     return {};
+  };
+
+  // ฟังก์ชันแปลงชื่อประเภทเอกสารเป็นภาษาไทย
+  const getDocumentTypeName = (documentType: string) => {
+    const typeNames: {[key: string]: string} = {
+      'idCard': 'สำเนาบัตรประชาชน',
+      'houseRegistration': 'สำเนาทะเบียนบ้าน',
+      'educationCertificate': 'ใบรับรองการศึกษา',
+      'militaryCertificate': 'ใบรับรองการเกณฑ์ทหาร',
+      'medicalCertificate': 'ใบรับรองแพทย์',
+      'drivingLicense': 'ใบขับขี่',
+      'nameChangeCertificate': 'ใบเปลี่ยนชื่อ'
+    };
+    return typeNames[documentType] || documentType;
+  };
+
+  // แปลงพาธไฟล์แนบให้เป็น URL สาธารณะที่ปลอดภัย (รองรับชื่อไฟล์ภาษาไทย/ช่องว่าง)
+  const getAttachmentUrl = (rawPath: string): string => {
+    if (!rawPath) return '';
+    const publicPath = rawPath.startsWith('http') ? rawPath : (rawPath.startsWith('/') ? rawPath : `/${rawPath}`);
+    // ใช้ encodeURI เพื่อคงเครื่องหมาย / และเข้ารหัสเฉพาะอักขระที่จำเป็น เหมาะกับชื่อไฟล์ภาษาไทยและช่องว่าง
+    return encodeURI(publicPath);
   };
 
   // ฟังก์ชันสำหรับดึงข้อมูลจาก API
@@ -493,7 +516,7 @@ export default function PrintAllDocuments() {
         medicalRights: data.medicalRights || undefined,
         multipleEmployers: data.multipleEmployers || data.otherEmployers || [],
         staffInfo: data.staffInfo || undefined,
-        profileImage: data.profileImage || data.photo || data.avatar || '',
+        profileImage: data.profileImage || data.photo || data.avatar || data.profileImageUrl || data.image || data.picture || data.profile_image || data.user_image || '',
         updatedAt: data.updatedAt || data.modifiedAt || '',
         documents: data.documents || undefined,
         // เพิ่มฟิลด์อื่นๆ ที่อาจมีในฐานข้อมูล
@@ -557,11 +580,75 @@ export default function PrintAllDocuments() {
       });
       
       setApplicationData(applicationData);
+      
+      // Debug: ตรวจสอบข้อมูล profileImage
+      console.log('🔍 Print-All Profile Image Debug:');
+      console.log('• Raw data keys:', Object.keys(data));
+      console.log('• Raw profileImage:', data.profileImage);
+      console.log('• Raw photo:', data.photo);
+      console.log('• Raw avatar:', data.avatar);
+      console.log('• Raw profileImageUrl:', data.profileImageUrl);
+      console.log('• Raw image:', data.image);
+      console.log('• Raw picture:', data.picture);
+      console.log('• Raw profile_image:', data.profile_image);
+      console.log('• Raw user_image:', data.user_image);
+      console.log('• Mapped profileImage:', applicationData.profileImage);
+      console.log('• Profile Image Type:', typeof applicationData.profileImage);
+      console.log('• Profile Image Length:', applicationData.profileImage?.length);
+      console.log('• Profile Image URL:', applicationData.profileImage ? 
+        (applicationData.profileImage.startsWith('http') ? 
+          applicationData.profileImage : 
+          `/api/image?file=${encodeURIComponent(applicationData.profileImage)}`) : 
+        'No image');
+      
+      // ดึงข้อมูลเอกสารแนบ
+      if (applicationData.id) {
+        try {
+          console.log('🔍 Fetching documents for application ID:', applicationData.id);
+          const documents = await fetchUploadedDocuments(applicationData.id);
+          console.log('📄 Fetched documents:', documents);
+          console.log('📄 Documents count:', documents.length);
+          setUploadedDocuments(documents);
+        } catch (error) {
+          console.error('❌ Error fetching documents:', error);
+          setUploadedDocuments([]);
+        }
+      } else {
+        console.log('⚠️ No application ID found, skipping document fetch');
+      }
     } catch (err) {
       console.error('Error fetching application data:', err);
       setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ฟังก์ชันดึงข้อมูลเอกสารที่อัปโหลดแล้ว
+  const fetchUploadedDocuments = async (resumeDepositId: string) => {
+    try {
+      console.log('🌐 Calling API:', `/api/resume-documents?resumeDepositId=${resumeDepositId}`);
+      const response = await fetch(`/api/resume-documents?resumeDepositId=${resumeDepositId}`);
+      console.log('📡 API Response status:', response.status);
+      
+      if (!response.ok) {
+        console.error('❌ API Response not OK:', response.status, response.statusText);
+        return [];
+      }
+      
+      const result = await response.json();
+      console.log('📋 API Response data:', result);
+      
+      if (result.success) {
+        console.log('✅ Documents fetched successfully:', result.data);
+        return result.data || [];
+      } else {
+        console.error('❌ Fetch documents failed:', result.message);
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error fetching documents:', error);
+      return [];
     }
   };
 
@@ -599,7 +686,37 @@ export default function PrintAllDocuments() {
 
   // ฟังก์ชันพิมพ์
   const handlePrint = () => {
+    // เพิ่ม CSS สำหรับการพิมพ์เพื่อให้รูปภาพคมชัด
+    const printStyles = `
+      @media print {
+        img {
+          image-rendering: high-quality !important;
+          image-rendering: -webkit-optimize-contrast !important;
+          image-rendering: crisp-edges !important;
+          -webkit-print-color-adjust: exact !important;
+          color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .profile-image-container {
+          image-rendering: high-quality !important;
+          image-rendering: -webkit-optimize-contrast !important;
+          image-rendering: crisp-edges !important;
+        }
+      }
+    `;
+    
+    // เพิ่ม stylesheet สำหรับการพิมพ์
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = printStyles;
+    document.head.appendChild(styleSheet);
+    
+    // พิมพ์
     window.print();
+    
+    // ลบ stylesheet หลังจากพิมพ์เสร็จ
+    setTimeout(() => {
+      document.head.removeChild(styleSheet);
+    }, 1000);
   };
 
   // แสดง loading state
@@ -670,6 +787,55 @@ export default function PrintAllDocuments() {
             padding: 0 !important;
           }
           .print-a4-container { font-size: 18px !important; line-height: 1.0 !important; }
+          /* เพิ่ม CSS สำหรับรูปภาพให้คมชัด */
+          img {
+            image-rendering: high-quality !important;
+            image-rendering: -webkit-optimize-contrast !important;
+            image-rendering: crisp-edges !important;
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .profile-image-container {
+            image-rendering: high-quality !important;
+            image-rendering: -webkit-optimize-contrast !important;
+            image-rendering: crisp-edges !important;
+          }
+          .profile-image-container img {
+            image-rendering: high-quality !important;
+            image-rendering: -webkit-optimize-contrast !important;
+            image-rendering: crisp-edges !important;
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          /* CSS สำหรับไฟล์แนบ - ขนาด A4 */
+          .document-container {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0 auto 10mm auto !important;
+            page-break-after: always !important;
+            border: 1px solid #000 !important;
+          }
+          .document-container iframe {
+            width: 100% !important;
+            height: 100% !important;
+            border: none !important;
+          }
+          .document-container img {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain !important;
+          }
+          /* CSS สำหรับหน้าใหม่ของเอกสารแนบ */
+          .page-break-before {
+            page-break-before: always !important;
+            break-before: page !important;
+          }
+          .page-break-before:first-child {
+            page-break-before: auto !important;
+            break-before: auto !important;
+          }
           .print-a4-container .text-xs { font-size: 16px !important; line-height: 1.0 !important; }
           .print-a4-container .mb-2 { margin-bottom: 2px !important; }
           .print-a4-container .mb-1 { margin-bottom: 1px !important; }
@@ -712,44 +878,29 @@ export default function PrintAllDocuments() {
         }
       `}</style>
       
-      {/* Print Button */}
+      {/* Print Buttons */}
       <div className="mb-4 no-print">
-        <Button
-          color="success"
-          variant="solid"
-          size="lg"
-          startContent={<DocumentTextIcon className="w-5 h-5" />}
-          onClick={handlePrint}
-        >
-          พิมพ์เอกสารทั้งหมด
-        </Button>
-      </div>
-
-      {/* Debug Information - Development Mode Only */}
-      {process.env.NODE_ENV === 'development' && applicationData && (
-        <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded-lg no-print">
-          <h3 className="font-bold text-yellow-800 mb-2">🔍 Debug Information (Development Mode)</h3>
-          <div className="text-sm text-yellow-700">
-            <p><strong>ID:</strong> {applicationData.id}</p>
-            <p><strong>ชื่อ-นามสกุล:</strong> {applicationData.prefix} {applicationData.firstName} {applicationData.lastName}</p>
-            <p><strong>เลขบัตรประชาชน:</strong> {applicationData.idNumber || 'ไม่มีข้อมูล'}</p>
-            <p><strong>วันเกิด:</strong> {applicationData.birthDate || 'ไม่มีข้อมูล'}</p>
-            <p><strong>เพศ:</strong> {applicationData.gender || 'ไม่มีข้อมูล'}</p>
-            <p><strong>สถานะสมรส:</strong> {applicationData.maritalStatus || 'ไม่มีข้อมูล'}</p>
-            <p><strong>ออกให้ ณ อำเภอ/เขต:</strong> {applicationData.idCardIssuedAt || 'ไม่มีข้อมูล'}</p>
-            <p><strong>วันที่ออกบัตร:</strong> {applicationData.idCardIssueDate || 'ไม่มีข้อมูล'}</p>
-            <p><strong>หมดอายุวันที่:</strong> {applicationData.idCardExpiryDate || 'ไม่มีข้อมูล'}</p>
-            <p><strong>บ้านเลขที่:</strong> {applicationData.house_registration_house_number || 'ไม่มีข้อมูล'}</p>
-            <p><strong>หมู่ที่:</strong> {applicationData.house_registration_village_number || 'ไม่มีข้อมูล'}</p>
-            <p><strong>ตรอก/ซอย:</strong> {applicationData.house_registration_alley || 'ไม่มีข้อมูล'}</p>
-            <p><strong>ถนน:</strong> {applicationData.house_registration_road || 'ไม่มีข้อมูล'}</p>
-            <p><strong>ตำบล/แขวง:</strong> {applicationData.house_registration_sub_district || 'ไม่มีข้อมูล'}</p>
-            <p><strong>อำเภอ/เขต:</strong> {applicationData.house_registration_district || 'ไม่มีข้อมูล'}</p>
-            <p><strong>จังหวัด:</strong> {applicationData.house_registration_province || 'ไม่มีข้อมูล'}</p>
-            <p><strong>รหัสไปรษณีย์:</strong> {applicationData.house_registration_postal_code || 'ไม่มีข้อมูล'}</p>
-          </div>
+        <div className="flex gap-3 flex-wrap">
+          <Button
+            color="success"
+            variant="solid"
+            size="lg"
+            startContent={<DocumentTextIcon className="w-5 h-5" />}
+            onClick={handlePrint}
+          >
+            พิมพ์เฉพาะใบสมัคร
+          </Button>
+          <Button
+            color="primary"
+            variant="solid"
+            size="lg"
+            startContent={<DocumentTextIcon className="w-5 h-5" />}
+            onClick={() => window.print()}
+          >
+            พิมพ์ทั้งหมด (รวมไฟล์แนบ)
+          </Button>
         </div>
-      )}
+      </div>
 
       {/* Print Container */}
       <div ref={containerRef} className="print-a4-container bg-white shadow-lg">
@@ -769,43 +920,79 @@ export default function PrintAllDocuments() {
               </h1>
               
               {/* ช่องติดรูปถ่าย */}
-              <div className="w-[1.3in] h-[1.5in] border-2 border-gray-400 flex items-center justify-center absolute right-0 top-0">
-                {applicationData?.profileImage ? (
-                  <div className="w-full h-full flex items-center justify-center">
+              <div className="w-[1.3in] h-[1.5in] border-2 border-gray-400 flex items-center justify-center absolute right-0 top-0" style={{ 
+                imageRendering: 'high-quality',
+                imageRendering: '-webkit-optimize-contrast',
+                imageRendering: 'crisp-edges'
+              }}>
+                {applicationData?.profileImage && applicationData.profileImage.trim() !== '' ? (
+                  <div className="w-full h-full flex items-center justify-center relative profile-image-container">
+                    {/* Test with different image sources */}
                     <Image
-                      src={`/api/image?file=${applicationData.profileImage}`}
+                      src={applicationData.profileImage.startsWith('http') ? applicationData.profileImage : `/api/image?file=${encodeURIComponent(applicationData.profileImage)}`}
                       alt="รูปถ่ายผู้สมัคร"
-                      width={120}
-                      height={150}
-                      className="w-full h-full object-cover"
+                      width={300}
+                      height={375}
+                      className="w-full h-full object-cover border border-gray-200"
+                      style={{ 
+                        objectFit: 'cover',
+                        objectPosition: 'center top',
+                        imageRendering: 'high-quality',
+                        imageRendering: '-webkit-optimize-contrast',
+                        imageRendering: 'crisp-edges'
+                      }}
+                      quality={100}
+                      priority={true}
+                      unoptimized={false}
                       onError={(e) => {
                         console.error('❌ Failed to load profile image:', applicationData.profileImage);
+                        console.error('❌ Image src:', e.currentTarget.src);
+                        console.error('❌ Image error details:', e);
+                        
+                        // Try alternative image sources
+                        const alternativeSources = [
+                          `/api/image?file=${encodeURIComponent(applicationData.profileImage)}`,
+                          `/uploads/${applicationData.profileImage}`,
+                          `/public/uploads/${applicationData.profileImage}`,
+                          applicationData.profileImage
+                        ];
+                        
+                        console.log('🔄 Trying alternative sources:', alternativeSources);
+                        
                         const img = e.currentTarget as HTMLImageElement;
                         img.style.display = 'none';
                         const parent = img.parentElement;
                         if (parent) {
                           parent.innerHTML = `
-                            <div class="text-center">
+                            <div class="text-center p-2">
                               <div class="text-xs text-gray-500 mb-1">ติดรูปถ่าย</div>
                               <div class="text-xs text-gray-500">ขนาด ๑ นิ้ว</div>
                               <div class="text-xs text-red-500 mt-1">ไม่สามารถโหลดรูปได้</div>
+                              <div class="text-xs text-red-400 mt-1">URL: ${e.currentTarget.src}</div>
+                              <div class="text-xs text-blue-400 mt-1">Original: ${applicationData.profileImage}</div>
                             </div>
                           `;
                         }
                       }}
                       onLoad={() => {
                         console.log('✅ Profile image loaded successfully:', applicationData.profileImage);
+                        console.log('✅ Image src:', applicationData.profileImage.startsWith('http') ? applicationData.profileImage : `/api/image?file=${encodeURIComponent(applicationData.profileImage)}`);
                       }}
                     />
+                    {/* Overlay สำหรับแสดงข้อมูลรูปภาพ */}
+                    {/* <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 text-center">
+                      รูปถ่าย 1 นิ้ว
+                    </div> */}
                   </div>
                 ) : (
-                  <div className="text-center">
+                  <div className="text-center p-2">
                     <div className="text-xs text-gray-500 mb-1">ติดรูปถ่าย</div>
                     <div className="text-xs text-gray-500">ขนาด ๑ นิ้ว</div>
+                    <div className="text-xs text-gray-400 mt-2">ไม่มีรูปภาพ</div>
                     {/* Debug info */}
                     {process.env.NODE_ENV === 'development' && (
-                      <div className="text-xs text-red-500 mt-1">
-                        Debug: {applicationData?.profileImage ? 'มีรูป' : 'ไม่มีรูป'}
+                      <div className="text-xs text-red-500 mt-2">
+                        Debug: profileImage = "{applicationData?.profileImage || 'undefined'}"
                       </div>
                     )}
                   </div>
@@ -824,38 +1011,26 @@ export default function PrintAllDocuments() {
                   <div className="flex items-center gap-2 text-xm w-full">
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span>คำนำหน้า</span>
-                    <div className="flex-1 min-w-[60px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{applicationData?.prefix || ''}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.prefix || 'empty'}]</div>
-                      )}
-                    </div>
+                      <div className="flex-1 min-w-[60px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
+                        <span className="text-xm font-medium text-gray-800">{applicationData?.prefix || ''}</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span>ชื่อ</span>
                       <div className="flex-1 min-w-[100px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                         <span className="text-xm font-medium text-gray-800">{applicationData?.firstName || ''}</span>
-                        {process.env.NODE_ENV === 'development' && (
-                          <div className="text-xs text-blue-500 ml-1">[{applicationData?.firstName || 'empty'}]</div>
-                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span>นามสกุล</span>
                       <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                         <span className="text-xm font-medium text-gray-800">{applicationData?.lastName || ''}</span>
-                        {process.env.NODE_ENV === 'development' && (
-                          <div className="text-xs text-blue-500 ml-1">[{applicationData?.lastName || 'empty'}]</div>
-                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span>อายุ</span>
                       <div className="flex-1 min-w-[40px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                         <span className="text-xm font-medium text-gray-800">{applicationData?.age || ''}</span>
-                        {process.env.NODE_ENV === 'development' && (
-                          <div className="text-xs text-blue-500 ml-1">[{applicationData?.age || 'empty'}]</div>
-                        )}
                       </div>
                       <span>ปี</span>
                     </div>
@@ -865,28 +1040,19 @@ export default function PrintAllDocuments() {
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>เชื้อชาติ</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{applicationData?.race || ''}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.race || 'empty'}]</div>
-                      )}
+                        <span className="text-xm font-medium text-gray-800">{applicationData?.race || ''}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>สัญชาติ</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{applicationData?.nationality || ''}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.nationality || 'empty'}]</div>
-                      )}
+                        <span className="text-xm font-medium text-gray-800">{applicationData?.nationality || ''}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>ศาสนา</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{applicationData?.religion || ''}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.religion || 'empty'}]</div>
-                      )}
+                        <span className="text-xm font-medium text-gray-800">{applicationData?.religion || ''}</span>
                     </div>
                   </div>
                 </div>
@@ -922,14 +1088,7 @@ export default function PrintAllDocuments() {
                       {applicationData?.maritalStatus === 'สมรส' && applicationData?.spouseInfo 
                         ? `${applicationData.spouseInfo.firstName || ''} ${applicationData.spouseInfo.lastName || ''}`.trim()
                         : ''}
-                    </span>
-                    {process.env.NODE_ENV === 'development' && (
-                      <div className="text-xs text-blue-500 ml-1">
-                        [{applicationData?.maritalStatus === 'สมรส' && applicationData?.spouseInfo 
-                          ? `${applicationData.spouseInfo.firstName || ''} ${applicationData.spouseInfo.lastName || ''}`.trim()
-                          : 'empty'}]
-                      </div>
-                    )}
+                      </span>
                   </div>
                 </div>
               </div>
@@ -941,19 +1100,13 @@ export default function PrintAllDocuments() {
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>เลขที่</span>
                     <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{applicationData?.idNumber || ''}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.idNumber || 'empty'}]</div>
-                      )}
+                        <span className="text-xm font-medium text-gray-800">{applicationData?.idNumber || ''}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>ออกให้ ณ อำเภอ/เขต</span>
                     <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{applicationData?.idCardIssuedAt || ''}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.idCardIssuedAt || 'empty'}]</div>
-                      )}
+                        <span className="text-xm font-medium text-gray-800">{applicationData?.idCardIssuedAt || ''}</span>
                     </div>
                   </div>
                 </div>
@@ -961,47 +1114,31 @@ export default function PrintAllDocuments() {
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span className="whitespace-nowrap">วันที่ออกบัตร</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{getThaiDay(applicationData?.idCardIssueDate || '')}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{getThaiDay(applicationData?.idCardIssueDate || '') || 'empty'}]</div>
-                      )}
+                        <span className="text-xm font-medium text-gray-800">{getThaiDay(applicationData?.idCardIssueDate || '')}</span>
                     </div>
                     <span>เดือน</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{getThaiMonthName(applicationData?.idCardIssueDate || '')}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{getThaiMonthName(applicationData?.idCardIssueDate || '') || 'empty'}]</div>
-                      )}
+                        <span className="text-xm font-medium text-gray-800">{getThaiMonthName(applicationData?.idCardIssueDate || '')}</span>
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{getGregorianYear(applicationData?.idCardIssueDate || '')}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{getGregorianYear(applicationData?.idCardIssueDate || '') || 'empty'}]</div>
-                      )}
+                        <span className="text-xm font-medium text-gray-800">{getGregorianYear(applicationData?.idCardIssueDate || '')}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span className="whitespace-nowrap">หมดอายุวันที่</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{getThaiDay(applicationData?.idCardExpiryDate || '')}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{getThaiDay(applicationData?.idCardExpiryDate || '') || 'empty'}]</div>
-                      )}
                     </div>
                     <span>เดือน</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{getThaiMonthName(applicationData?.idCardExpiryDate || '')}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{getThaiMonthName(applicationData?.idCardExpiryDate || '') || 'empty'}]</div>
-                      )}
+                      
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{getGregorianYear(applicationData?.idCardExpiryDate || '')}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{getGregorianYear(applicationData?.idCardExpiryDate || '') || 'empty'}]</div>
-                      )}
+                      
                     </div>
                   </div>
                 </div>
@@ -1015,90 +1152,60 @@ export default function PrintAllDocuments() {
                     <span>บ้านเลขที่</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_house_number || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').houseNumber}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_house_number || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').houseNumber || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>หมู่ที่</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_village_number || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').villageNumber}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_village_number || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').villageNumber || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ตรอก/ซอย</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_alley || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').alley}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_alley || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').alley || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ถนน</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_road || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').road}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_road || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').road || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ตำบล/แขวง</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_sub_district || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').subDistrict}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_sub_district || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').subDistrict || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>อำเภอ/เขต</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_district || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').district}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_district || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').district || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>จังหวัด</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_province || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').province}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_province || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').province || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>รหัสไปรษณีย์</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_postal_code || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').postalCode}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_postal_code || parseAddress(applicationData?.addressAccordingToHouseRegistration || '').postalCode || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>โทรศัพท์</span>
                     <div className="flex-1 min-w-[80px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_phone || applicationData?.phone || ''}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_phone || applicationData?.phone || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>โทรศัพท์มือถือ</span>
                     <div className="flex-1 min-w-[80px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.house_registration_mobile || applicationData?.phone || ''}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.house_registration_mobile || applicationData?.phone || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1112,36 +1219,24 @@ export default function PrintAllDocuments() {
                     <span>บ้านเลขที่</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.current_address_house_number || parseAddress(applicationData?.currentAddress || '').houseNumber}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.current_address_house_number || parseAddress(applicationData?.currentAddress || '').houseNumber || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>หมู่ที่</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.current_address_village_number || parseAddress(applicationData?.currentAddress || '').villageNumber}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.current_address_village_number || parseAddress(applicationData?.currentAddress || '').villageNumber || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ตรอก/ซอย</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.current_address_alley || parseAddress(applicationData?.currentAddress || '').alley}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.current_address_alley || parseAddress(applicationData?.currentAddress || '').alley || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ถนน</span>
                     <div className="flex-1 min-w-[96px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.current_address_road || parseAddress(applicationData?.currentAddress || '').road}</span>
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-blue-500 ml-1">[{applicationData?.current_address_road || parseAddress(applicationData?.currentAddress || '').road || 'empty'}]</div>
-                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -1444,30 +1539,8 @@ export default function PrintAllDocuments() {
                 </div>
               </div>
 
-              {/* ๑.๑๐ ขอสมัครเป็นบุคคลภายนอกฯตำแหน่ง */}
-              <div className="mb-1 px-2">
-                <h3 className="text-xm font-semibold text-gray-700 mb-1">๑.๑๐ ขอสมัครเป็นบุคคลภายนอกฯตำแหน่ง</h3>
-                <div className="flex items-center gap-2 text-xm px-2 w-full">
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span>ตำแหน่งที่สมัคร</span>
-                    <div className="flex-1 min-w-[200px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{applicationData?.appliedPosition || ''}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span>เงินเดือนที่คาดหวัง</span>
-                    <div className="flex-1 min-w-[150px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{applicationData?.expectedSalary || ''}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    <span>วันที่สามารถเริ่มงาน</span>
-                    <div className="flex-1 min-w-[150px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{applicationData?.availableDate || ''}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              
+              
             </div>
           </div>
 
@@ -1603,33 +1676,130 @@ export default function PrintAllDocuments() {
                   </div>
                   
                   <div className="space-y-3 text-xm">
+                    {/* สำเนาบัตรประจำตัวประชาชน */}
                     <div className="flex items-start gap-2">
-                      <input type="checkbox" className="w-3 h-3 mt-1" />
-                      <span>สำเนาบัตรประจำตัวประชาชน</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-3 h-3 mt-1" 
+                        checked={uploadedDocuments.some(doc => doc.documentType === 'idCard')}
+                        readOnly
+                      />
+                      <div className="flex-1">
+                        <span>สำเนาบัตรประจำตัวประชาชน</span>
+                        {uploadedDocuments.filter(doc => doc.documentType === 'idCard').map((doc, index) => (
+                          <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
+                            
+                          </div>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* สำเนาทะเบียนบ้าน */}
                     <div className="flex items-start gap-2">
-                      <input type="checkbox" className="w-3 h-3 mt-1" />
-                      <span>สำเนาทะเบียนบ้าน</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-3 h-3 mt-1" 
+                        checked={uploadedDocuments.some(doc => doc.documentType === 'houseRegistration')}
+                        readOnly
+                      />
+                      <div className="flex-1">
+                        <span>สำเนาทะเบียนบ้าน</span>
+                        {uploadedDocuments.filter(doc => doc.documentType === 'houseRegistration').map((doc, index) => (
+                          <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
+                            
+                          </div>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* หลักฐานทางทหาร */}
                     <div className="flex items-start gap-2">
-                      <input type="checkbox" className="w-3 h-3 mt-1" />
-                      <span>สำเนาหลักฐานทางทหาร (เฉพาะผู้สมัครเพศชาย) ได้แก่ ใบสำคัญ (แบบ สด.๙) สมุดประจำตัวทหารกองหนุน (แบบ สด.๘) สำเนาทะเบียนทหารกองประจำการ (สด.๓) หรือ สด.๔๓ แล้วแต่กรณี</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-3 h-3 mt-1" 
+                        checked={uploadedDocuments.some(doc => doc.documentType === 'militaryCertificate')}
+                        readOnly
+                      />
+                      <div className="flex-1">
+                        <span>สำเนาหลักฐานทางทหาร (เฉพาะผู้สมัครเพศชาย) ได้แก่ ใบสำคัญ (แบบ สด.๙) สมุดประจำตัวทหารกองหนุน (แบบ สด.๘) สำเนาทะเบียนทหารกองประจำการ (สด.๓) หรือ สด.๔๓ แล้วแต่กรณี</span>
+                        {uploadedDocuments.filter(doc => doc.documentType === 'militaryCertificate').map((doc, index) => (
+                          <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
+                            
+                          </div>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* หลักฐานการศึกษา */}
                     <div className="flex items-start gap-2">
-                      <input type="checkbox" className="w-3 h-3 mt-1" />
-                      <span>สำเนาหลักฐานการศึกษา เช่น ใบประกาศนียบัตร หรือ ใบปริญญาบัตร และระเบียนแสดงผลการเรียน (Transcript)</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-3 h-3 mt-1" 
+                        checked={uploadedDocuments.some(doc => doc.documentType === 'educationCertificate')}
+                        readOnly
+                      />
+                      <div className="flex-1">
+                        <span>สำเนาหลักฐานการศึกษา เช่น ใบประกาศนียบัตร หรือ ใบปริญญาบัตร และระเบียนแสดงผลการเรียน (Transcript)</span>
+                        {uploadedDocuments.filter(doc => doc.documentType === 'educationCertificate').map((doc, index) => (
+                          <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
+                            
+                          </div>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* ใบรับรองแพทย์ */}
                     <div className="flex items-start gap-2">
-                      <input type="checkbox" className="w-3 h-3 mt-1" />
-                      <span>ใบรับรองแพทย์ ซึ่งออกไม่เกิน ๑ เดือน (ออกโดยโรงพยาบาลราชพิพัฒน์เท่านั้น)</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-3 h-3 mt-1" 
+                        checked={uploadedDocuments.some(doc => doc.documentType === 'medicalCertificate')}
+                        readOnly
+                      />
+                      <div className="flex-1">
+                        <span>ใบรับรองแพทย์ ซึ่งออกไม่เกิน ๑ เดือน (ออกโดยโรงพยาบาลราชพิพัฒน์เท่านั้น)</span>
+                        {uploadedDocuments.filter(doc => doc.documentType === 'medicalCertificate').map((doc, index) => (
+                          <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
+                            
+                          </div>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* ใบอนุญาตที่เกี่ยวข้องกับตำแหน่ง */}
                     <div className="flex items-start gap-2">
-                      <input type="checkbox" className="w-3 h-3 mt-1" />
-                      <span>ใบอนุญาตที่เกี่ยวข้องกับตำแหน่ง เช่น ใบอนุญาตขับรถยนต์ หรือใบอนุญาตขับเรือ ใบประกอบวิชาชีพ ฯลฯ</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-3 h-3 mt-1" 
+                        checked={uploadedDocuments.some(doc => doc.documentType === 'drivingLicense')}
+                        readOnly
+                      />
+                      <div className="flex-1">
+                        <span>ใบอนุญาตที่เกี่ยวข้องกับตำแหน่ง เช่น ใบอนุญาตขับรถยนต์ หรือใบอนุญาตขับเรือ ใบประกอบวิชาชีพ ฯลฯ</span>
+                        {uploadedDocuments.filter(doc => doc.documentType === 'drivingLicense').map((doc, index) => (
+                          <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
+                            
+                          </div>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* เอกสารอื่นๆ */}
                     <div className="flex items-start gap-2">
-                      <input type="checkbox" className="w-3 h-3 mt-1" />
-                      <span>เอกสารอื่นๆ (ถ้ามี) เช่น สำเนาหลักฐานการเปลี่ยนชื่อตัว ชื่อสกุล สำเนาหลักฐานการสมรสหรือใบหย่า</span>
+                      <input 
+                        type="checkbox" 
+                        className="w-3 h-3 mt-1" 
+                        checked={uploadedDocuments.some(doc => doc.documentType === 'nameChangeCertificate')}
+                        readOnly
+                      />
+                      <div className="flex-1">
+                        <span>เอกสารอื่นๆ (ถ้ามี) เช่น สำเนาหลักฐานการเปลี่ยนชื่อตัว ชื่อสกุล สำเนาหลักฐานการสมรสหรือใบหย่า</span>
+                        {uploadedDocuments.filter(doc => doc.documentType === 'nameChangeCertificate').map((doc, index) => (
+                          <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
+                            
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   
@@ -1820,6 +1990,289 @@ export default function PrintAllDocuments() {
           </div>
         </div>
       </div>
+
+      {/* ส่วนแสดงไฟล์แนบทั้งหมด - ด้านล่างสุด */}
+      {console.log('🔍 Uploaded Documents Count:', uploadedDocuments.length)}
+      {console.log('📄 Uploaded Documents:', uploadedDocuments)}
+      
+      {/* Debug: แสดงจำนวนไฟล์แนบ */}
+      
+
+      {/* พื้นที่แสดงไฟล์แนบทุกหน้าของไฟล์แนบ */}
+      {console.log('🔍 Render - Uploaded Documents Count:', uploadedDocuments.length)}
+      {console.log('🔍 Render - Uploaded Documents:', uploadedDocuments)}
+      
+      {/* แสดงข้อมูลทดสอบเมื่อไม่มีไฟล์แนบจริง */}
+      {uploadedDocuments.length === 0 && !loading && (
+        <div className="mt-12">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">เอกสารแนบทั้งหมด (ทดสอบ)</h2>
+            <div className="w-full h-1 border-b-2 border-dotted border-gray-600"></div>
+            <p className="text-sm text-gray-600 mt-2">
+              จำนวนเอกสาร: 2 ฉบับ (ข้อมูลทดสอบ)
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-8">
+            {/* เอกสารทดสอบที่ 1 */}
+            <div className="w-full">
+              <div className="page-break-before">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-8 py-4 border-2 border-blue-200 rounded-t-xl shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold text-blue-800 mb-1">
+                        เอกสารที่ 1: สำเนาบัตรประชาชน
+                      </h3>
+                      <p className="text-sm text-blue-600">
+                        id-card-sample.pdf • 2.5 MB
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                        PDF
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white border-2 border-t-0 border-blue-200 rounded-b-xl shadow-lg overflow-hidden">
+                  <div className="w-full" style={{ height: '297mm', minHeight: '297mm' }}>
+                    <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                      <div className="text-center">
+                        <DocumentTextIcon className="w-32 h-32 mx-auto mb-4 text-blue-400" />
+                        <p className="text-lg font-medium text-gray-600">ตัวอย่างเอกสาร</p>
+                        <p className="text-sm text-gray-500">สำเนาบัตรประชาชน</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50 px-8 py-3 border-2 border-t-0 border-blue-200 rounded-b-xl">
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>เอกสารที่ 1 จาก 2</span>
+                    <span>สำเนาบัตรประชาชน</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* เอกสารทดสอบที่ 2 */}
+            <div className="w-full">
+              <div className="page-break-before">
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-8 py-4 border-2 border-green-200 rounded-t-xl shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold text-green-800 mb-1">
+                        เอกสารที่ 2: ใบรับรองการศึกษา
+                      </h3>
+                      <p className="text-sm text-green-600">
+                        education-certificate-sample.pdf • 1.8 MB
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                        PDF
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white border-2 border-t-0 border-green-200 rounded-b-xl shadow-lg overflow-hidden">
+                  <div className="w-full" style={{ height: '297mm', minHeight: '297mm' }}>
+                    <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                      <div className="text-center">
+                        <DocumentTextIcon className="w-32 h-32 mx-auto mb-4 text-green-400" />
+                        <p className="text-lg font-medium text-gray-600">ตัวอย่างเอกสาร</p>
+                        <p className="text-sm text-gray-500">ใบรับรองการศึกษา</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50 px-8 py-3 border-2 border-t-0 border-green-200 rounded-b-xl">
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>เอกสารที่ 2 จาก 2</span>
+                    <span>ใบรับรองการศึกษา</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {uploadedDocuments.length > 0 && (
+        <div className="mt-12">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">เอกสารแนบทั้งหมด</h2>
+            <div className="w-full h-1 border-b-2 border-dotted border-gray-600"></div>
+            <p className="text-sm text-gray-600 mt-2">
+              จำนวนเอกสาร: {uploadedDocuments.length} ฉบับ
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-8">
+            {uploadedDocuments.map((doc, index) => (
+              <div key={index} className="w-full">
+                {/* หน้าใหม่สำหรับแต่ละเอกสาร */}
+                <div className="page-break-before">
+                  {/* Header ของเอกสาร */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-8 py-4 border-2 border-blue-200 rounded-t-xl shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold text-blue-800 mb-1">
+                          เอกสารที่ {index + 1}: {getDocumentTypeName(doc.documentType)}
+                        </h3>
+                        <p className="text-sm text-blue-600">
+                          {doc.fileName} • {(doc.fileSize / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                          {doc.mimeType === 'application/pdf' ? 'PDF' : 'รูปภาพ'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* เนื้อหาเอกสาร - ขนาด A4 เต็มหน้า */}
+                  <div className="bg-white border-2 border-t-0 border-blue-200 rounded-b-xl shadow-lg overflow-hidden" style={{ width: '210mm', margin: '0 auto' }}>
+                    <div className="w-full" style={{ width: '210mm', height: '297mm', minHeight: '297mm' }}>
+                      {/* Debug: แสดงข้อมูลไฟล์ */}
+                      <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-xs p-2 rounded z-10">
+                        <div>File: {doc.fileName}</div>
+                        <div>Path: {doc.filePath}</div>
+                        <div>Type: {doc.mimeType}</div>
+                        <div>Size: {(doc.fileSize / 1024 / 1024).toFixed(2)} MB</div>
+                      </div>
+                      
+                      {/* ตรวจสอบว่าไฟล์มีอยู่จริงหรือไม่ */}
+                      {(() => {
+                        const fileUrl = getAttachmentUrl(doc.filePath);
+                        console.log('🔍 File URL:', fileUrl);
+                        console.log('🔍 File Path:', doc.filePath);
+                        console.log('🔍 File Name:', doc.fileName);
+                        console.log('🔍 MIME Type:', doc.mimeType);
+                        
+                        return doc.mimeType === 'application/pdf' ? (
+                          <iframe
+                            src={fileUrl}
+                            className="w-full h-full border-0"
+                            title={`PDF Preview - ${doc.fileName}`}
+                            style={{ width: '210mm', minHeight: '297mm' }}
+                            onLoad={() => {
+                              console.log('✅ PDF loaded successfully:', doc.fileName);
+                            }}
+                            onError={(e) => {
+                              console.error('❌ Error loading PDF:', doc.fileName);
+                              console.error('❌ PDF URL:', fileUrl);
+                              console.error('❌ Original Path:', doc.filePath);
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-50" style={{ width: '210mm', height: '297mm' }}>
+                            <img
+                              src={fileUrl}
+                              alt={doc.fileName}
+                              className="max-w-full max-h-full object-contain shadow-lg"
+                              onLoad={() => {
+                                console.log('✅ Image loaded successfully:', doc.fileName);
+                              }}
+                              onError={(e) => {
+                                console.error('❌ Error loading image:', doc.fileName);
+                                console.error('❌ Image URL:', fileUrl);
+                                console.error('❌ Original Path:', doc.filePath);
+                                e.currentTarget.style.display = 'none';
+                                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                          </div>
+                        );
+                      })()}
+                      
+                      {/* Fallback message */}
+                      <div 
+                        className="hidden w-full h-full flex items-center justify-center bg-gray-50 text-gray-500 text-lg"
+                        style={{ minHeight: '297mm' }}
+                      >
+                        <div className="text-center p-8">
+                          <DocumentTextIcon className="w-20 h-20 mx-auto mb-6 text-gray-400" />
+                          <h3 className="text-xl font-semibold text-gray-600 mb-2">ไม่สามารถแสดงตัวอย่างไฟล์ได้</h3>
+                          <p className="text-sm text-gray-500 mb-4">{doc.fileName}</p>
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
+                            <p className="text-sm text-yellow-700">
+                              <strong>สาเหตุที่เป็นไปได้:</strong>
+                            </p>
+                            <ul className="text-xs text-yellow-600 mt-2 text-left">
+                              <li>• ไฟล์ไม่พบในระบบ</li>
+                              <li>• ไฟล์เสียหายหรือไม่สมบูรณ์</li>
+                              <li>• ไม่มีสิทธิ์เข้าถึงไฟล์</li>
+                            </ul>
+                          </div>
+                          <div className="mt-4">
+                            <button
+                              onClick={() => window.open(getAttachmentUrl(doc.filePath), '_blank')}
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                            >
+                              เปิดในแท็บใหม่
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Footer ของเอกสาร */}
+                  <div className="bg-gray-50 px-8 py-3 border-2 border-t-0 border-blue-200 rounded-b-xl">
+                    <div className="flex justify-between items-center text-sm text-gray-600">
+                      <span>เอกสารที่ {index + 1} จาก {uploadedDocuments.length}</span>
+                      <span>{getDocumentTypeName(doc.documentType)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* แสดงข้อความเมื่อไม่มีไฟล์แนบ */}
+      {uploadedDocuments.length === 0 && (
+        <div className="mt-12">
+          {/* Debug Information */}
+          <div className="mb-8 p-4 bg-yellow-100 border border-yellow-300 rounded-lg">
+            <h3 className="text-lg font-semibold text-yellow-800 mb-2">Debug: ข้อมูลไฟล์แนบ</h3>
+            <p className="text-sm text-yellow-700">
+              จำนวนไฟล์แนบ: {uploadedDocuments.length} ไฟล์
+            </p>
+            <p className="text-sm text-yellow-700">
+              Application ID: {applicationData?.id || 'ไม่พบ ID'}
+            </p>
+            <p className="text-sm text-yellow-700">
+              Loading: {loading ? 'กำลังโหลด...' : 'โหลดเสร็จแล้ว'}
+            </p>
+          </div>
+          
+          {/* ข้อความไม่มีไฟล์แนบ */}
+          <div className="text-center py-16">
+            <div className="bg-gray-50 rounded-xl p-8 max-w-md mx-auto">
+              <DocumentTextIcon className="w-20 h-20 mx-auto mb-6 text-gray-400" />
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">ไม่มีเอกสารแนบ</h3>
+              <p className="text-gray-500 mb-4">
+                ยังไม่มีเอกสารแนบในระบบสำหรับใบสมัครนี้
+              </p>
+              <div className="text-sm text-gray-400">
+                <p>Application ID: {applicationData?.id || 'ไม่พบ'}</p>
+                <p>จำนวนไฟล์: {uploadedDocuments.length}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

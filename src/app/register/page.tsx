@@ -475,6 +475,15 @@ export default function ApplicationForm() {
           reason: w.description || ''
         }))
       : [];
+    const mappedPreviousGovernmentService = Array.isArray(resume.previousGovernmentService)
+      ? resume.previousGovernmentService.map((g: any) => ({
+          position: g.position || '',
+          department: g.department || '',
+          reason: g.reason || '',
+          date: g.date || '',
+          type: g.type || 'civilServant'
+        }))
+      : [];
 
     setFormData((prev) => ({
       ...prev,
@@ -518,6 +527,7 @@ export default function ApplicationForm() {
       ...(typeof (prev as any).unit !== 'undefined' ? { unit: resume.unit ?? (prev as any).unit } : {}),
       education: mappedEducation.length ? mappedEducation : prev.education,
       workExperience: mappedWork.length ? mappedWork : prev.workExperience,
+      previousGovernmentService: mappedPreviousGovernmentService.length ? mappedPreviousGovernmentService : prev.previousGovernmentService,
       // แผนที่อยู่ตามทะเบียนบ้าน
       registeredAddress: {
         houseNumber: resume.house_registration_house_number || prev.registeredAddress?.houseNumber || '',
@@ -736,8 +746,8 @@ export default function ApplicationForm() {
         partial.previousGovernmentService = (formData.previousGovernmentService || []).map((g) => ({
           position: g.position,
           department: g.department,
-          resignationReason: g.reason,
-          resignationDate: g.date ? new Date(g.date) : null,
+          reason: g.reason,
+          date: g.date,
           type: g.type || 'civilServant', // เพิ่มฟิลด์ type
         }));
       } else if (tab === 'skills') {
@@ -2841,22 +2851,17 @@ export default function ApplicationForm() {
     try {
       const timestamp = new Date().toISOString();
 
-        // ตรวจสอบว่ามี department parameter หรือไม่
-        const hasDepartment = departmentName || departmentId;
-        
-        // บันทึกข้อมูลไปที่ ResumeDeposit เสมอ (ไม่ว่าจะมี department parameter หรือไม่)
-        console.log('🔍 Mode: RESUME DEPOSIT (ฝากประวัติ) - บันทึกไปที่ตาราง ResumeDeposit');
-      console.log('🔍 departmentId:', departmentId);
-      console.log('🔍 departmentName:', departmentName);
+        // บันทึกข้อมูลไปที่ ResumeDeposit ที่เดียวเท่านั้น
+        console.log('🔍 Mode: RESUME DEPOSIT (ฝากประวัติ) - บันทึกไปที่ตาราง ResumeDeposit เท่านั้น');
+        console.log('🔍 departmentId:', departmentId);
+        console.log('🔍 departmentName:', departmentName);
 
-        // บันทึกข้อมูลไปที่ ResumeDeposit
+        // บันทึกข้อมูลไปที่ ResumeDeposit เท่านั้น
         await saveToResumeDeposit();
         
-        // บันทึกข้อมูลไปที่ ApplicationForm ด้วย (ถ้ามี department parameter)
-        if (hasDepartment) {
-          console.log('🔍 Mode: APPLICATION FORM (สมัครงาน) - บันทึกไปที่ตาราง ApplicationForm');
-          await saveToApplicationForm();
-        }
+        // บันทึกข้อมูลสำเร็จ
+        console.log('✅ บันทึกข้อมูลสำเร็จ');
+        setIsSaving(false);
     } catch (error) {
       console.error('❌ Error in handleSubmit:', error);
       alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
@@ -2885,22 +2890,22 @@ export default function ApplicationForm() {
           availableDate: formData.availableDate ? new Date(formData.availableDate) : null,
           expectedSalary: formData.expectedSalary || '',
           department: departmentName || formData.department || '',
-        departmentId: departmentId || formData.departmentId || '',
+        departmentId: departmentId || formData.department || '',
           appliedPosition: formData.appliedPosition || departmentName || '',
           // ที่อยู่ปัจจุบัน
-        currentAddress: formData.currentAddress?.currentAddress || '',
-        current_address_house_number: formData.currentAddress?.houseNumber || '',
-        current_address_village_number: formData.currentAddress?.villageNumber || '',
-        current_address_alley: formData.currentAddress?.alley || '',
-        current_address_road: formData.currentAddress?.road || '',
-        current_address_sub_district: formData.currentAddress?.subDistrict || '',
-        current_address_district: formData.currentAddress?.district || '',
-        current_address_province: formData.currentAddress?.province || '',
-        current_address_postal_code: formData.currentAddress?.postalCode || '',
-        current_address_phone: formData.currentAddress?.phone || '',
-        current_address_mobile: formData.currentAddress?.mobile || '',
+        currentAddress: formData.currentAddress || '',
+        current_address_house_number: formData.currentAddressDetail?.houseNumber || '',
+        current_address_village_number: formData.currentAddressDetail?.villageNumber || '',
+        current_address_alley: formData.currentAddressDetail?.alley || '',
+        current_address_road: formData.currentAddressDetail?.road || '',
+        current_address_sub_district: formData.currentAddressDetail?.subDistrict || '',
+        current_address_district: formData.currentAddressDetail?.district || '',
+        current_address_province: formData.currentAddressDetail?.province || '',
+        current_address_postal_code: formData.currentAddressDetail?.postalCode || '',
+        current_address_phone: formData.currentAddressDetail?.homePhone || '',
+        current_address_mobile: formData.currentAddressDetail?.mobilePhone || '',
           // ที่อยู่ตามทะเบียนบ้าน
-        addressAccordingToHouseRegistration: formData.registeredAddress?.addressAccordingToHouseRegistration || '',
+        addressAccordingToHouseRegistration: formData.addressAccordingToHouseRegistration || '',
         house_registration_house_number: formData.registeredAddress?.houseNumber || '',
         house_registration_village_number: formData.registeredAddress?.villageNumber || '',
         house_registration_alley: formData.registeredAddress?.alley || '',
@@ -3090,6 +3095,8 @@ export default function ApplicationForm() {
   const saveToResumeDeposit = async () => {
     try {
       console.log('📝 Saving to ResumeDeposit...');
+      console.log('🔍 formData.previousGovernmentService:', formData.previousGovernmentService);
+      console.log('🔍 formData.previousGovernmentService.length:', formData.previousGovernmentService?.length || 0);
       
       // สร้าง ResumeDeposit payload
       const resumePayload = {
@@ -3111,8 +3118,7 @@ export default function ApplicationForm() {
         religion: formData.religion || null,
           maritalStatus: formData.maritalStatus || 'UNKNOWN',
           // ที่อยู่
-        addressAccordingToHouseRegistration: formData.addressAccordingToHouseRegistration || null,
-        currentAddress: formData.currentAddress || null,
+        address: formData.currentAddress || null,
         phone: formData.phone || null,
         email: formData.email || null,
         // ข้อมูลฉุกเฉิน
@@ -3129,44 +3135,107 @@ export default function ApplicationForm() {
           certificates: formData.certificates || null,
           references: formData.references || null,
           // งานที่สนใจ
-          appliedPosition: formData.appliedPosition || departmentName || null,
+          expectedPosition: formData.appliedPosition || departmentName || null,
           expectedSalary: formData.expectedSalary || null,
-          availableDate: formData.availableDate ? new Date(formData.availableDate).toISOString() : null,
-          currentWork: formData.currentWork || false,
+          availableDate: formData.availableDate ? new Date(formData.availableDate) : null,
           department: departmentName || formData.department || null,
-          departmentId: departmentId || null,
           // ข้อมูลคู่สมรส
-          spouseFirstName: formData.spouseInfo?.firstName || null,
-          spouseLastName: formData.spouseInfo?.lastName || null,
+          spouse_first_name: formData.spouseInfo?.firstName || null,
+          spouse_last_name: formData.spouseInfo?.lastName || null,
           // การศึกษา
           education: (formData.education || []).map((e) => ({
             level: e.level,
-            institution: e.institution,
+            school: e.institution,
             major: e.major || null,
-          year: e.year,
-          gpa: e.gpa ? parseFloat(e.gpa) : null
+            endYear: e.year,
+            gpa: e.gpa ? parseFloat(e.gpa) : null
           })),
           // ประสบการณ์ทำงาน
           workExperience: (formData.workExperience || []).map((w) => ({
             position: w.position,
             company: w.company,
-            startDate: w.startDate ? new Date(w.startDate).toISOString() : null,
-            endDate: w.endDate ? new Date(w.endDate).toISOString() : null,
+            startDate: w.startDate ? new Date(w.startDate) : null,
+            endDate: w.endDate ? new Date(w.endDate) : null,
             salary: w.salary || null,
-            reason: w.reason || null,
+            description: w.reason || null,
           })),
           // ข้อมูลการรับราชการก่อนหน้า
-          previousGovernmentService: (formData.previousGovernmentService || []).map((g) => ({
-            position: g.position,
-            department: g.department,
-            resignationReason: g.reason,
-            resignationDate: g.date ? new Date(g.date).toISOString() : null,
-            type: g.type || 'civilServant',
-          })),
+          previousGovernmentService: (formData.previousGovernmentService || []).map((g) => {
+            console.log('🔍 Mapping previousGovernmentService:', g);
+            return {
+              position: g.position,
+              department: g.department,
+              reason: g.reason,
+              date: g.date,
+              type: g.type || 'civilServant',
+            };
+          }),
         // ข้อมูลเจ้าหน้าที่
         staff_position: formData.staffInfo?.position || null,
         staff_department: formData.staffInfo?.department || null,
         staff_start_work: formData.staffInfo?.startWork || null,
+        
+        // ที่อยู่ทะเบียนบ้าน (รายละเอียด)
+        house_registration_house_number: formData.registeredAddress?.houseNumber || null,
+        house_registration_village_number: formData.registeredAddress?.villageNumber || null,
+        house_registration_alley: formData.registeredAddress?.alley || null,
+        house_registration_road: formData.registeredAddress?.road || null,
+        house_registration_sub_district: formData.registeredAddress?.subDistrict || null,
+        house_registration_district: formData.registeredAddress?.district || null,
+        house_registration_province: formData.registeredAddress?.province || null,
+        house_registration_postal_code: formData.registeredAddress?.postalCode || null,
+        house_registration_phone: formData.registeredAddress?.phone || null,
+        house_registration_mobile: formData.registeredAddress?.mobile || null,
+        
+        // ที่อยู่ปัจจุบัน (รายละเอียด)
+        current_address_house_number: formData.currentAddressDetail?.houseNumber || null,
+        current_address_village_number: formData.currentAddressDetail?.villageNumber || null,
+        current_address_alley: formData.currentAddressDetail?.alley || null,
+        current_address_road: formData.currentAddressDetail?.road || null,
+        current_address_sub_district: formData.currentAddressDetail?.subDistrict || null,
+        current_address_district: formData.currentAddressDetail?.district || null,
+        current_address_province: formData.currentAddressDetail?.province || null,
+        current_address_postal_code: formData.currentAddressDetail?.postalCode || null,
+        current_address_phone: formData.currentAddressDetail?.homePhone || null,
+        current_address_mobile: formData.currentAddressDetail?.mobilePhone || null,
+        
+        // ที่อยู่ตามทะเบียนบ้าน (แบบเก่า)
+        addressAccordingToHouseRegistration: formData.addressAccordingToHouseRegistration || null,
+        
+        // ที่อยู่ฉุกเฉิน
+        emergency_address_house_number: formData.emergencyAddress?.houseNumber || null,
+        emergency_address_village_number: formData.emergencyAddress?.villageNumber || null,
+        emergency_address_alley: formData.emergencyAddress?.alley || null,
+        emergency_address_road: formData.emergencyAddress?.road || null,
+        emergency_address_sub_district: formData.emergencyAddress?.subDistrict || null,
+        emergency_address_district: formData.emergencyAddress?.district || null,
+        emergency_address_province: formData.emergencyAddress?.province || null,
+        emergency_address_postal_code: formData.emergencyAddress?.postalCode || null,
+        emergency_address_phone: formData.emergencyAddress?.phone || null,
+        
+        // ที่ทำงานของคนฉุกเฉิน
+        emergency_workplace_name: formData.emergencyWorkplace?.name || null,
+        emergency_workplace_district: formData.emergencyWorkplace?.district || null,
+        emergency_workplace_province: formData.emergencyWorkplace?.province || null,
+        emergency_workplace_phone: formData.emergencyWorkplace?.phone || null,
+        
+        // ข้อมูลสิทธิการรักษา
+        medical_rights_has_universal_healthcare: formData.medicalRights?.hasUniversalHealthcare || false,
+        medical_rights_universal_healthcare_hospital: formData.medicalRights?.universalHealthcareHospital || null,
+        medical_rights_has_social_security: formData.medicalRights?.hasSocialSecurity || false,
+        medical_rights_social_security_hospital: formData.medicalRights?.socialSecurityHospital || null,
+        medical_rights_dont_want_to_change_hospital: formData.medicalRights?.dontWantToChangeHospital || false,
+        medical_rights_want_to_change_hospital: formData.medicalRights?.wantToChangeHospital || false,
+        medical_rights_new_hospital: formData.medicalRights?.newHospital || null,
+        medical_rights_has_civil_servant_rights: formData.medicalRights?.hasCivilServantRights || false,
+        medical_rights_other_rights: formData.medicalRights?.otherRights || null,
+        
+        // ข้อมูลเพิ่มเติม
+        applicantSignature: formData.applicantSignature || null,
+        applicationDate: formData.applicationDate ? new Date(formData.applicationDate) : null,
+        currentWork: formData.currentWork || false,
+        multipleEmployers: formData.multipleEmployers ? JSON.stringify(formData.multipleEmployers) : null,
+        
         // เอกสารแนบ - ไม่ส่งข้อมูล documents ที่นี่เพราะจะจัดการแยกใน API
         // documents: formData.documents || null,
       };
@@ -3174,6 +3243,8 @@ export default function ApplicationForm() {
       // ส่งเป็น JSON เท่านั้น (รูปภาพจะจัดการแยกผ่าน profile-image/upload API)
       console.log('🔍 handleSubmit POST - Sending JSON data only');
       console.log('🔍 handleSubmit POST - formData.profileImage:', formData.profileImage);
+      console.log('🔍 handleSubmit POST - resumePayload.previousGovernmentService:', resumePayload.previousGovernmentService);
+      console.log('🔍 handleSubmit POST - resumePayload.previousGovernmentService.length:', resumePayload.previousGovernmentService?.length || 0);
 
       const res = await fetch('/api/resume-deposit', {
         method: 'POST',

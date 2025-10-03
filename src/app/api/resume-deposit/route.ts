@@ -73,11 +73,16 @@ export async function POST(request: NextRequest) {
                       data.maritalStatus === 'หย่า' ? 'DIVORCED' : 
                       data.maritalStatus === 'หม้าย' ? 'WIDOWED' : 'UNKNOWN',
         address: data.address || '',
+        addressAccordingToHouseRegistration: data.addressAccordingToHouseRegistration || '',
         phone: isDraft ? (data.phone || '-') : data.phone,
         email: isDraft ? (data.email || `draft-${Date.now()}@example.com`) : data.email,
         emergencyContact: data.emergencyContact || '',
+        emergencyContactFirstName: data.emergencyContactFirstName || '',
+        emergencyContactLastName: data.emergencyContactLastName || '',
         emergencyPhone: data.emergencyPhone || '',
         emergencyRelationship: data.emergencyRelationship || '',
+        // emergency address
+        emergencyAddress: data.emergencyAddress || null,
         // emergency workplace
         emergency_workplace_name: data.emergencyWorkplace?.name || data.emergency_workplace_name || '',
         emergency_workplace_district: data.emergencyWorkplace?.district || data.emergency_workplace_district || '',
@@ -130,6 +135,10 @@ export async function POST(request: NextRequest) {
         medical_rights_other_rights: data.medical_rights_other_rights || data.medicalRights?.otherRights || '',
         // Multiple employers (stored as JSON)
         multiple_employers: data.multiple_employers || (data.multipleEmployers ? JSON.stringify(data.multipleEmployers) : ''),
+        // Application information
+        applicantSignature: data.applicantSignature || '',
+        applicationDate: data.applicationDate ? new Date(data.applicationDate) : null,
+        currentWork: data.currentWork || false,
         // Staff information
         staff_position: data.staff_position || data.staffInfo?.position || '',
         staff_department: data.staff_department || data.staffInfo?.department || '',
@@ -176,12 +185,23 @@ export async function POST(request: NextRequest) {
         
         // Create related previous government service records
         previousGovernmentService: {
-          create: (data.previousGovernmentService || []).filter((gov: any) => gov.position || gov.department).map((gov: any) => ({
-            position: gov.position || '',
-            department: gov.department || '',
-            reason: gov.reason || '',
-            date: gov.date || ''
-          }))
+          create: (() => {
+            console.log('🔍 API - data.previousGovernmentService:', data.previousGovernmentService);
+            console.log('🔍 API - data.previousGovernmentService.length:', data.previousGovernmentService?.length || 0);
+            return (data.previousGovernmentService || []).filter((gov: any) => gov.position || gov.department).map((gov: any) => {
+              const serviceData: any = {
+                position: gov.position || '',
+                department: gov.department || '',
+                reason: gov.reason || '',
+                date: gov.date || ''
+              };
+              // เพิ่ม type field เฉพาะเมื่อมี
+              if (gov.type) {
+                serviceData.type = gov.type;
+              }
+              return serviceData;
+            });
+          })()
         },
         
         // Create related document records

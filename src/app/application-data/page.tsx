@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Card,
   CardBody,
@@ -22,7 +22,9 @@ import {
   BriefcaseIcon,
   DocumentTextIcon,
   EyeIcon,
-  PrinterIcon
+  PrinterIcon,
+  ArrowLeftIcon,
+  CloudArrowUpIcon
 } from '@heroicons/react/24/outline';
 
 // Interface สำหรับข้อมูลใบสมัครงาน
@@ -173,11 +175,15 @@ interface ApplicationData {
 const ApplicationFormView = ({ 
   application, 
   isEditing = false,
-  onInputChange
+  onInputChange,
+  uploadingFiles = {},
+  onFileSelect
 }: { 
   application: ApplicationData;
   isEditing?: boolean;
   onInputChange?: (field: string, value: any) => void;
+  uploadingFiles?: {[key: string]: boolean};
+  onFileSelect?: (event: React.ChangeEvent<HTMLInputElement>, documentType: string, applicationId: string) => void;
 }) => {
   // ฟังก์ชันสำหรับจัดรูปแบบวันที่
   const formatDate = (dateString: string) => {
@@ -1804,36 +1810,89 @@ const ApplicationFormView = ({
                         </span>
                       </div>
                       <div className="flex gap-2">
-                <Button
+                        <Button
                           color="secondary"
                           variant="bordered"
-                  size="sm"
+                          size="sm"
                           className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
                           onClick={() => window.open(application.documents?.idCard, '_blank')}
-                >
+                        >
                           ดูตัวอย่าง
-                </Button>
+                        </Button>
                         <Button
                           color="danger"
                           variant="bordered"
                           size="sm"
                           className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
-                              // TODO: เพิ่มฟังก์ชันลบไฟล์
-                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                              try {
+                                const response = await fetch(`/api/resume-documents`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    resumeDepositId: application.id,
+                                    documentType: 'idCard'
+                                  }),
+                                });
+
+                                if (response.ok) {
+                                  alert('ลบไฟล์เรียบร้อยแล้ว');
+                                  window.location.reload();
+                                } else {
+                                  try {
+                                    const contentType = response.headers.get('content-type');
+                                    if (contentType && contentType.includes('application/json')) {
+                                      const errorData = await response.json();
+                                      alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถลบไฟล์ได้'}`);
+                                    } else {
+                                      const errorText = await response.text();
+                                      alert(`เกิดข้อผิดพลาด: ${errorText || 'ไม่สามารถลบไฟล์ได้'} (Status: ${response.status})`);
+                                    }
+                                  } catch (parseError) {
+                                    alert(`เกิดข้อผิดพลาด: ไม่สามารถลบไฟล์ได้ (Status: ${response.status})`);
+                                  }
+                                }
+                              } catch (error) {
+                                console.error('Error deleting file:', error);
+                                alert('เกิดข้อผิดพลาดในการลบไฟล์');
+                              }
                             }
                           }}
                         >
                           ลบ
                         </Button>
-                    </div>
+                      </div>
                     </div>
                   ) : (
                     <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
-                  </div>
-                )}
+                      <div className="text-center">
+                        <span className="text-sm text-gray-500 block mb-3">ไม่มีไฟล์แนบ</span>
+                        <div className="flex flex-col gap-2">
+                          <input
+                            type="file"
+                            id={`idCard-${application.id}`}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => onFileSelect?.(e, 'idCard', application.id)}
+                            className="hidden"
+                          />
+                          <Button
+                            color="primary"
+                            variant="bordered"
+                            size="sm"
+                            startContent={<CloudArrowUpIcon className="w-4 h-4" />}
+                            onClick={() => document.getElementById(`idCard-${application.id}`)?.click()}
+                            disabled={uploadingFiles[`${application.id}-idCard`]}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                          >
+                            {uploadingFiles[`${application.id}-idCard`] ? 'กำลังอัปโหลด...' : 'อัปโหลดไฟล์'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1877,10 +1936,41 @@ const ApplicationFormView = ({
                           variant="bordered"
                           size="sm"
                           className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
-                              // TODO: เพิ่มฟังก์ชันลบไฟล์
-                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                              try {
+                                const response = await fetch(`/api/resume-documents`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    resumeDepositId: application.id,
+                                    documentType: 'idCard'
+                                  }),
+                                });
+
+                                if (response.ok) {
+                                  alert('ลบไฟล์เรียบร้อยแล้ว');
+                                  window.location.reload();
+                                } else {
+                                  try {
+                                    const contentType = response.headers.get('content-type');
+                                    if (contentType && contentType.includes('application/json')) {
+                                      const errorData = await response.json();
+                                      alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถลบไฟล์ได้'}`);
+                                    } else {
+                                      const errorText = await response.text();
+                                      alert(`เกิดข้อผิดพลาด: ${errorText || 'ไม่สามารถลบไฟล์ได้'} (Status: ${response.status})`);
+                                    }
+                                  } catch (parseError) {
+                                    alert(`เกิดข้อผิดพลาด: ไม่สามารถลบไฟล์ได้ (Status: ${response.status})`);
+                                  }
+                                }
+                              } catch (error) {
+                                console.error('Error deleting file:', error);
+                                alert('เกิดข้อผิดพลาดในการลบไฟล์');
+                              }
                             }
                           }}
                         >
@@ -1890,8 +1980,30 @@ const ApplicationFormView = ({
                     </div>
                   ) : (
                     <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
-                  </div>
+                      <div className="text-center">
+                        <span className="text-sm text-gray-500 block mb-3">ไม่มีไฟล์แนบ</span>
+                        <div className="flex flex-col gap-2">
+                          <input
+                            type="file"
+                            id={`houseRegistration-${application.id}`}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => onFileSelect?.(e, 'houseRegistration', application.id)}
+                            className="hidden"
+                          />
+                          <Button
+                            color="primary"
+                            variant="bordered"
+                            size="sm"
+                            startContent={<CloudArrowUpIcon className="w-4 h-4" />}
+                            onClick={() => document.getElementById(`houseRegistration-${application.id}`)?.click()}
+                            disabled={uploadingFiles[`${application.id}-houseRegistration`]}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                          >
+                            {uploadingFiles[`${application.id}-houseRegistration`] ? 'กำลังอัปโหลด...' : 'อัปโหลดไฟล์'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                 )}
                 </div>
               </div>
@@ -1936,10 +2048,41 @@ const ApplicationFormView = ({
                           variant="bordered"
                           size="sm"
                           className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
-                              // TODO: เพิ่มฟังก์ชันลบไฟล์
-                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                              try {
+                                const response = await fetch(`/api/resume-documents`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    resumeDepositId: application.id,
+                                    documentType: 'idCard'
+                                  }),
+                                });
+
+                                if (response.ok) {
+                                  alert('ลบไฟล์เรียบร้อยแล้ว');
+                                  window.location.reload();
+                                } else {
+                                  try {
+                                    const contentType = response.headers.get('content-type');
+                                    if (contentType && contentType.includes('application/json')) {
+                                      const errorData = await response.json();
+                                      alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถลบไฟล์ได้'}`);
+                                    } else {
+                                      const errorText = await response.text();
+                                      alert(`เกิดข้อผิดพลาด: ${errorText || 'ไม่สามารถลบไฟล์ได้'} (Status: ${response.status})`);
+                                    }
+                                  } catch (parseError) {
+                                    alert(`เกิดข้อผิดพลาด: ไม่สามารถลบไฟล์ได้ (Status: ${response.status})`);
+                                  }
+                                }
+                              } catch (error) {
+                                console.error('Error deleting file:', error);
+                                alert('เกิดข้อผิดพลาดในการลบไฟล์');
+                              }
                             }
                           }}
                         >
@@ -1949,11 +2092,33 @@ const ApplicationFormView = ({
                     </div>
                   ) : (
                     <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
+                      <div className="text-center">
+                        <span className="text-sm text-gray-500 block mb-3">ไม่มีไฟล์แนบ</span>
+                        <div className="flex flex-col gap-2">
+                          <input
+                            type="file"
+                            id={`educationCertificate-${application.id}`}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => onFileSelect?.(e, 'educationCertificate', application.id)}
+                            className="hidden"
+                          />
+                          <Button
+                            color="primary"
+                            variant="bordered"
+                            size="sm"
+                            startContent={<CloudArrowUpIcon className="w-4 h-4" />}
+                            onClick={() => document.getElementById(`educationCertificate-${application.id}`)?.click()}
+                            disabled={uploadingFiles[`${application.id}-educationCertificate`]}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                          >
+                            {uploadingFiles[`${application.id}-educationCertificate`] ? 'กำลังอัปโหลด...' : 'อัปโหลดไฟล์'}
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
+            </div>
 
               {/* ใบรับรองการเกณฑ์ทหาร */}
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
@@ -1995,10 +2160,41 @@ const ApplicationFormView = ({
                           variant="bordered"
                           size="sm"
                           className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
-                              // TODO: เพิ่มฟังก์ชันลบไฟล์
-                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                              try {
+                                const response = await fetch(`/api/resume-documents`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    resumeDepositId: application.id,
+                                    documentType: 'idCard'
+                                  }),
+                                });
+
+                                if (response.ok) {
+                                  alert('ลบไฟล์เรียบร้อยแล้ว');
+                                  window.location.reload();
+                                } else {
+                                  try {
+                                    const contentType = response.headers.get('content-type');
+                                    if (contentType && contentType.includes('application/json')) {
+                                      const errorData = await response.json();
+                                      alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถลบไฟล์ได้'}`);
+                                    } else {
+                                      const errorText = await response.text();
+                                      alert(`เกิดข้อผิดพลาด: ${errorText || 'ไม่สามารถลบไฟล์ได้'} (Status: ${response.status})`);
+                                    }
+                                  } catch (parseError) {
+                                    alert(`เกิดข้อผิดพลาด: ไม่สามารถลบไฟล์ได้ (Status: ${response.status})`);
+                                  }
+                                }
+                              } catch (error) {
+                                console.error('Error deleting file:', error);
+                                alert('เกิดข้อผิดพลาดในการลบไฟล์');
+                              }
                             }
                           }}
                         >
@@ -2008,8 +2204,30 @@ const ApplicationFormView = ({
                     </div>
                   ) : (
                     <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
-                  </div>
+                      <div className="text-center">
+                        <span className="text-sm text-gray-500 block mb-3">ไม่มีไฟล์แนบ</span>
+                        <div className="flex flex-col gap-2">
+                          <input
+                            type="file"
+                            id={`militaryCertificate-${application.id}`}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => onFileSelect?.(e, 'militaryCertificate', application.id)}
+                            className="hidden"
+                          />
+                          <Button
+                            color="primary"
+                            variant="bordered"
+                            size="sm"
+                            startContent={<CloudArrowUpIcon className="w-4 h-4" />}
+                            onClick={() => document.getElementById(`militaryCertificate-${application.id}`)?.click()}
+                            disabled={uploadingFiles[`${application.id}-militaryCertificate`]}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                          >
+                            {uploadingFiles[`${application.id}-militaryCertificate`] ? 'กำลังอัปโหลด...' : 'อัปโหลดไฟล์'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                 )}
                 </div>
               </div>
@@ -2054,10 +2272,41 @@ const ApplicationFormView = ({
                           variant="bordered"
                           size="sm"
                           className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
-                              // TODO: เพิ่มฟังก์ชันลบไฟล์
-                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                              try {
+                                const response = await fetch(`/api/resume-documents`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    resumeDepositId: application.id,
+                                    documentType: 'idCard'
+                                  }),
+                                });
+
+                                if (response.ok) {
+                                  alert('ลบไฟล์เรียบร้อยแล้ว');
+                                  window.location.reload();
+                                } else {
+                                  try {
+                                    const contentType = response.headers.get('content-type');
+                                    if (contentType && contentType.includes('application/json')) {
+                                      const errorData = await response.json();
+                                      alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถลบไฟล์ได้'}`);
+                                    } else {
+                                      const errorText = await response.text();
+                                      alert(`เกิดข้อผิดพลาด: ${errorText || 'ไม่สามารถลบไฟล์ได้'} (Status: ${response.status})`);
+                                    }
+                                  } catch (parseError) {
+                                    alert(`เกิดข้อผิดพลาด: ไม่สามารถลบไฟล์ได้ (Status: ${response.status})`);
+                                  }
+                                }
+                              } catch (error) {
+                                console.error('Error deleting file:', error);
+                                alert('เกิดข้อผิดพลาดในการลบไฟล์');
+                              }
                             }
                           }}
                         >
@@ -2067,11 +2316,33 @@ const ApplicationFormView = ({
                     </div>
                   ) : (
                     <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
-                  </div>
+                      <div className="text-center">
+                        <span className="text-sm text-gray-500 block mb-3">ไม่มีไฟล์แนบ</span>
+                        <div className="flex flex-col gap-2">
+                          <input
+                            type="file"
+                            id={`medicalCertificate-${application.id}`}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => onFileSelect?.(e, 'medicalCertificate', application.id)}
+                            className="hidden"
+                          />
+                          <Button
+                            color="primary"
+                            variant="bordered"
+                            size="sm"
+                            startContent={<CloudArrowUpIcon className="w-4 h-4" />}
+                            onClick={() => document.getElementById(`medicalCertificate-${application.id}`)?.click()}
+                            disabled={uploadingFiles[`${application.id}-medicalCertificate`]}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                          >
+                            {uploadingFiles[`${application.id}-medicalCertificate`] ? 'กำลังอัปโหลด...' : 'อัปโหลดไฟล์'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                 )}
+                </div>
             </div>
-          </div>
 
               {/* ใบขับขี่ */}
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
@@ -2113,10 +2384,41 @@ const ApplicationFormView = ({
                           variant="bordered"
                         size="sm" 
                           className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
-                              // TODO: เพิ่มฟังก์ชันลบไฟล์
-                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                              try {
+                                const response = await fetch(`/api/resume-documents`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    resumeDepositId: application.id,
+                                    documentType: 'idCard'
+                                  }),
+                                });
+
+                                if (response.ok) {
+                                  alert('ลบไฟล์เรียบร้อยแล้ว');
+                                  window.location.reload();
+                                } else {
+                                  try {
+                                    const contentType = response.headers.get('content-type');
+                                    if (contentType && contentType.includes('application/json')) {
+                                      const errorData = await response.json();
+                                      alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถลบไฟล์ได้'}`);
+                                    } else {
+                                      const errorText = await response.text();
+                                      alert(`เกิดข้อผิดพลาด: ${errorText || 'ไม่สามารถลบไฟล์ได้'} (Status: ${response.status})`);
+                                    }
+                                  } catch (parseError) {
+                                    alert(`เกิดข้อผิดพลาด: ไม่สามารถลบไฟล์ได้ (Status: ${response.status})`);
+                                  }
+                                }
+                              } catch (error) {
+                                console.error('Error deleting file:', error);
+                                alert('เกิดข้อผิดพลาดในการลบไฟล์');
+                              }
                             }
                           }}
                         >
@@ -2126,8 +2428,30 @@ const ApplicationFormView = ({
                   </div>
                   ) : (
                     <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
-            </div>
+                      <div className="text-center">
+                        <span className="text-sm text-gray-500 block mb-3">ไม่มีไฟล์แนบ</span>
+                        <div className="flex flex-col gap-2">
+                          <input
+                            type="file"
+                            id={`drivingLicense-${application.id}`}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => onFileSelect?.(e, 'drivingLicense', application.id)}
+                            className="hidden"
+                          />
+                          <Button
+                            color="primary"
+                            variant="bordered"
+                            size="sm"
+                            startContent={<CloudArrowUpIcon className="w-4 h-4" />}
+                            onClick={() => document.getElementById(`drivingLicense-${application.id}`)?.click()}
+                            disabled={uploadingFiles[`${application.id}-drivingLicense`]}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                          >
+                            {uploadingFiles[`${application.id}-drivingLicense`] ? 'กำลังอัปโหลด...' : 'อัปโหลดไฟล์'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
           )}
                 </div>
               </div>
@@ -2172,10 +2496,41 @@ const ApplicationFormView = ({
                           variant="bordered"
                           size="sm"
                           className="bg-red-50 hover:bg-red-100 text-red-700 border-red-300 rounded-lg shadow-sm transition-all duration-200"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm('คุณต้องการลบไฟล์นี้หรือไม่?')) {
-                              // TODO: เพิ่มฟังก์ชันลบไฟล์
-                              alert('ฟีเจอร์ลบไฟล์จะเพิ่มในอนาคต');
+                              try {
+                                const response = await fetch(`/api/resume-documents`, {
+                                  method: 'DELETE',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    resumeDepositId: application.id,
+                                    documentType: 'idCard'
+                                  }),
+                                });
+
+                                if (response.ok) {
+                                  alert('ลบไฟล์เรียบร้อยแล้ว');
+                                  window.location.reload();
+                                } else {
+                                  try {
+                                    const contentType = response.headers.get('content-type');
+                                    if (contentType && contentType.includes('application/json')) {
+                                      const errorData = await response.json();
+                                      alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถลบไฟล์ได้'}`);
+                                    } else {
+                                      const errorText = await response.text();
+                                      alert(`เกิดข้อผิดพลาด: ${errorText || 'ไม่สามารถลบไฟล์ได้'} (Status: ${response.status})`);
+                                    }
+                                  } catch (parseError) {
+                                    alert(`เกิดข้อผิดพลาด: ไม่สามารถลบไฟล์ได้ (Status: ${response.status})`);
+                                  }
+                                }
+                              } catch (error) {
+                                console.error('Error deleting file:', error);
+                                alert('เกิดข้อผิดพลาดในการลบไฟล์');
+                              }
                             }
                           }}
                         >
@@ -2185,8 +2540,30 @@ const ApplicationFormView = ({
                     </div>
                   ) : (
                     <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                      <span className="text-sm text-gray-500">ไม่มีไฟล์แนบ</span>
-              </div>
+                      <div className="text-center">
+                        <span className="text-sm text-gray-500 block mb-3">ไม่มีไฟล์แนบ</span>
+                        <div className="flex flex-col gap-2">
+                          <input
+                            type="file"
+                            id={`nameChangeCertificate-${application.id}`}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => onFileSelect?.(e, 'nameChangeCertificate', application.id)}
+                            className="hidden"
+                          />
+                          <Button
+                            color="primary"
+                            variant="bordered"
+                            size="sm"
+                            startContent={<CloudArrowUpIcon className="w-4 h-4" />}
+                            onClick={() => document.getElementById(`nameChangeCertificate-${application.id}`)?.click()}
+                            disabled={uploadingFiles[`${application.id}-nameChangeCertificate`]}
+                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
+                          >
+                            {uploadingFiles[`${application.id}-nameChangeCertificate`] ? 'กำลังอัปโหลด...' : 'อัปโหลดไฟล์'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
             )}
                 </div>
               </div>
@@ -2205,7 +2582,12 @@ export default function ApplicationData() {
   const [editingApplication, setEditingApplication] = useState<ApplicationData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Upload states
+  const [uploadingFiles, setUploadingFiles] = useState<{[key: string]: boolean}>({});
+  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
   const searchParams = useSearchParams();
+  const router = useRouter();
   const departmentName = searchParams.get('department');
   
   // Modal states
@@ -2402,6 +2784,62 @@ export default function ApplicationData() {
     setIsEditing(false);
   };
 
+  // ฟังก์ชันอัปโหลดไฟล์
+  const handleFileUpload = async (file: File, documentType: string, applicationId: string) => {
+    const uploadKey = `${applicationId}-${documentType}`;
+    
+    try {
+      setUploadingFiles(prev => ({ ...prev, [uploadKey]: true }));
+      setUploadProgress(prev => ({ ...prev, [uploadKey]: 0 }));
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('resumeDepositId', applicationId);
+      formData.append('documentType', documentType);
+
+      const response = await fetch('/api/resume-documents', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        alert('อัปโหลดไฟล์เรียบร้อยแล้ว');
+        // รีเฟรชข้อมูล
+        fetchApplications();
+      } else {
+        const errorData = await response.json();
+        alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถอัปโหลดไฟล์ได้'}`);
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('เกิดข้อผิดพลาดในการอัปโหลดไฟล์');
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, [uploadKey]: false }));
+      setUploadProgress(prev => ({ ...prev, [uploadKey]: 0 }));
+    }
+  };
+
+  // ฟังก์ชันจัดการการเลือกไฟล์
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>, documentType: string, applicationId: string) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // ตรวจสอบขนาดไฟล์ (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('ขนาดไฟล์ต้องไม่เกิน 10MB');
+        return;
+      }
+      
+      // ตรวจสอบประเภทไฟล์
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('รองรับเฉพาะไฟล์ PDF, JPG, JPEG, PNG เท่านั้น');
+        return;
+      }
+
+      handleFileUpload(file, documentType, applicationId);
+    }
+  };
+
   // ฟังก์ชันบันทึกข้อมูล
   const handleSaveApplication = async () => {
     if (!editingApplication) return;
@@ -2490,6 +2928,42 @@ export default function ApplicationData() {
     }));
   };
 
+
+
+
+  // ฟังก์ชันลบไฟล์
+  const handleDeleteFile = async (documentType: string, applicationId: string) => {
+    try {
+      if (!applicationId) {
+        alert('ไม่พบข้อมูลใบสมัคร');
+        return;
+      }
+
+      const response = await fetch(`/api/resume-documents`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          resumeDepositId: applicationId,
+          documentType: documentType
+        }),
+      });
+
+      if (response.ok) {
+        alert('ลบไฟล์เรียบร้อยแล้ว');
+        // รีเฟรชข้อมูล
+        window.location.reload();
+      } else {
+        const errorData = await response.json();
+        alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถลบไฟล์ได้'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      alert('เกิดข้อผิดพลาดในการลบไฟล์');
+    }
+  };
+
   // ฟังก์ชันสำหรับพิมพ์เอกสาร
   const handlePrintDocument = (application: ApplicationData) => {
     // ส่งเฉพาะ ID ไปยัง official-documents เพื่อให้ดึงข้อมูลจาก API
@@ -2529,13 +3003,26 @@ export default function ApplicationData() {
   return (
     <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                  ข้อมูลใบสมัครงาน
-                </h1>
-        <p className="text-gray-600">
-          {departmentName ? `แผนก: ${departmentName}` : 'รายการใบสมัครงานทั้งหมด'}
-        </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                ข้อมูลใบสมัครงาน
+              </h1>
+              <p className="text-gray-600">
+                {departmentName ? `แผนก: ${departmentName}` : 'รายการใบสมัครงานทั้งหมด'}
+              </p>
+            </div>
+            <Button
+              color="primary"
+              variant="bordered"
+              startContent={<ArrowLeftIcon className="w-4 h-4" />}
+              onClick={() => router.push('/dashboard')}
+              className="bg-white hover:bg-gray-50 border-gray-300 text-gray-700"
+            >
+              กลับไป Dashboard
+            </Button>
           </div>
+        </div>
           
       {applications.length === 0 ? (
         <Card className="p-8 text-center">
@@ -2646,6 +3133,8 @@ export default function ApplicationData() {
                  application={isEditing ? editingApplication! : selectedApplication} 
                    isEditing={isEditing}
                  onInputChange={handleInputChange}
+                 uploadingFiles={uploadingFiles}
+                 onFileSelect={handleFileSelect}
                  />
                )}
             </ModalBody>

@@ -91,82 +91,82 @@ model UserWorkExperience {
 }
 
 model ApplicationForm {
-  id                                  String                      @id @default(cuid())
-  userId                              String?                     @map("user_id")
-  submittedAt                         DateTime                    @default(now()) @map("submitted_at")
-  status                              ApplicationStatus           @default(PENDING)
-  prefix                              String?                     @db.VarChar(10)
-  firstName                           String                      @map("first_name") @db.VarChar(100)
-  lastName                            String                      @map("last_name") @db.VarChar(100)
-  idNumber                            String?                     @map("id_number") @db.VarChar(20)
-  idCardIssuedAt                      String?                     @map("id_card_issued_at") @db.VarChar(100)
-  idCardIssueDate                     DateTime?                   @map("id_card_issue_date") @db.Date
-  idCardExpiryDate                    DateTime?                   @map("id_card_expiry_date") @db.Date
-  birthDate                           DateTime?                   @map("birth_date") @db.Date
+  id                                  String                                 @id @default(cuid())
+  userId                              String?                                @map("user_id")
+  submittedAt                         DateTime                               @default(now()) @map("submitted_at")
+  status                              ApplicationStatus                      @default(PENDING)
+  prefix                              String?                                @db.VarChar(10)
+  firstName                           String                                 @map("first_name") @db.VarChar(100)
+  lastName                            String                                 @map("last_name") @db.VarChar(100)
+  idNumber                            String?                                @map("id_number") @db.VarChar(20)
+  idCardIssuedAt                      String?                                @map("id_card_issued_at") @db.VarChar(100)
+  idCardIssueDate                     DateTime?                              @map("id_card_issue_date") @db.Date
+  idCardExpiryDate                    DateTime?                              @map("id_card_expiry_date") @db.Date
+  birthDate                           DateTime?                              @map("birth_date") @db.Date
   age                                 Int?
-  race                                String?                     @db.VarChar(50)
-  placeOfBirth                        String?                     @map("place_of_birth") @db.VarChar(100)
-  gender                              Gender                      @default(UNKNOWN)
-  nationality                         String?                     @default("ไทย") @db.VarChar(50)
-  religion                            String?                     @db.VarChar(50)
-  maritalStatus                       MaritalStatus               @default(UNKNOWN) @map("marital_status")
-  addressAccordingToHouseRegistration String?                     @map("address_according_to_house_registration") @db.Text
-  currentAddress                      String?                     @map("current_address") @db.Text
-  phone                               String?                     @db.VarChar(20)
-  email                               String?                     @db.VarChar(255)
-  emergencyContact                    String?                     @map("emergency_contact") @db.VarChar(100)
-  emergencyPhone                      String?                     @map("emergency_phone") @db.VarChar(20)
-  emergencyRelationship               String?                     @map("emergency_relationship") @db.VarChar(50)
-  appliedPosition                     String?                     @map("applied_position") @db.VarChar(200)
-  expectedSalary                      String?                     @map("expected_salary") @db.VarChar(100)
-  availableDate                       DateTime?                   @map("available_date") @db.Date
-  currentWork                         Boolean                     @default(false) @map("current_work")
-  department                          String?                     @db.VarChar(100)
-  departmentId                        String?                     @map("department_id") @db.VarChar(50)
-  skills                              String?                     @db.Text
-  languages                           String?                     @db.Text
-  computerSkills                      String?                     @map("computer_skills") @db.Text
-  certificates                        String?                     @db.Text
-  references                          String?                     @db.Text
-  profileImage                        String?                     @map("profile_image") @db.VarChar(255)
-  createdAt                           DateTime                    @default(now()) @map("created_at")
-  updatedAt                           DateTime                    @updatedAt @map("updated_at")
-  current_address_alley               String?                     @db.VarChar(100)
-  current_address_district            String?                     @db.VarChar(100)
-  current_address_house_number        String?                     @db.VarChar(20)
-  current_address_mobile              String?                     @db.VarChar(20)
-  current_address_phone               String?                     @db.VarChar(20)
-  current_address_postal_code         String?                     @db.VarChar(10)
-  current_address_province            String?                     @db.VarChar(100)
-  current_address_road                String?                     @db.VarChar(100)
-  current_address_sub_district        String?                     @db.VarChar(100)
-  current_address_village_number      String?                     @db.VarChar(20)
-  house_registration_alley            String?                     @db.VarChar(100)
-  house_registration_district         String?                     @db.VarChar(100)
-  house_registration_house_number     String?                     @db.VarChar(20)
-  house_registration_mobile           String?                     @db.VarChar(20)
-  house_registration_phone            String?                     @db.VarChar(20)
-  house_registration_postal_code      String?                     @db.VarChar(10)
-  house_registration_province         String?                     @db.VarChar(100)
-  house_registration_road             String?                     @db.VarChar(100)
-  house_registration_sub_district     String?                     @db.VarChar(100)
-  house_registration_village_number   String?                     @db.VarChar(20)
-  emergency_address_alley             String?                     @db.VarChar(100)
-  emergency_address_district          String?                     @db.VarChar(100)
-  emergency_address_house_number      String?                     @db.VarChar(20)
-  emergency_address_phone             String?                     @db.VarChar(20)
-  emergency_address_postal_code       String?                     @db.VarChar(10)
-  emergency_address_province          String?                     @db.VarChar(100)
-  emergency_address_road              String?                     @db.VarChar(100)
-  emergency_address_sub_district      String?                     @db.VarChar(100)
-  emergency_address_village_number    String?                     @db.VarChar(20)
-  spouseFirstName                     String?                     @map("spouse_first_name") @db.VarChar(100)
-  spouseLastName                      String?                     @map("spouse_last_name") @db.VarChar(100)
+  race                                String?                                @db.VarChar(50)
+  placeOfBirth                        String?                                @map("place_of_birth") @db.VarChar(100)
+  gender                              Gender                                 @default(UNKNOWN)
+  nationality                         String?                                @default("ไทย") @db.VarChar(50)
+  religion                            String?                                @db.VarChar(50)
+  maritalStatus                       MaritalStatus                          @default(UNKNOWN) @map("marital_status")
+  addressAccordingToHouseRegistration String?                                @map("address_according_to_house_registration") @db.Text
+  currentAddress                      String?                                @map("current_address") @db.Text
+  phone                               String?                                @db.VarChar(20)
+  email                               String?                                @db.VarChar(255)
+  emergencyContact                    String?                                @map("emergency_contact") @db.VarChar(100)
+  emergencyPhone                      String?                                @map("emergency_phone") @db.VarChar(20)
+  emergencyRelationship               String?                                @map("emergency_relationship") @db.VarChar(50)
+  appliedPosition                     String?                                @map("applied_position") @db.VarChar(200)
+  expectedSalary                      String?                                @map("expected_salary") @db.VarChar(100)
+  availableDate                       DateTime?                              @map("available_date") @db.Date
+  currentWork                         Boolean                                @default(false) @map("current_work")
+  department                          String?                                @db.VarChar(100)
+  skills                              String?                                @db.Text
+  languages                           String?                                @db.Text
+  computerSkills                      String?                                @map("computer_skills") @db.Text
+  certificates                        String?                                @db.Text
+  references                          String?                                @db.Text
+  profileImage                        String?                                @map("profile_image") @db.VarChar(255)
+  createdAt                           DateTime                               @default(now()) @map("created_at")
+  updatedAt                           DateTime                               @updatedAt @map("updated_at")
+  current_address_alley               String?                                @db.VarChar(100)
+  current_address_district            String?                                @db.VarChar(100)
+  current_address_house_number        String?                                @db.VarChar(20)
+  current_address_mobile              String?                                @db.VarChar(20)
+  current_address_phone               String?                                @db.VarChar(20)
+  current_address_postal_code         String?                                @db.VarChar(10)
+  current_address_province            String?                                @db.VarChar(100)
+  current_address_road                String?                                @db.VarChar(100)
+  current_address_sub_district        String?                                @db.VarChar(100)
+  current_address_village_number      String?                                @db.VarChar(20)
+  house_registration_alley            String?                                @db.VarChar(100)
+  house_registration_district         String?                                @db.VarChar(100)
+  house_registration_house_number     String?                                @db.VarChar(20)
+  house_registration_mobile           String?                                @db.VarChar(20)
+  house_registration_phone            String?                                @db.VarChar(20)
+  house_registration_postal_code      String?                                @db.VarChar(10)
+  house_registration_province         String?                                @db.VarChar(100)
+  house_registration_road             String?                                @db.VarChar(100)
+  house_registration_sub_district     String?                                @db.VarChar(100)
+  house_registration_village_number   String?                                @db.VarChar(20)
+  emergency_address_alley             String?                                @db.VarChar(100)
+  emergency_address_district          String?                                @db.VarChar(100)
+  emergency_address_house_number      String?                                @db.VarChar(20)
+  emergency_address_phone             String?                                @db.VarChar(20)
+  emergency_address_postal_code       String?                                @db.VarChar(10)
+  emergency_address_province          String?                                @db.VarChar(100)
+  emergency_address_road              String?                                @db.VarChar(100)
+  emergency_address_sub_district      String?                                @db.VarChar(100)
+  emergency_address_village_number    String?                                @db.VarChar(20)
+  spouseFirstName                     String?                                @map("spouse_first_name") @db.VarChar(100)
+  spouseLastName                      String?                                @map("spouse_last_name") @db.VarChar(100)
+  departmentId                        String?                                @map("department_id") @db.VarChar(50)
   documents                           ApplicationDocument[]
   education                           ApplicationEducation[]
-  user                                User?                       @relation(fields: [userId], references: [id])
-  workExperience                      ApplicationWorkExperience[]
+  user                                User?                                  @relation(fields: [userId], references: [id])
   previousGovernmentService           ApplicationPreviousGovernmentService[]
+  workExperience                      ApplicationWorkExperience[]
 
   @@index([userId], map: "application_forms_user_id_fkey")
   @@map("application_forms")
@@ -204,16 +204,16 @@ model ApplicationWorkExperience {
 }
 
 model ApplicationPreviousGovernmentService {
-  id              Int             @id @default(autoincrement())
-  applicationId   String          @map("application_id")
-  position        String          @db.VarChar(200)
-  department      String          @db.VarChar(200)
-  reason          String          @db.Text
-  date            String          @db.VarChar(50)
-  type            String?         @default("civilServant") @db.VarChar(50)
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-  application     ApplicationForm @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  id            Int             @id @default(autoincrement())
+  applicationId String          @map("application_id")
+  position      String          @db.VarChar(200)
+  department    String          @db.VarChar(200)
+  reason        String          @db.Text
+  date          String          @db.VarChar(50)
+  type          String?         @default("civilServant") @db.VarChar(50)
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  application   ApplicationForm @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId], map: "application_prev_gov_service_application_id_fkey")
   @@map("application_previous_government_service")
@@ -334,11 +334,15 @@ model ResumeDeposit {
   religion                                     String?                                  @db.VarChar(50)
   maritalStatus                                MaritalStatus                            @default(UNKNOWN) @map("marital_status")
   address                                      String?                                  @db.Text
+  addressAccordingToHouseRegistration          String?                                  @map("address_according_to_house_registration") @db.Text
   phone                                        String                                   @db.VarChar(20)
   email                                        String                                   @db.VarChar(255)
   emergencyContact                             String?                                  @map("emergency_contact") @db.VarChar(100)
+  emergencyContactFirstName                    String?                                  @map("emergency_contact_first_name") @db.VarChar(100)
+  emergencyContactLastName                     String?                                  @map("emergency_contact_last_name") @db.VarChar(100)
   emergencyPhone                               String?                                  @map("emergency_phone") @db.VarChar(20)
   emergencyRelationship                        String?                                  @map("emergency_relationship") @db.VarChar(50)
+  emergencyAddress                             Json?                                    @map("emergency_address")
   emergency_workplace_name                     String?                                  @db.VarChar(200)
   emergency_workplace_district                 String?                                  @db.VarChar(100)
   emergency_workplace_province                 String?                                  @db.VarChar(100)
@@ -405,6 +409,9 @@ model ResumeDeposit {
   staff_department                             String?                                  @map("staff_department") @db.VarChar(200)
   staff_position                               String?                                  @map("staff_position") @db.VarChar(200)
   staff_start_work                             String?                                  @map("staff_start_work") @db.VarChar(50)
+  applicantSignature                           String?                                  @map("applicant_signature") @db.VarChar(255)
+  applicationDate                              DateTime?                                @map("application_date") @db.Date
+  currentWork                                  Boolean                                  @default(false) @map("current_work")
   documents                                    ResumeDepositDocument[]
   education                                    ResumeDepositEducation[]
   previousGovernmentService                    ResumeDepositPreviousGovernmentService[]
@@ -455,9 +462,9 @@ model ResumeDepositPreviousGovernmentService {
   department      String        @db.VarChar(200)
   reason          String        @db.Text
   date            String        @db.VarChar(50)
-  type            String?       @default("civilServant") @db.VarChar(50)
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
+  type            String?       @default("civilServant") @db.VarChar(50)
   resumeDeposit   ResumeDeposit @relation(fields: [resumeDepositId], references: [id], onDelete: Cascade)
 
   @@index([resumeDepositId], map: "resume_deposit_prev_gov_service_resume_deposit_id_fkey")

@@ -500,13 +500,20 @@ export default function OfficialDocuments() {
         medicalRights: data.medicalRights || undefined,
         multipleEmployers: data.multipleEmployers || [],
         staffInfo: data.staffInfo || undefined,
-        profileImage: data.profileImage || '',
+        profileImage: data.profileImage || data.photo || data.avatar || '',
         updatedAt: data.updatedAt || '',
         documents: data.documents || undefined
       };
       
       // Debug: แสดงข้อมูลที่แปลงแล้ว
       console.log('🔍 Mapped ApplicationData:', applicationData);
+      console.log('🔍 Profile Image Debug:', {
+        rawProfileImage: data.profileImage,
+        rawPhoto: data.photo,
+        rawAvatar: data.avatar,
+        mappedProfileImage: applicationData.profileImage,
+        profileImageType: typeof applicationData.profileImage
+      });
       console.log('🔍 Key fields check:', {
         firstName: applicationData.firstName,
         lastName: applicationData.lastName,
@@ -807,13 +814,14 @@ export default function OfficialDocuments() {
                   {applicationData?.profileImage ? (
                     <div className="w-full h-full flex items-center justify-center">
                       <Image
-                        src={`/api/image?file=${applicationData.profileImage}`}
+                        src={applicationData.profileImage.startsWith('http') ? applicationData.profileImage : `/api/image?file=${applicationData.profileImage}`}
                         alt="รูปถ่ายผู้สมัคร"
                         width={120}
                         height={150}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           console.error('❌ Failed to load profile image:', applicationData.profileImage);
+                          console.error('❌ Image src:', e.currentTarget.src);
                           const img = e.currentTarget as HTMLImageElement;
                           img.style.display = 'none';
                           const parent = img.parentElement;
@@ -836,12 +844,6 @@ export default function OfficialDocuments() {
                     <div className="text-center">
                       <div className="text-xs text-gray-500 mb-1">ติดรูปถ่าย</div>
                       <div className="text-xs text-gray-500">ขนาด ๑ นิ้ว</div>
-                      {/* Debug info */}
-                      {process.env.NODE_ENV === 'development' && (
-                        <div className="text-xs text-red-500 mt-1">
-                          Debug: {applicationData?.profileImage ? 'มีรูป' : 'ไม่มีรูป'}
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
