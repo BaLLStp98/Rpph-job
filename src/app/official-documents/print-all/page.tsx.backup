@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button, Spinner } from '@heroui/react';
-import { DocumentTextIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, DocumentIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 
 // Interface สำหรับข้อมูลที่ส่งมาจาก application-data
@@ -439,6 +439,8 @@ export default function PrintAllDocuments() {
         emergencyContactLastName: data.emergencyContactLastName || '',
         emergencyContactRelationship: data.emergencyContactRelationship || data.emergencyRelationship || '',
         emergencyContactPhone: data.emergencyContactPhone || data.emergencyPhone || '',
+        emergencyPhone: data.emergencyPhone || data.emergencyContactPhone || '',
+        emergencyRelationship: data.emergencyRelationship || data.emergencyContactRelationship || '',
         emergencyAddress: data.emergencyAddress || undefined,
         emergencyWorkplace: data.emergencyWorkplace || undefined,
         appliedPosition: data.expectedPosition || data.appliedPosition || data.position || '',
@@ -510,14 +512,13 @@ export default function PrintAllDocuments() {
         emergency_address_district: data.emergency_address_district || data.emergencyDistrict || '',
         emergency_address_province: data.emergency_address_province || data.emergencyProvince || '',
         emergency_address_postal_code: data.emergency_address_postal_code || data.emergencyPostalCode || '',
-        emergency_address_phone: data.emergency_address_phone || data.emergencyPhone || '',
+        emergency_address_phone: data.emergency_address_phone || data.emergencyPhone || data.emergencyContactPhone || '',
         medicalRights: data.medicalRights || undefined,
         multipleEmployers: data.multipleEmployers || data.otherEmployers || [],
         staffInfo: data.staffInfo || undefined,
         profileImage: data.profileImage || data.photo || data.avatar || data.profileImageUrl || data.image || data.picture || data.profile_image || data.user_image || '',
         updatedAt: data.updatedAt || data.modifiedAt || '',
         documents: data.documents || undefined,
-        // เพิ่มฟิลด์อื่นๆ ที่อาจมีในฐานข้อมูล
         placeOfBirth: data.placeOfBirth || data.birthPlace || '',
         placeOfBirthProvince: data.placeOfBirthProvince || data.birthProvince || '',
         age: data.age || data.ageYears || '',
@@ -532,11 +533,11 @@ export default function PrintAllDocuments() {
         email: data.email || data.emailAddress || data.contactEmail || '',
         addressAccordingToHouseRegistration: data.addressAccordingToHouseRegistration || data.houseRegistrationAddress || data.registeredAddress || '',
         currentAddress: data.currentAddress || data.address || data.currentResidence || data.presentAddress || '',
-        emergencyContact: data.emergencyContact || data.emergencyContactName || data.emergencyPerson || '',
-        emergencyContactFirstName: data.emergencyContactFirstName || data.emergencyFirstName || '',
+        emergencyContact: data.emergencyContact || data.emergencyContactName || data.emergencyPerson || data.emergencyName || '',
+        emergencyContactFirstName: data.emergencyContactFirstName || data.emergencyFirstName || data.emergencyName || '',
         emergencyContactLastName: data.emergencyContactLastName || data.emergencyLastName || data.emergencySurname || '',
-        emergencyContactRelationship: data.emergencyContactRelationship || data.emergencyRelationship || '',
-        emergencyContactPhone: data.emergencyContactPhone || data.emergencyPhone || '',
+        emergencyContactRelationship: data.emergencyContactRelationship || data.emergencyRelationship || data.emergencyRelation || '',
+        emergencyContactPhone: data.emergencyContactPhone || data.emergencyPhone || data.emergencyContactNumber || '',
         appliedPosition: data.appliedPosition || data.expectedPosition || data.position || data.jobPosition || data.desiredPosition || '',
         expectedSalary: data.expectedSalary || data.salary || data.desiredSalary || data.expectedWage || '',
         availableDate: data.availableDate || data.availableStartDate || data.startDate || data.availableFrom || '',
@@ -709,6 +710,152 @@ export default function PrintAllDocuments() {
     setTimeout(() => {
       document.head.removeChild(styleSheet);
     }, 1000);
+  };
+
+  // ฟังก์ชันพิมพ์เฉพาะไฟล์แนบ
+  const handlePrintAttachments = () => {
+    if (uploadedDocuments.length === 0) {
+      alert('ไม่มีไฟล์แนบให้พิมพ์');
+      return;
+    }
+
+    // สร้าง HTML สำหรับไฟล์แนบเท่านั้น
+    const attachmentsHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>ไฟล์แนบ - ใบสมัครงาน</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          
+          body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Sarabun', sans-serif;
+            background: white;
+          }
+          
+          .attachment-page {
+            width: 210mm;
+            height: 297mm;
+            page-break-after: always;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            position: relative;
+          }
+          
+          .attachment-page:last-child {
+            page-break-after: auto;
+          }
+          
+          .attachment-header {
+            position: absolute;
+            top: 20mm;
+            left: 20mm;
+            right: 20mm;
+            text-align: center;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+          }
+          
+          .attachment-content {
+            width: 170mm;
+            height: 220mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e5e7eb;
+            background: #f9fafb;
+          }
+          
+          .attachment-preview {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+          }
+          
+          .attachment-footer {
+            position: absolute;
+            bottom: 20mm;
+            left: 20mm;
+            right: 20mm;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 10px;
+          }
+          
+          .no-print {
+            display: none !important;
+          }
+        </style>
+      </head>
+      <body>
+        ${uploadedDocuments.map((doc, index) => `
+          <div class="attachment-page">
+            <div class="attachment-header">
+              <h2 style="margin: 0; color: #1f2937; font-size: 18px;">
+                ไฟล์แนบที่ ${index + 1}: ${getDocumentTypeName(doc.documentType)}
+              </h2>
+              <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">
+                ${doc.originalName || 'ไม่ระบุชื่อไฟล์'} (${doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : 'ไม่ระบุขนาด'})
+              </p>
+            </div>
+            
+            <div class="attachment-content">
+              ${doc.fileType === 'application/pdf' ? `
+                <iframe 
+                  src="${getAttachmentUrl(doc.filePath)}" 
+                  className="attachment-preview"
+                  style="width: 100%; height: 100%; border: none;"
+                  title="PDF Preview"
+                ></iframe>
+              ` : `
+                <img 
+                  src="${getAttachmentUrl(doc.filePath)}" 
+                  className="attachment-preview"
+                  alt="Image Preview"
+                  onError="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                />
+                <div style="display: none; text-align: center; color: #6b7280;">
+                  <p>ไม่สามารถแสดงภาพได้</p>
+                  <p>ไฟล์: ${doc.originalName || 'ไม่ระบุชื่อ'}</p>
+                </div>
+              `}
+            </div>
+            
+            <div class="attachment-footer">
+              <p>หน้า ${index + 1} จาก ${uploadedDocuments.length} | ประเภท: ${getDocumentTypeName(doc.documentType)} | วันที่อัปโหลด: ${new Date(doc.uploadedAt).toLocaleDateString('th-TH')}</p>
+            </div>
+          </div>
+        `).join('')}
+      </body>
+      </html>
+    `;
+
+    // สร้าง Blob URL และเปิดในหน้าต่างใหม่
+    const blob = new Blob([attachmentsHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, '_blank');
+    
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+        // ลบ URL หลังจากพิมพ์เสร็จ
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 1000);
+      };
+    }
   };
 
   // แสดง loading state
@@ -891,6 +1038,15 @@ export default function PrintAllDocuments() {
           >
             พิมพ์ทั้งหมด (รวมไฟล์แนบ)
           </Button>
+          <Button
+            color="secondary"
+            variant="solid"
+            size="lg"
+            startContent={<DocumentIcon className="w-5 h-5" />}
+            onClick={handlePrintAttachments}
+          >
+            พิมพ์เฉพาะไฟล์แนบ
+          </Button>
         </div>
       </div>
 
@@ -913,7 +1069,7 @@ export default function PrintAllDocuments() {
               
               {/* ช่องติดรูปถ่าย */}
               <div className="w-[1.3in] h-[1.5in] border-2 border-gray-400 flex items-center justify-center absolute right-0 top-0" style={{ 
-                imageRendering: 'auto' as any
+                imageRendering: 'high-quality'
               }}>
                 {applicationData?.profileImage && applicationData.profileImage.trim() !== '' ? (
                   <div className="w-full h-full flex items-center justify-center relative profile-image-container">
@@ -927,22 +1083,24 @@ export default function PrintAllDocuments() {
                       style={{ 
                         objectFit: 'cover',
                         objectPosition: 'center top',
-                        imageRendering: 'auto' as any
+                        imageRendering: 'high-quality',
+                        imageRendering: '-webkit-optimize-contrast',
+                        imageRendering: 'crisp-edges'
                       }}
                       quality={100}
                       priority={true}
                       unoptimized={false}
                       onError={(e) => {
-                        console.error('❌ Failed to load profile image:', applicationData?.profileImage);
+                        console.error('❌ Failed to load profile image:', applicationData.profileImage);
                         console.error('❌ Image src:', e.currentTarget.src);
                         console.error('❌ Image error details:', e);
                         
                         // Try alternative image sources
                         const alternativeSources = [
-                          `/api/image?file=${encodeURIComponent(applicationData?.profileImage || '')}`,
-                          `/uploads/${applicationData?.profileImage || ''}`,
-                          `/public/uploads/${applicationData?.profileImage || ''}`,
-                          applicationData?.profileImage || ''
+                          `/api/image?file=${encodeURIComponent(applicationData.profileImage)}`,
+                          `/uploads/${applicationData.profileImage}`,
+                          `/public/uploads/${applicationData.profileImage}`,
+                          applicationData.profileImage
                         ];
                         
                         console.log('🔄 Trying alternative sources:', alternativeSources);
@@ -957,14 +1115,14 @@ export default function PrintAllDocuments() {
                               <div class="text-xs text-gray-500">ขนาด ๑ นิ้ว</div>
                               <div class="text-xs text-red-500 mt-1">ไม่สามารถโหลดรูปได้</div>
                               <div class="text-xs text-red-400 mt-1">URL: ${e.currentTarget.src}</div>
-                              <div class="text-xs text-blue-400 mt-1">Original: ${applicationData?.profileImage || ''}</div>
+                              <div class="text-xs text-blue-400 mt-1">Original: ${applicationData.profileImage}</div>
                             </div>
                           `;
                         }
                       }}
                       onLoad={() => {
-                        console.log('✅ Profile image loaded successfully:', applicationData?.profileImage);
-                        console.log('✅ Image src:', applicationData?.profileImage?.startsWith('http') ? applicationData.profileImage : `/api/image?file=${encodeURIComponent(applicationData?.profileImage || '')}`);
+                        console.log('✅ Profile image loaded successfully:', applicationData.profileImage);
+                        console.log('✅ Image src:', applicationData.profileImage.startsWith('http') ? applicationData.profileImage : `/api/image?file=${encodeURIComponent(applicationData.profileImage)}`);
                       }}
                     />
                     {/* Overlay สำหรับแสดงข้อมูลรูปภาพ */}
@@ -1978,7 +2136,6 @@ export default function PrintAllDocuments() {
           </div>
         </div>
       </div>
-      
 
       {/* ส่วนแสดงไฟล์แนบทั้งหมด - ด้านล่างสุด */}
       {console.log('🔍 Uploaded Documents Count:', uploadedDocuments.length)}
