@@ -35,9 +35,9 @@ export async function GET(
     // Debug: ตรวจสอบข้อมูล profileImage
     console.log('🔍 API Resume Deposit Debug:');
     console.log('• ID:', id);
-    console.log('• ProfileImage:', resumeDeposit.profileImage);
-    console.log('• ProfileImage Type:', typeof resumeDeposit.profileImage);
-    console.log('• ProfileImage Length:', resumeDeposit.profileImage?.length);
+    console.log('• ProfileImageUrl:', resumeDeposit.profileImageUrl);
+    console.log('• ProfileImageUrl Type:', typeof resumeDeposit.profileImageUrl);
+    console.log('• ProfileImageUrl Length:', resumeDeposit.profileImageUrl?.length);
     
     return NextResponse.json({
       success: true,
@@ -230,7 +230,12 @@ export async function PUT(
     });
     
   } catch (error) {
-    console.error('Error updating resume deposit:', error);
+    console.error('❌ PATCH API - Error updating resume deposit:', error);
+    console.error('❌ PATCH API - Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return NextResponse.json(
       { success: false, message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล' },
       { status: 500 }
@@ -245,6 +250,10 @@ export async function PATCH(
   try {
     const { id } = await params;
     const data = await request.json();
+    
+    console.log('🔍 PATCH API - Received request:', { id, data });
+    console.log('🔍 PATCH API - Request method:', request.method);
+    console.log('🔍 PATCH API - Request URL:', request.url);
     
     if (!id) {
       return NextResponse.json(
@@ -302,6 +311,45 @@ export async function PATCH(
     if (data.staff_position !== undefined) updateData.staff_position = data.staff_position;
     if (data.staff_department !== undefined) updateData.staff_department = data.staff_department;
     if (data.staff_start_work !== undefined) updateData.staff_start_work = data.staff_start_work;
+    
+    // จัดการ status field
+    if (data.status !== undefined) {
+      console.log('🔍 PATCH API - Processing status field:', { 
+        originalStatus: data.status, 
+        type: typeof data.status 
+      });
+      
+      const statusMap: Record<string, string> = {
+        pending: 'PENDING',
+        approved: 'HIRED',
+        rejected: 'REJECTED',
+        reviewing: 'REVIEWING',
+        in_review: 'REVIEWING',
+        contacted: 'CONTACTED',
+        hired: 'HIRED',
+        archived: 'ARCHIVED',
+        'รอพิจารณา': 'PENDING',
+        'อนุมัติ': 'HIRED',
+        'ไม่อนุมัติ': 'REJECTED',
+        'กำลังพิจารณา': 'REVIEWING',
+        'ติดต่อแล้ว': 'CONTACTED',
+        'รับเข้าทำงาน': 'HIRED',
+        'ปฏิเสธ': 'REJECTED',
+        'เก็บถาวร': 'ARCHIVED'
+      };
+      
+      const normalizedStatus = statusMap[data.status] || statusMap[data.status.toLowerCase()] || data.status;
+      updateData.status = normalizedStatus;
+      
+      console.log('🔍 PATCH API - Status update:', { 
+        original: data.status, 
+        normalized: normalizedStatus,
+        statusMap: statusMap,
+        foundInMap: statusMap[data.status] || statusMap[data.status.toLowerCase()]
+      });
+    } else {
+      console.log('🔍 PATCH API - No status field in request data');
+    }
 
     // Debug logs เพื่อตรวจสอบข้อมูลที่ได้รับ
     console.log('🔍 PATCH API - Received education data:', data.education);
@@ -310,7 +358,10 @@ export async function PATCH(
 
     // ตรวจสอบว่ามีเรคอร์ดอยู่ก่อนอัปเดต เพื่อหลีกเลี่ยง Prisma P2025
     const existing = await prisma.resumeDeposit.findUnique({ where: { id } });
+    console.log('🔍 PATCH API - Existing record check:', { id, exists: !!existing });
+    
     if (!existing) {
+      console.error('❌ PATCH API - Record not found:', { id });
       return NextResponse.json(
         { success: false, message: 'ไม่พบข้อมูลสำหรับอัปเดต' },
         { status: 404 }
@@ -387,25 +438,68 @@ export async function PATCH(
       }
     }
 
-    const updatedResumeDeposit = await prisma.resumeDeposit.update({
-      where: { id },
-      data: updateData,
-      include: {
-        education: true,
-        workExperience: true,
-        previousGovernmentService: true,
-        documents: true
-      }
-    });
+    console.log('🔍 PATCH API - Update data:', updateData);
     
-    return NextResponse.json({
-      success: true,
-      message: 'อัปเดตข้อมูลเรียบร้อยแล้ว',
-      data: updatedResumeDeposit
-    });
+    // ตรวจสอบว่า updateData มีข้อมูลหรือไม่
+    if (Object.keys(updateData).length === 0) {
+      console.warn('⚠️ PATCH API - No data to update, updateData is empty');
+      return NextResponse.json({
+        success: true,
+        message: 'ไม่มีข้อมูลที่ต้องอัปเดต',
+        data: existing
+      });
+    }
+    
+    console.log('🔍 PATCH API - About to update database with:', { id, updateData });
+    
+    try {
+      const updatedResumeDeposit = await prisma.resumeDeposit.update({
+        where: { id },
+        data: updateData,
+        include: {
+          education: true,
+          workExperience: true,
+          previousGovernmentService: true,
+          documents: true
+        }
+      });
+      
+      console.log('🔍 PATCH API - Database update successful:', { id, status: updatedResumeDeposit.status });
+      
+      return NextResponse.json({
+        success: true,
+        message: 'อัปเดตข้อมูลเรียบร้อยแล้ว',
+        data: updatedResumeDeposit
+      });
+    } catch (dbError) {
+      console.error('❌ PATCH API - Database update failed:', dbError);
+      console.error('❌ PATCH API - Database error details:', {
+        name: dbError instanceof Error ? dbError.name : 'Unknown',
+        message: dbError instanceof Error ? dbError.message : 'Unknown error',
+        code: (dbError as any)?.code,
+        meta: (dbError as any)?.meta
+      });
+      
+      return NextResponse.json(
+        { success: false, message: 'เกิดข้อผิดพลาดในการอัปเดตฐานข้อมูล' },
+        { status: 500 }
+      );
+    }
     
   } catch (error) {
-    console.error('Error updating resume deposit:', error);
+    console.error('❌ PATCH API - Error updating resume deposit:', error);
+    console.error('❌ PATCH API - Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    // เพิ่มการ debug สำหรับ Prisma errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      console.error('❌ PATCH API - Prisma error code:', (error as any).code);
+      console.error('❌ PATCH API - Prisma error meta:', (error as any).meta);
+    }
+    
     return NextResponse.json(
       { success: false, message: 'เกิดข้อผิดพลาดในการอัปเดตข้อมูล' },
       { status: 500 }

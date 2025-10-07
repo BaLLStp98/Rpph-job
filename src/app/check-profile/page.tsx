@@ -43,8 +43,15 @@ export default function CheckProfilePage() {
             return;
           }
 
-          // ตรวจสอบข้อมูลฝากประวัติแทนที่จะตรวจสอบข้อมูลผู้ใช้
-          const response = await fetch(`/api/resume-deposit?lineId=${encodeURIComponent(lineId)}`);
+          // ตรวจสอบข้อมูลฝากประวัติ โดยอิง userId/email จาก session (API ไม่รองรับ lineId โดยตรง)
+          const userId = (session.user as any)?.id || '';
+          const email = (session.user as any)?.email || '';
+          const params = new URLSearchParams();
+          if (userId) params.set('userId', String(userId));
+          if (email) params.set('email', String(email));
+          const url = `/api/resume-deposit?${params.toString()}`;
+          console.log('Check Profile - Fetch URL:', url);
+          const response = await fetch(url);
           console.log('Check Profile - API response status:', response.status);
 
           if (response.ok) {

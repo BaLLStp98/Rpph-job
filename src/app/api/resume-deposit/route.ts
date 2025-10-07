@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
     // Create resume deposit record
     const resumeDeposit = await prisma.resumeDeposit.create({
       data: {
-        
+        // 🔒 Security: บันทึก userId เพื่อความปลอดภัย
+        userId: data.userId || null,
         prefix: data.prefix || '',
         firstName: isDraft ? (data.firstName || 'Draft') : data.firstName,
         lastName: isDraft ? (data.lastName || 'User') : data.lastName,
@@ -297,18 +298,44 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
     const email = searchParams.get('email');
+    const userId = searchParams.get('userId');
+    const isAdmin = searchParams.get('admin') === 'true';
     
     const skip = (page - 1) * limit;
     
     // Build where clause
     const where: any = {};
     
-    if (status) {
-      where.status = status;
+    // 🔒 Security: กรองข้อมูลตาม userId หรือ email เพื่อความปลอดภัย
+    if (isAdmin) {
+      // Admin สามารถดูข้อมูลทั้งหมดได้
+      console.log('🔒 Admin mode: แสดงข้อมูลทั้งหมด');
+    } else if (userId && email) {
+      // รองรับเรคคอร์ดเก่าที่มีเฉพาะ email และเรคคอร์ดใหม่ที่มี userId
+      where.OR = [
+        { userId },
+        { email }
+      ];
+    } else if (userId) {
+      where.userId = userId;
+    } else if (email) {
+      where.email = email;
+    } else {
+      // ถ้าไม่มี userId หรือ email ให้ส่งกลับข้อมูลว่าง
+      return NextResponse.json({
+        success: true,
+        data: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          pages: 0
+        }
+      });
     }
     
-    if (email) {
-      where.email = email;
+    if (status) {
+      where.status = status;
     }
     
     if (search) {
@@ -327,6 +354,7 @@ export async function GET(request: NextRequest) {
         include: {
           education: true,
           workExperience: true,
+          previousGovernmentService: true,
           documents: true
         },
         orderBy: { createdAt: 'desc' },

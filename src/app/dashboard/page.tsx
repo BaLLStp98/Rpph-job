@@ -201,7 +201,22 @@ export default function Dashboard() {
   const fetchResumeDepositData = async () => {
     try {
       setResumeDepositLoading(true);
-      const response = await fetch('/api/resume-deposit?limit=100');
+      // ส่งตัวกรองตามผู้ใช้ปัจจุบันไปยัง API เพื่อให้ได้เฉพาะข้อมูลของผู้ใช้
+      const params = new URLSearchParams();
+      params.set('limit', '100');
+      try {
+        const userId = (session as any)?.user?.id || '';
+        const email = (session as any)?.user?.email || '';
+        if (userId) params.set('userId', String(userId));
+        if (email) params.set('email', String(email));
+      } catch {}
+      // หากเป็นผู้ดูแล ให้สามารถดึงทั้งหมดได้เมื่อจำเป็น
+      if (isAdmin) {
+        params.set('admin', 'true');
+      }
+      const url = `/api/resume-deposit?${params.toString()}`;
+      console.log('🔎 Fetching resume deposits with URL:', url);
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setResumeDepositData(data.data || []);
@@ -250,16 +265,8 @@ export default function Dashboard() {
       return 
     }
     
-    // ตรวจสอบว่ามีข้อมูลฝากประวัติหรือไม่ (ไม่ต้องเปรียบเทียบกับ session)
-    // ถ้ามีข้อมูลฝากประวัติในระบบ แสดงว่าผู้ใช้สามารถสมัครงานได้
-    const hasResume = resumeDepositData.length > 0 && resumeDepositData.some((r: any) => {
-      // ตรวจสอบว่าข้อมูลฝากประวัติมีข้อมูลครบถ้วน
-      return r && (
-        (r.firstName && r.lastName) || 
-        (r.email) || 
-        (r.phone)
-      )
-    })
+    // มีเรคคอร์ดฝากประวัติอย่างน้อย 1 รายการถือว่าเพียงพอสำหรับการสมัคร
+    const hasResume = Array.isArray(resumeDepositData) && resumeDepositData.length > 0
 
     console.log('🔍 Checking userHasResume from resume deposit data:', {
       resumeDepositDataLength: resumeDepositData.length,
@@ -272,6 +279,13 @@ export default function Dashboard() {
 
     setUserHasResume(hasResume)
   }, [resumeDepositData, session?.user])
+
+  // รีเฟรชข้อมูลฝากประวัติทันทีเมื่อเข้าสู่ระบบเรียบร้อย เพื่อป้องกันเหตุ fetch ก่อน session พร้อม
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetchResumeDepositData();
+    }
+  }, [status, (session as any)?.user?.id, (session as any)?.user?.email])
 
   // รีเฟรชข้อมูลเมื่อผู้ใช้กลับมาจากหน้า resume-deposit
   useEffect(() => {
@@ -483,10 +497,13 @@ export default function Dashboard() {
                 onClick={() => {
                   setNavigatingPath('/register');
                   try {
-                    const existing = (resumeDepositData && resumeDepositData.length > 0)
-                      ? resumeDepositData[0]
-                      : null;
-                    const url = existing?.id ? `/register?resumeId=${existing.id}` : '/register';
+                    // ส่งพารามิเตอร์แบบบังคับใช้ resumeUserId เป็นตัวอ้างอิงหลัก
+                    const userId = (session as any)?.user?.id || '';
+                    const params = new URLSearchParams();
+                    if (userId) {
+                      params.set('resumeUserId', String(userId));
+                    }
+                    const url = params.toString() ? `/register?${params.toString()}` : '/register';
                     router.push(url);
                   } catch {
                     router.push('/register');
@@ -853,20 +870,41 @@ export default function Dashboard() {
                       color="primary"
                       variant="solid"
                           size="sm"
-                          className={`flex-1 text-xs sm:text-sm border-0 rounded-xl text-white ${userHasResume ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+                          className={`flex-1 text-xs sm:text-sm border-0 rounded-xl text-white ${userHasResume ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 text-gray-600'}`}
                           isLoading={applyingDeptId === String(dept.id) || resumeDepositLoading}
                           onClick={() => {
                             setApplyingDeptId(String(dept.id))
                             if (!userHasResume) {
                               alert('ไม่พบข้อมูลฝากประวัติ กรุณาฝากประวัติก่อนทำการสมัครงาน')
-                              router.push('/resume-deposit')
+                              try {
+                                const userId = (session as any)?.user?.id || ''
+                                const email = (session as any)?.user?.email || ''
+                                const params = new URLSearchParams()
+                                if (userId) params.set('resumeUserId', String(userId))
+                                else if (email) params.set('resumeEmail', String(email))
+                                const url = params.toString() ? `/register?${params.toString()}` : '/register'
+                                router.push(url)
+                              } catch {
+                                router.push('/register')
+                              }
                               setApplyingDeptId(null)
                               return
                             }
-                            router.push(`/register?department=${encodeURIComponent(dept.name)}&departmentId=${dept.id}`)
+                            try {
+                              const userId = (session as any)?.user?.id || ''
+                              const email = (session as any)?.user?.email || ''
+                              const params = new URLSearchParams()
+                              params.set('department', encodeURIComponent(dept.name))
+                              params.set('departmentId', String(dept.id))
+                              if (userId) params.set('resumeUserId', String(userId))
+                              else if (email) params.set('resumeEmail', String(email))
+                              router.push(`/register?${params.toString()}`)
+                            } catch {
+                              router.push(`/register?department=${encodeURIComponent(dept.name)}&departmentId=${dept.id}`)
+                            }
                           }}
                         >
-                          {resumeDepositLoading ? 'กำลังตรวจสอบ...' : (userHasResume ? 'สมัครงาน' : 'ไม่มีข้อมูลฝากประวัติ')}
+                          {resumeDepositLoading ? 'กำลังตรวจสอบ...' : (userHasResume ? 'สมัครงาน' : 'ฝากประวัติก่อน')}
                     </Button>
                     <Button
                       color="secondary"

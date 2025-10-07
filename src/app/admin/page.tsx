@@ -246,7 +246,8 @@ export default function AdminPage() {
       setError(null);
       console.log('🔄 กำลังดึงข้อมูลใบสมัครงานจาก /api/resume-deposit...');
       
-      const response = await fetch('/api/resume-deposit', {
+      // 🔒 Admin: Admin สามารถดูข้อมูลทั้งหมดได้ (ไม่กรองตาม user)
+      const response = await fetch('/api/resume-deposit?admin=true', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -301,8 +302,12 @@ export default function AdminPage() {
           // คำนวณสถิติ
           const newStats = {
             total: processedData.length,
-            pending: processedData.filter((app: ApplicationData) => app.status === 'pending').length,
-            approved: processedData.filter((app: ApplicationData) => app.status === 'approved').length
+            pending: processedData.filter((app: ApplicationData) => 
+              app.status === 'pending' || app.status === 'PENDING' || app.status === 'รอพิจารณา'
+            ).length,
+            approved: processedData.filter((app: ApplicationData) => 
+              app.status === 'hired' || app.status === 'HIRED' || app.status === 'อนุมัติ'
+            ).length
           };
           setStats(newStats);
           console.log('📊 สถิติ:', newStats);
@@ -392,6 +397,7 @@ export default function AdminPage() {
   const handleCloseDetailModal = () => {
     setSelectedApplication(null);
     setShowDetailModal(false);
+    onDetailModalOpenChange(); // ปิด modal ผ่าน useDisclosure
   };
 
   const handlePreviewFile = (filePath: string, fileName: string) => {
@@ -433,7 +439,7 @@ export default function AdminPage() {
 
   // ฟังก์ชันลบไฟล์เอกสารแนบ
   const handleDeleteDocument = async (documentId: string, documentType: string) => {
-    if (!selectedApplication?.id) {
+    if (!(selectedApplication as any)?.id) {
       alert('ไม่พบข้อมูลใบสมัครงาน');
       return;
     }
@@ -447,7 +453,7 @@ export default function AdminPage() {
       
       if (result.success) {
         // อัปเดตข้อมูลเอกสารที่อัปโหลดแล้ว
-        const documents = await fetchDocuments(selectedApplication.id);
+        const documents = await fetchDocuments(selectedApplication?.id || '');
         setUploadedDocuments(documents);
         alert('ลบไฟล์สำเร็จ');
       } else {
@@ -478,46 +484,169 @@ export default function AdminPage() {
 
   const handleStatusUpdate = async (applicationId: string, newStatus: string) => {
     try {
+      console.log('🔍 handleStatusUpdate called:', { applicationId, newStatus });
+      
+      const requestBody = { status: newStatus };
+      console.log('🔍 Sending request body:', requestBody);
+      console.log('🔍 Request URL:', `/api/resume-deposit/${applicationId}`);
+      console.log('🔍 Request method:', 'PATCH');
+      
       const response = await fetch(`/api/resume-deposit/${applicationId}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify(requestBody),
       });
+
+      console.log('🔍 API Response status:', response.status);
+      console.log('🔍 API Response ok:', response.ok);
+      console.log('🔍 API Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log('🔍 API Response URL:', response.url);
 
       if (response.ok) {
         const responseData = await response.json();
+        console.log('🔍 API Response data:', responseData);
+        console.log('🔍 API Response success:', responseData.success);
+        console.log('🔍 API Response message:', responseData.message);
+        
         if (responseData.success) {
-          await fetchApplications();
-          alert(`อัปเดตสถานะเป็น: ${getStatusText(newStatus)}`);
-          handleCloseDetailModal();
-      } else {
+          console.log('✅ สถานะอัปเดตสำเร็จ');
+          
+          // อัปเดตสถานะใน applications list ทันที
+          setApplications(prev => 
+            prev.map(app => 
+              app.id === applicationId 
+                ? { ...app, status: newStatus }
+                : app
+            )
+          );
+          
+          // อัปเดตสถานะใน modal ถ้าเปิดอยู่
+          if (selectedApplication && selectedApplication.id === applicationId) {
+            setSelectedApplication(prev => 
+              prev ? { ...prev, status: newStatus } : null
+            );
+          }
+          
+          // อัปเดตสถิติ
+          const updatedApplications = applications.map(app => 
+            app.id === applicationId ? { ...app, status: newStatus } : app
+          );
+          
+          const newStats = {
+            total: updatedApplications.length,
+            pending: updatedApplications.filter((app: ApplicationData) => 
+              app.status === 'pending' || app.status === 'PENDING' || app.status === 'รอพิจารณา'
+            ).length,
+        approved: updatedApplications.filter((app: ApplicationData) => 
+          app.status === 'hired' || app.status === 'HIRED' || app.status === 'อนุมัติ'
+        ).length
+          };
+          setStats(newStats);
+          
+          // แสดงข้อความสำเร็จ
+          alert(`อัปเดตสถานะเป็น "${newStatus}" สำเร็จ`);
+          
+          // ปิด modal ถ้าเปิดอยู่
+          if (selectedApplication && selectedApplication.id === applicationId) {
+            handleCloseDetailModal();
+          }
+        } else {
+          console.error('❌ API returned success: false:', responseData);
+          console.error('❌ API error message:', responseData.message);
+          console.error('❌ API error details:', responseData);
           throw new Error(responseData.message || 'Failed to update status');
         }
       } else {
-        throw new Error('Failed to update status');
+        const errorText = await response.text();
+        console.error('❌ API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText,
+          url: response.url,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        
+        console.error('❌ Error details:', {
+          statusCode: response.status,
+          statusText: response.statusText,
+          contentType: response.headers.get('content-type'),
+          contentLength: response.headers.get('content-length')
+        });
+        
+        // พยายาม parse error response เป็น JSON
+        try {
+          const errorData = JSON.parse(errorText);
+          console.error('❌ Parsed error data:', errorData);
+          console.error('❌ Parsed error success:', errorData.success);
+          console.error('❌ Parsed error message:', errorData.message);
+          console.error('❌ Parsed error data type:', typeof errorData);
+          console.error('❌ Parsed error data keys:', Object.keys(errorData));
+        } catch (parseError) {
+          console.error('❌ Could not parse error response as JSON:', parseError);
+          console.error('❌ Raw error text:', errorText);
+          console.error('❌ Raw error text length:', errorText.length);
+          console.error('❌ Raw error text type:', typeof errorText);
+        }
+        
+        throw new Error(`Failed to update status: ${errorText}`);
       }
-    } catch (error) {
-      console.error('Error updating status:', error);
-      alert('เกิดข้อผิดพลาดในการอัปเดตสถานะ');
+    } catch (error: unknown) {
+      console.error('❌ Error updating status:', error);
+      const errorMessage = error instanceof Error ? error.message : 'ไม่ทราบสาเหตุ';
+      alert(`เกิดข้อผิดพลาดในการอัปเดตสถานะ: ${errorMessage}`);
     }
   };
 
   const getStatusText = (status: string) => {
+    const lowerCaseStatus = status.toLowerCase();
     const statusMap: { [key: string]: string } = {
-      pending: 'รอพิจารณา',
-      approved: 'อนุมัติ'
+      'pending': 'รอพิจารณา',
+      'approved': 'อนุมัติ',
     };
-    return statusMap[status] || status;
+    return statusMap[lowerCaseStatus] || status;
   };
 
   const getStatusColor = (status: string) => {
+    const lowerCaseStatus = status.toLowerCase();
     const colorMap: { [key: string]: string } = {
-      pending: 'warning',
-      approved: 'success'
+      'pending': 'warning',
+      'approved': 'success',
     };
-    return colorMap[status] || 'default';
+    return colorMap[lowerCaseStatus] || 'default';
+  };
+
+  // ฟังก์ชันแปลงเพศเป็นภาษาไทย
+  const getGenderText = (gender: string) => {
+    const genderMap: { [key: string]: string } = {
+      'male': 'ชาย',
+      'female': 'หญิง',
+      'MALE': 'ชาย',
+      'FEMALE': 'หญิง',
+      'ชาย': 'ชาย',
+      'หญิง': 'หญิง'
+    };
+    return genderMap[gender] || gender || '-';
+  };
+
+  // ฟังก์ชันแปลงสถานภาพเป็นภาษาไทย
+  const getMaritalStatusText = (status: string) => {
+    const statusMap: { [key: string]: string } = {
+      'single': 'โสด',
+      'married': 'สมรส',
+      'divorced': 'หย่าร้าง',
+      'widowed': 'หม้าย',
+      'SINGLE': 'โสด',
+      'MARRIED': 'สมรส',
+      'DIVORCED': 'หย่าร้าง',
+      'WIDOWED': 'หม้าย',
+      'โสด': 'โสด',
+      'สมรส': 'สมรส',
+      'หย่าร้าง': 'หย่าร้าง',
+      'หม้าย': 'หม้าย'
+    };
+    return statusMap[status] || status || '-';
   };
 
   const filteredApplications = applications.filter(app => {
@@ -582,7 +711,7 @@ export default function AdminPage() {
 
       <div className="space-y-8">
           {/* สถิติ */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        <div className="grid grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
           <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
             <CardBody className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
@@ -755,6 +884,42 @@ export default function AdminPage() {
                         >
                           พิมพ์เอกสาร
                         </Button>
+                        {/* {(() => {
+                          console.log('🔍 Status check for application:', {
+                            id: application.id,
+                            name: `${application.firstName} ${application.lastName}`,
+                            status: application.status,
+                            isPending: application.status === 'pending' || application.status === 'PENDING' || application.status === 'รอพิจารณา',
+                            isApproved: application.status === 'approved' || application.status === 'APPROVED' || application.status === 'อนุมัติ'
+                          });
+                          return application.status === 'pending' || application.status === 'PENDING' || application.status === 'รอพิจารณา';
+                        })() ? (
+                          <Button
+                            size="sm"
+                            color="success"
+                            variant="solid"
+                            startContent={<CheckCircleIcon className="w-4 h-4" />}
+                            onPress={() => {
+                              console.log('🔍 Button clicked: อนุมัติ for application:', application.id);
+                              handleStatusUpdate(application.id, 'อนุมัติ');
+                            }}
+                          >
+                            อนุมัติ
+                          </Button>
+                        ) : application.status === 'approved' || application.status === 'APPROVED' || application.status === 'อนุมัติ' ? (
+                          <Button
+                            size="sm"
+                            color="warning"
+                            variant="solid"
+                            startContent={<ClockIcon className="w-4 h-4" />}
+                            onPress={() => {
+                              console.log('🔍 Button clicked: รอพิจารณา for application:', application.id);
+                              handleStatusUpdate(application.id, 'รอพิจารณา');
+                            }}
+                          >
+                            รอพิจารณา
+                          </Button>
+                        ) : null} */}
           </div>
                     </TableCell>
                   </TableRow>
@@ -787,22 +952,22 @@ export default function AdminPage() {
                 <div className="flex items-center gap-4">
                   {/* รูปภาพโปรไฟล์ */}
                   <div className="flex-shrink-0">
-                    {selectedApplication?.profileImage ? (
+                    {(selectedApplication as any)?.profileImage ? (
                       <img
-                        src={selectedApplication.profileImage}
+                        src={(selectedApplication as any)?.profileImage}
                         alt="รูปภาพโปรไฟล์"
                         className="w-16 h-16 rounded-full object-cover border-4 border-white shadow-lg"
                         onError={(e) => {
-                          console.log('❌ รูปภาพโหลดไม่สำเร็จ:', selectedApplication.profileImage);
+                          console.log('❌ รูปภาพโหลดไม่สำเร็จ:', (selectedApplication as any)?.profileImage);
                           console.log('❌ Error details:', e);
                         }}
                         onLoad={() => {
-                          console.log('✅ รูปภาพโหลดสำเร็จ:', selectedApplication.profileImage);
+                          console.log('✅ รูปภาพโหลดสำเร็จ:', (selectedApplication as any)?.profileImage);
                         }}
                       />
                     ) : (
                       <Avatar
-                        name={`${selectedApplication?.firstName} ${selectedApplication?.lastName}`}
+                        name={`${(selectedApplication as any)?.firstName || ''} ${(selectedApplication as any)?.lastName || ''}`}
                         size="lg"
                         className="w-16 h-16 border-4 border-white shadow-lg"
                       />
@@ -813,19 +978,19 @@ export default function AdminPage() {
                       รายละเอียดใบสมัครงาน
                     </h3>
                     <p className="text-blue-100 text-sm">
-                      {selectedApplication?.prefix ? `${selectedApplication.prefix} ` : ''}{selectedApplication?.firstName} {selectedApplication?.lastName}
+                      {(selectedApplication as any)?.prefix ? `${(selectedApplication as any).prefix} ` : ''}{(selectedApplication as any)?.firstName} {(selectedApplication as any)?.lastName}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
                       <Chip
-                        color={getStatusColor(selectedApplication?.status || 'pending') as any}
+                        color={getStatusColor((selectedApplication as any)?.status) as any}
                         variant="flat"
                         size="sm"
                         className="text-xs"
                       >
-                        {getStatusText(selectedApplication?.status || 'pending')}
+                        {getStatusText((selectedApplication as any)?.status)}
                       </Chip>
                       <span className="text-blue-200 text-xs">
-                        สมัครเมื่อ: {selectedApplication?.createdAt ? new Date(selectedApplication.createdAt).toLocaleDateString('th-TH') : '-'}
+                        สมัครเมื่อ: {(selectedApplication as any)?.createdAt ? new Date((selectedApplication as any).createdAt).toLocaleDateString('th-TH') : '-'}
                       </span>
             </div>
                   </div>
@@ -840,62 +1005,62 @@ export default function AdminPage() {
                         <UserIcon className="w-5 h-5 text-blue-600" />
                         ข้อมูลส่วนตัว
                       </h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
             <div>
                           <label className="text-sm font-medium text-gray-600">คำนำหน้า</label>
-                          <p className="text-gray-800">{selectedApplication?.prefix || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.prefix || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">ชื่อ</label>
-                          <p className="text-gray-800">{selectedApplication?.firstName || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.firstName || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">นามสกุล</label>
-                          <p className="text-gray-800">{selectedApplication?.lastName || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.lastName || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">อายุ</label>
-                          <p className="text-gray-800">{selectedApplication?.age || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.age || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">วันเกิด</label>
-                          <p className="text-gray-800">{selectedApplication?.birthDate || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.birthDate || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">เพศ</label>
-                          <p className="text-gray-800">{selectedApplication?.gender || '-'}</p>
+                          <p className="text-gray-800">{getGenderText((selectedApplication as any)?.gender || '')}</p>
             </div>
             <div>
-                          <label className="text-sm font-medium text-gray-600">สถานที่เกิด</label>
-                          <p className="text-gray-800">{selectedApplication?.placeOfBirth || '-'}</p>
+                          <label className="text-sm font-medium text-gray-600">อำเภอ/เขตที่เกิด</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.placeOfBirth || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">จังหวัดที่เกิด</label>
-                          <p className="text-gray-800">{selectedApplication?.placeOfBirthProvince || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.placeOfBirthProvince || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">เชื้อชาติ</label>
-                          <p className="text-gray-800">{selectedApplication?.race || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.race || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">สัญชาติ</label>
-                          <p className="text-gray-800">{selectedApplication?.nationality || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.nationality || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">ศาสนา</label>
-                          <p className="text-gray-800">{selectedApplication?.religion || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.religion || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">สถานภาพ</label>
-                          <p className="text-gray-800">{selectedApplication?.maritalStatus || '-'}</p>
+                          <p className="text-gray-800">{getMaritalStatusText((selectedApplication as any)?.maritalStatus || '')}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์</label>
-                          <p className="text-gray-800">{selectedApplication?.phone || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.phone || '-'}</p>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">อีเมล</label>
-                          <p className="text-gray-800">{selectedApplication?.email || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.email || '-'}</p>
                         </div>
             </div>
           </div>
@@ -906,22 +1071,22 @@ export default function AdminPage() {
                         <DocumentTextIcon className="w-5 h-5 text-blue-600" />
                         ข้อมูลบัตรประชาชน
                       </h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                 <div>
                           <label className="text-sm font-medium text-gray-600">เลขบัตรประชาชน</label>
-                          <p className="text-gray-800">{selectedApplication?.idNumber || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.idNumber || '-'}</p>
                 </div>
                 <div>
                           <label className="text-sm font-medium text-gray-600">ออกโดย</label>
-                          <p className="text-gray-800">{selectedApplication?.idCardIssuedAt || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.idCardIssuedAt || '-'}</p>
                 </div>
                 <div>
                           <label className="text-sm font-medium text-gray-600">วันที่ออกบัตร</label>
-                          <p className="text-gray-800">{selectedApplication?.idCardIssueDate || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.idCardIssueDate || '-'}</p>
                 </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">วันที่บัตรหมดอายุ</label>
-                          <p className="text-gray-800">{selectedApplication?.idCardExpiryDate || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.idCardExpiryDate || '-'}</p>
               </div>
             </div>
                     </div>
@@ -932,55 +1097,51 @@ export default function AdminPage() {
                         <DocumentTextIcon className="w-5 h-5 text-blue-600" />
                         ที่อยู่ตามทะเบียนบ้าน
                       </h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <div className="col-span-2">
                           <label className="text-sm font-medium text-gray-600">ที่อยู่</label>
-                          <p className="text-gray-800">{selectedApplication?.addressAccordingToHouseRegistration || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.addressAccordingToHouseRegistration || '-'}</p>
             </div>
-                        {selectedApplication?.registeredAddress && (
-                          <>
-                            <div>
-                              <label className="text-sm font-medium text-gray-600">เลขที่</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.houseNumber || '-'}</p>
-          </div>
-                    <div>
-                              <label className="text-sm font-medium text-gray-600">หมู่ที่</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.villageNumber || '-'}</p>
-                    </div>
-                    <div>
-                              <label className="text-sm font-medium text-gray-600">ตรอก/ซอย</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.alley || '-'}</p>
-                    </div>
-                    <div>
-                              <label className="text-sm font-medium text-gray-600">ถนน</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.road || '-'}</p>
-                    </div>
-                    <div>
-                              <label className="text-sm font-medium text-gray-600">ตำบล/แขวง</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.subDistrict || '-'}</p>
-                    </div>
-                    <div>
-                              <label className="text-sm font-medium text-gray-600">อำเภอ/เขต</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.district || '-'}</p>
-                    </div>
-                            <div>
-                              <label className="text-sm font-medium text-gray-600">จังหวัด</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.province || '-'}</p>
-                  </div>
-                            <div>
-                              <label className="text-sm font-medium text-gray-600">รหัสไปรษณีย์</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.postalCode || '-'}</p>
-                </div>
-                            <div>
-                              <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์บ้าน</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.phone || '-'}</p>
-            </div>
-                            <div>
-                              <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์มือถือ</label>
-                              <p className="text-gray-800">{selectedApplication.registeredAddress.mobile || '-'}</p>
-            </div>
-                          </>
-                        )}
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">เลขที่</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_house_number || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">หมู่ที่</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_village_number || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">ตรอก/ซอย</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_alley || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">ถนน</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_road || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">ตำบล/แขวง</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_sub_district || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">อำเภอ/เขต</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_district || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">จังหวัด</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_province || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">รหัสไปรษณีย์</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_postal_code || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์บ้าน</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_phone || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์มือถือ</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_mobile || '-'}</p>
+                        </div>
             </div>
           </div>
 
@@ -990,55 +1151,51 @@ export default function AdminPage() {
                         <DocumentTextIcon className="w-5 h-5 text-blue-600" />
                         ที่อยู่ปัจจุบัน
                       </h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <div className="col-span-2">
                           <label className="text-sm font-medium text-gray-600">ที่อยู่</label>
-                          <p className="text-gray-800">{selectedApplication?.currentAddress || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.currentAddress || '-'}</p>
                         </div>
-                        {selectedApplication?.currentAddressDetail && (
-                          <>
-                    <div>
-                              <label className="text-sm font-medium text-gray-600">เลขที่</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.houseNumber || '-'}</p>
-                    </div>
-                    <div>
-                              <label className="text-sm font-medium text-gray-600">หมู่ที่</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.villageNumber || '-'}</p>
-                    </div>
-                    <div>
-                              <label className="text-sm font-medium text-gray-600">ตรอก/ซอย</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.alley || '-'}</p>
-                    </div>
-                    <div>
-                              <label className="text-sm font-medium text-gray-600">ถนน</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.road || '-'}</p>
-                    </div>
-                            <div>
-                              <label className="text-sm font-medium text-gray-600">ตำบล/แขวง</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.subDistrict || '-'}</p>
-                  </div>
-                <div>
-                              <label className="text-sm font-medium text-gray-600">อำเภอ/เขต</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.district || '-'}</p>
-                </div>
-                <div>
-                              <label className="text-sm font-medium text-gray-600">จังหวัด</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.province || '-'}</p>
-                </div>
-                <div>
-                              <label className="text-sm font-medium text-gray-600">รหัสไปรษณีย์</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.postalCode || '-'}</p>
-                </div>
-                <div>
-                              <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์บ้าน</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.homePhone || '-'}</p>
-                </div>
-                <div>
-                              <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์มือถือ</label>
-                              <p className="text-gray-800">{selectedApplication.currentAddressDetail.mobilePhone || '-'}</p>
-                </div>
-                          </>
-              )}
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">เลขที่</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_house_number || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">หมู่ที่</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_village_number || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">ตรอก/ซอย</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_alley || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">ถนน</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_road || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">ตำบล/แขวง</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_sub_district || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">อำเภอ/เขต</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_district || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">จังหวัด</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_province || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">รหัสไปรษณีย์</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_postal_code || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์บ้าน</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_phone || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์มือถือ</label>
+                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_mobile || '-'}</p>
+                        </div>
             </div>
                     </div>
 
@@ -1048,22 +1205,22 @@ export default function AdminPage() {
                         <DocumentTextIcon className="w-5 h-5 text-blue-600" />
                         การติดต่อฉุกเฉิน
                       </h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <div>
                           <label className="text-sm font-medium text-gray-600">ชื่อผู้ติดต่อฉุกเฉิน</label>
-                          <p className="text-gray-800">{selectedApplication?.emergencyContact || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.emergencyContact || '-'}</p>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">ความสัมพันธ์</label>
-                          <p className="text-gray-800">{selectedApplication?.emergencyRelationship || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.emergencyRelationship || '-'}</p>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์ฉุกเฉิน</label>
-                          <p className="text-gray-800">{selectedApplication?.emergencyPhone || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.emergencyPhone || '-'}</p>
               </div>
                         <div className="col-span-2">
                           <label className="text-sm font-medium text-gray-600">ที่อยู่ฉุกเฉิน</label>
-                          <p className="text-gray-800">{selectedApplication?.emergencyAddress || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.emergencyAddress || '-'}</p>
             </div>
               </div>
             </div>
@@ -1074,37 +1231,37 @@ export default function AdminPage() {
                         <BriefcaseIcon className="w-5 h-5 text-blue-600" />
                         ข้อมูลการสมัครงาน
                       </h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
               <div>
                           <label className="text-sm font-medium text-gray-600">ตำแหน่งที่สมัคร</label>
-                          <p className="text-gray-800">{selectedApplication?.expectedPosition || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.expectedPosition || '-'}</p>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">ฝ่าย/กลุ่มงาน</label>
-                          <p className="text-gray-800">{selectedApplication?.department || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.department || '-'}</p>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">เงินเดือนที่คาดหวัง</label>
-                          <p className="text-gray-800">{selectedApplication?.expectedSalary || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.expectedSalary || '-'}</p>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">วันที่สามารถเริ่มงานได้</label>
-                          <p className="text-gray-800">{selectedApplication?.availableDate || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.availableDate || '-'}</p>
               </div>
                       </div>
                     </div>
 
                     {/* ข้อมูลการศึกษา */}
-                    {selectedApplication?.education && selectedApplication.education.length > 0 && (
+                    {(selectedApplication as any)?.education && (selectedApplication as any).education.length > 0 && (
                       <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
                         <h4 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
                           <AcademicCapIcon className="w-5 h-5 text-blue-600" />
                           ข้อมูลการศึกษา
                         </h4>
                         <div className="space-y-4">
-                          {selectedApplication.education.map((edu: any, index: number) => (
+                          {(selectedApplication as any).education.map((edu: any, index: number) => (
                             <div key={index} className="bg-white rounded-lg p-4 border">
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-3 gap-4">
               <div>
                                   <label className="text-sm font-medium text-gray-600">ระดับการศึกษา</label>
                                   <p className="text-gray-800">{edu.level || '-'}</p>
@@ -1133,16 +1290,16 @@ export default function AdminPage() {
               )}
               
                     {/* ข้อมูลประสบการณ์ทำงาน */}
-                    {selectedApplication?.workExperience && selectedApplication.workExperience.length > 0 && (
+                    {(selectedApplication as any)?.workExperience && (selectedApplication as any).workExperience.length > 0 && (
                       <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
                         <h4 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
                           <BriefcaseIcon className="w-5 h-5 text-blue-600" />
                           ประสบการณ์ทำงาน
                         </h4>
                         <div className="space-y-4">
-                          {selectedApplication.workExperience.map((work: any, index: number) => (
+                          {(selectedApplication as any).workExperience.map((work: any, index: number) => (
                             <div key={index} className="bg-white rounded-lg p-4 border">
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-3 gap-4">
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">ตำแหน่ง</label>
                                   <p className="text-gray-800">{work.position || '-'}</p>
@@ -1175,16 +1332,16 @@ export default function AdminPage() {
           )}
 
                     {/* ข้อมูลการรับราชการก่อนหน้า */}
-                    {selectedApplication?.previousGovernmentService && selectedApplication.previousGovernmentService.length > 0 && (
+                    {(selectedApplication as any)?.previousGovernmentService && (selectedApplication as any).previousGovernmentService.length > 0 && (
                       <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
                         <h4 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
                           <DocumentTextIcon className="w-5 h-5 text-blue-600" />
                           การรับราชการก่อนหน้า
                         </h4>
                         <div className="space-y-4">
-                          {selectedApplication.previousGovernmentService.map((service: any, index: number) => (
+                          {(selectedApplication as any).previousGovernmentService.map((service: any, index: number) => (
                             <div key={index} className="bg-white rounded-lg p-4 border">
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-3 gap-4">
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">ตำแหน่ง</label>
                                   <p className="text-gray-800">{service.position || '-'}</p>
@@ -1213,108 +1370,108 @@ export default function AdminPage() {
                     )}
 
                     {/* ข้อมูลคู่สมรส */}
-                    {selectedApplication?.spouseInfo && (
+                    {(selectedApplication as any)?.spouseInfo && (
                       <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
                         <h4 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
                           <UserIcon className="w-5 h-5 text-blue-600" />
                           ข้อมูลคู่สมรส
                         </h4>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="text-sm font-medium text-gray-600">ชื่อคู่สมรส</label>
-                            <p className="text-gray-800">{selectedApplication?.spouseInfo?.firstName || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any)?.spouseInfo?.firstName || '-'}</p>
           </div>
                           <div>
                             <label className="text-sm font-medium text-gray-600">นามสกุลคู่สมรส</label>
-                            <p className="text-gray-800">{selectedApplication?.spouseInfo?.lastName || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any)?.spouseInfo?.lastName || '-'}</p>
         </div>
       </div>
                       </div>
                     )}
 
                     {/* ข้อมูลที่ทำงานฉุกเฉิน */}
-                    {selectedApplication?.emergencyWorkplace && (
+                    {(selectedApplication as any)?.emergencyWorkplace && (
                       <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
                         <h4 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
                           <BriefcaseIcon className="w-5 h-5 text-blue-600" />
                           ข้อมูลที่ทำงานฉุกเฉิน
                         </h4>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="text-sm font-medium text-gray-600">ชื่อที่ทำงาน</label>
-                            <p className="text-gray-800">{selectedApplication?.emergencyWorkplace?.name || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any)?.emergencyWorkplace?.name || '-'}</p>
             </div>
             <div>
                             <label className="text-sm font-medium text-gray-600">เขต/อำเภอ</label>
-                            <p className="text-gray-800">{selectedApplication?.emergencyWorkplace?.district || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any)?.emergencyWorkplace?.district || '-'}</p>
                 </div>
                           <div>
                             <label className="text-sm font-medium text-gray-600">จังหวัด</label>
-                            <p className="text-gray-800">{selectedApplication?.emergencyWorkplace?.province || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any)?.emergencyWorkplace?.province || '-'}</p>
             </div>
                           <div>
                             <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์</label>
-                            <p className="text-gray-800">{selectedApplication?.emergencyWorkplace?.phone || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any)?.emergencyWorkplace?.phone || '-'}</p>
           </div>
             </div>
         </div>
                     )}
 
                     {/* ข้อมูลสิทธิการรักษา */}
-                    {selectedApplication?.medicalRights && (
+                    {(selectedApplication as any)?.medicalRights && (
                       <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
                         <h4 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
                           <DocumentTextIcon className="w-5 h-5 text-blue-600" />
                           ข้อมูลสิทธิการรักษา
                         </h4>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="text-sm font-medium text-gray-600">สิทธิหลักประกันสุขภาพถ้วนหน้า</label>
-                            <p className="text-gray-800">{selectedApplication.medicalRights.hasUniversalHealthcare ? 'มี' : 'ไม่มี'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any).medicalRights.hasUniversalHealthcare ? 'มี' : 'ไม่มี'}</p>
           </div>
                           <div>
                             <label className="text-sm font-medium text-gray-600">โรงพยาบาลหลักประกันสุขภาพ</label>
-                            <p className="text-gray-800">{selectedApplication.medicalRights.universalHealthcareHospital || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any).medicalRights.universalHealthcareHospital || '-'}</p>
         </div>
                           <div>
                             <label className="text-sm font-medium text-gray-600">สิทธิประกันสังคม</label>
-                            <p className="text-gray-800">{selectedApplication.medicalRights.hasSocialSecurity ? 'มี' : 'ไม่มี'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any).medicalRights.hasSocialSecurity ? 'มี' : 'ไม่มี'}</p>
                 </div>
                 <div>
                             <label className="text-sm font-medium text-gray-600">โรงพยาบาลประกันสังคม</label>
-                            <p className="text-gray-800">{selectedApplication.medicalRights.socialSecurityHospital || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any).medicalRights.socialSecurityHospital || '-'}</p>
                 </div>
                           <div>
                             <label className="text-sm font-medium text-gray-600">สิทธิข้าราชการ</label>
-                            <p className="text-gray-800">{selectedApplication.medicalRights.hasCivilServantRights ? 'มี' : 'ไม่มี'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any).medicalRights.hasCivilServantRights ? 'มี' : 'ไม่มี'}</p>
                 </div>
                 <div>
                             <label className="text-sm font-medium text-gray-600">สิทธิอื่นๆ</label>
-                            <p className="text-gray-800">{selectedApplication.medicalRights.otherRights || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any).medicalRights.otherRights || '-'}</p>
                 </div>
               </div>
                       </div>
                     )}
 
                     {/* ข้อมูลเจ้าหน้าที่ */}
-                    {selectedApplication?.staffInfo && (
+                    {(selectedApplication as any)?.staffInfo && (
                       <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
                         <h4 className="text-lg font-semibold text-blue-800 mb-4 flex items-center gap-2">
                           <BriefcaseIcon className="w-5 h-5 text-blue-600" />
                           ข้อมูลเจ้าหน้าที่
                         </h4>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="text-sm font-medium text-gray-600">ตำแหน่ง</label>
-                            <p className="text-gray-800">{selectedApplication.staffInfo.position || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any).staffInfo.position || '-'}</p>
                 </div>
                 <div>
                             <label className="text-sm font-medium text-gray-600">หน่วยงาน</label>
-                            <p className="text-gray-800">{selectedApplication.staffInfo.department || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any).staffInfo.department || '-'}</p>
                 </div>
                 <div>
                             <label className="text-sm font-medium text-gray-600">วันที่เริ่มทำงาน</label>
-                            <p className="text-gray-800">{selectedApplication.staffInfo.startWork || '-'}</p>
+                            <p className="text-gray-800">{(selectedApplication as any).staffInfo.startWork || '-'}</p>
                 </div>
               </div>
         </div>
@@ -1326,26 +1483,26 @@ export default function AdminPage() {
                         <DocumentTextIcon className="w-5 h-5 text-blue-600" />
                         ข้อมูลเพิ่มเติม
                       </h4>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
               <div>
                           <label className="text-sm font-medium text-gray-600">ความสามารถพิเศษ</label>
-                          <p className="text-gray-800">{selectedApplication?.skills || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.skills || '-'}</p>
               </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ภาษา</label>
-                          <p className="text-gray-800">{selectedApplication?.languages || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.languages || '-'}</p>
               </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ทักษะคอมพิวเตอร์</label>
-                          <p className="text-gray-800">{selectedApplication?.computerSkills || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.computerSkills || '-'}</p>
             </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ใบรับรอง</label>
-                          <p className="text-gray-800">{selectedApplication?.certificates || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.certificates || '-'}</p>
                         </div>
                         <div className="col-span-2">
                           <label className="text-sm font-medium text-gray-600">บุคคลอ้างอิง</label>
-                          <p className="text-gray-800">{selectedApplication?.references || '-'}</p>
+                          <p className="text-gray-800">{(selectedApplication as any)?.references || '-'}</p>
                       </div>
                       </div>
                     </div>
@@ -1441,22 +1598,40 @@ export default function AdminPage() {
                     >
                       พิมพ์เอกสาร
                     </Button>
-                    <Button 
-                      color="success" 
-                      variant="solid"
-                      startContent={<CheckCircleIcon className="w-4 h-4" />}
-                      onPress={() => handleStatusUpdate(selectedApplication.id, 'approved')}
-                    >
-                      อนุมัติ
-                    </Button>
-                    <Button 
-                      color="warning" 
-                      variant="solid"
-                      startContent={<ClockIcon className="w-4 h-4" />}
-                      onPress={() => handleStatusUpdate(selectedApplication.id, 'pending')}
-                    >
-                      รอพิจารณา
-                    </Button>
+                    {(() => {
+                      console.log('🔍 Modal Status check for application:', {
+                        id: selectedApplication.id,
+                        name: `${selectedApplication.firstName} ${selectedApplication.lastName}`,
+                        status: selectedApplication.status,
+                        isPending: selectedApplication.status === 'pending' || selectedApplication.status === 'PENDING' || selectedApplication.status === 'รอพิจารณา',
+                        isApproved: selectedApplication.status === 'approved' || selectedApplication.status === 'APPROVED' || selectedApplication.status === 'อนุมัติ'
+                      });
+                      return selectedApplication.status === 'pending' || selectedApplication.status === 'PENDING' || selectedApplication.status === 'รอพิจารณา';
+                    })() ? (
+                      <Button 
+                        color="success" 
+                        variant="solid"
+                        startContent={<CheckCircleIcon className="w-4 h-4" />}
+                        onPress={() => {
+                          console.log('🔍 Modal Button clicked: อนุมัติ for application:', selectedApplication.id);
+                          handleStatusUpdate(selectedApplication.id, 'อนุมัติ');
+                        }}
+                      >
+                        อนุมัติ
+                      </Button>
+                    ) : (selectedApplication.status === 'approved' || selectedApplication.status === 'APPROVED' || selectedApplication.status === 'อนุมัติ') ? (
+                      <Button 
+                        color="warning" 
+                        variant="solid"
+                        startContent={<ClockIcon className="w-4 h-4" />}
+                        onPress={() => {
+                          console.log('🔍 Modal Button clicked: รอพิจารณา for application:', selectedApplication.id);
+                          handleStatusUpdate(selectedApplication.id, 'รอพิจารณา');
+                        }}
+                      >
+                        รอพิจารณา
+                      </Button>
+                    ) : null}
                   </>
                 )}
               </ModalFooter>

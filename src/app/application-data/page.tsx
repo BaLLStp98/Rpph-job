@@ -24,7 +24,7 @@ import {
   EyeIcon,
   PrinterIcon,
   ArrowLeftIcon,
-  CloudArrowUpIcon
+  CloudArrowUpIcon,
 } from '@heroicons/react/24/outline';
 
 // Interface สำหรับข้อมูลใบสมัครงาน
@@ -2583,6 +2583,8 @@ export default function ApplicationData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [statusUpdateNotification, setStatusUpdateNotification] = useState<string | null>(null);
+  const [newApplicationNotification, setNewApplicationNotification] = useState<string | null>(null);
   
   // Upload states
   const [uploadingFiles, setUploadingFiles] = useState<{[key: string]: boolean}>({});
@@ -2597,11 +2599,62 @@ export default function ApplicationData() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingApplication, setEditingApplication] = useState<ApplicationData | null>(null);
 
+  // ฟังก์ชันสำหรับเพิ่มใบสมัครงานใหม่จากฝ่ายอื่น
+  const addNewApplication = async (applicationData: ApplicationData) => {
+    try {
+      console.log('🆕 Adding new application from different department:', applicationData);
+      
+      // เพิ่มใบสมัครงานใหม่ใน state
+      setApplications(prev => {
+        // ตรวจสอบว่าใบสมัครงานนี้มีอยู่แล้วหรือไม่
+        const exists = prev.some(app => app.id === applicationData.id);
+        if (exists) {
+          console.log('⚠️ Application already exists, skipping...');
+          return prev;
+        }
+        
+        // เพิ่มใบสมัครงานใหม่ที่ต้นของรายการ
+        const newApplications = [applicationData, ...prev];
+        console.log('✅ New application added to state');
+        return newApplications;
+      });
+      
+      // แสดงข้อความแจ้งเตือน
+      setNewApplicationNotification(`ใบสมัครงานใหม่จากฝ่าย ${applicationData.department} - ${applicationData.firstName} ${applicationData.lastName}`);
+      
+      // ซ่อนข้อความแจ้งเตือนหลังจาก 5 วินาที
+      setTimeout(() => {
+        setNewApplicationNotification(null);
+      }, 5000);
+      
+    } catch (error) {
+      console.error('❌ Error adding new application:', error);
+    }
+  };
+
   // ฟังก์ชันสำหรับดึงข้อมูลใบสมัครงาน
   const fetchApplications = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/resume-deposit');
+      
+      // 🔒 Security: ดึงข้อมูล userId จาก session หรือ localStorage
+      const userId = localStorage.getItem('userId') || sessionStorage.getItem('userId');
+      const userEmail = localStorage.getItem('userEmail') || sessionStorage.getItem('userEmail');
+      
+      // สร้าง URL พร้อม parameters สำหรับความปลอดภัย
+      const url = new URL('/api/resume-deposit', window.location.origin);
+      if (userId) {
+        url.searchParams.set('userId', userId);
+      } else if (userEmail) {
+        url.searchParams.set('email', userEmail);
+      } else {
+        console.warn('⚠️ ไม่พบ userId หรือ userEmail - ไม่สามารถดึงข้อมูลได้');
+        setApplications([]);
+        setLoading(false);
+        return;
+      }
+      
+      const response = await fetch(url.toString());
       
       if (!response.ok) {
         throw new Error('Failed to fetch applications');
@@ -2750,7 +2803,12 @@ export default function ApplicationData() {
         })),
         // ข้อมูลนายจ้างหลายราย
         multipleEmployers: app.multiple_employers ? JSON.parse(app.multiple_employers) : [],
-        status: app.status?.toLowerCase() || 'pending',
+        status: (() => {
+          const rawStatus = app.status || 'PENDING';
+          const normalizedStatus = rawStatus.toLowerCase();
+          console.log('🔍 Status conversion:', { raw: rawStatus, normalized: normalizedStatus });
+          return normalizedStatus;
+        })(),
         createdAt: app.createdAt || new Date().toISOString()
       }));
         
@@ -2775,6 +2833,39 @@ export default function ApplicationData() {
     setIsEditing(false);
     setEditingApplication(null);
     onClose();
+  };
+
+  // ฟังก์ชันสำหรับจัดการสีและข้อความของสถานะ
+  const getStatusInfo = (status: string) => {
+    const lowerCaseStatus = status.toLowerCase();
+    console.log('🔍 getStatusInfo - Input status:', status, 'Lowercase:', lowerCaseStatus);
+    
+    if (lowerCaseStatus === 'hired' || lowerCaseStatus === 'อนุมัติ') {
+      return {
+        text: 'ผ่านการพิจารณา',
+        color: 'success' as const,
+        bgColor: 'bg-green-100',
+        textColor: 'text-green-800',
+        borderColor: 'border-green-300'
+      };
+    } else if (lowerCaseStatus === 'pending' || lowerCaseStatus === 'รอพิจารณา') {
+      return {
+        text: 'รอพิจารณา',
+        color: 'warning' as const,
+        bgColor: 'bg-yellow-100',
+        textColor: 'text-yellow-800',
+        borderColor: 'border-yellow-300'
+      };
+    } else {
+      console.log('🔍 getStatusInfo - Unknown status, using default:', status);
+      return {
+        text: status,
+        color: 'default' as const,
+        bgColor: 'bg-gray-100',
+        textColor: 'text-gray-800',
+        borderColor: 'border-gray-300'
+      };
+    }
   };
 
   // ฟังก์ชันเริ่มแก้ไขข้อมูล
@@ -3055,6 +3146,8 @@ export default function ApplicationData() {
     }
   };
 
+  // ย้อนกลับ: ไม่จัดการสมัครงานจากหน้านี้
+
   // ฟังก์ชันลบข้อมูลใบสมัครงาน
   const handleDeleteApplication = async (applicationId: string) => {
     if (!applicationId) return;
@@ -3280,6 +3373,173 @@ export default function ApplicationData() {
     fetchApplications();
   }, []);
 
+  // เปิดฟังก์ชัน addNewApplication ให้เรียกใช้จากภายนอก
+  useEffect(() => {
+    (window as any).addNewApplicationToApplicationData = addNewApplication;
+    return () => {
+      delete (window as any).addNewApplicationToApplicationData;
+    };
+  }, []);
+
+  // ตรวจสอบใบสมัครงานใหม่ทุก 10 วินาที
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkForNewApplications();
+    }, 10000); // ตรวจสอบทุก 10 วินาที
+
+    return () => clearInterval(interval);
+  }, [applications]);
+
+  // ฟังก์ชันสำหรับตรวจสอบใบสมัครงานใหม่
+  const checkForNewApplications = async () => {
+    try {
+      console.log('🔍 Checking for new applications...');
+      
+      // 🔒 Security: ดึงข้อมูล userId จาก session หรือ localStorage
+      const userId = localStorage.getItem('userId') || sessionStorage.getItem('userId');
+      const userEmail = localStorage.getItem('userEmail') || sessionStorage.getItem('userEmail');
+      
+      if (!userId && !userEmail) {
+        console.warn('⚠️ ไม่พบ userId หรือ userEmail - ข้ามการตรวจสอบใบสมัครงานใหม่');
+        return;
+      }
+      
+      // สร้าง URL พร้อม parameters สำหรับความปลอดภัย
+      const url = new URL('/api/resume-deposit', window.location.origin);
+      if (userId) {
+        url.searchParams.set('userId', userId);
+      } else if (userEmail) {
+        url.searchParams.set('email', userEmail);
+      }
+      
+      const response = await fetch(url.toString());
+      
+      if (response.ok) {
+        const responseData = await response.json();
+        const data = responseData.data || [];
+        
+        // ตรวจสอบว่ามีใบสมัครงานใหม่หรือไม่
+        const currentApplicationIds = applications.map(app => app.id);
+        const newApplications = data.filter((app: any) => !currentApplicationIds.includes(app.id));
+        
+        if (newApplications.length > 0) {
+          console.log(`🆕 Found ${newApplications.length} new applications`);
+          
+          // แปลงข้อมูลใหม่เป็น ApplicationData format
+          const newApplicationsData: ApplicationData[] = newApplications.map((app: any) => ({
+            id: app.id,
+            firstName: app.firstName || '',
+            lastName: app.lastName || '',
+            appliedPosition: app.expectedPosition || 'ไม่ระบุ',
+            email: app.email || '',
+            phone: app.phone || '',
+            department: app.department || '',
+            status: app.status || 'PENDING',
+            createdAt: app.createdAt || new Date().toISOString(),
+            profileImageUrl: app.profileImageUrl || '',
+            prefix: app.prefix || '',
+            birthDate: app.birthDate || '',
+            age: app.age?.toString() || '',
+            race: app.race || '',
+            placeOfBirth: app.placeOfBirth || '',
+            placeOfBirthProvince: app.placeOfBirthProvince || '',
+            gender: app.gender === 'MALE' ? 'ชาย' : app.gender === 'FEMALE' ? 'หญิง' : app.gender || '',
+            nationality: app.nationality || '',
+            religion: app.religion || '',
+            maritalStatus: app.maritalStatus === 'SINGLE' ? 'โสด' : 
+                          app.maritalStatus === 'MARRIED' ? 'สมรส' : 
+                          app.maritalStatus === 'DIVORCED' ? 'หย่า' : 
+                          app.maritalStatus === 'WIDOWED' ? 'หม้าย' : app.maritalStatus || '',
+            currentAddress: app.address || '',
+            education: (app.education || []).map((edu: any) => ({
+              level: edu.level || '',
+              institution: edu.school || '',
+              school: edu.school || '',
+              major: edu.major || '',
+              startYear: edu.startYear || '',
+              endYear: edu.endYear || '',
+              year: edu.endYear || '',
+              graduationYear: edu.endYear || '',
+              gpa: edu.gpa?.toString() || ''
+            })),
+            workExperience: (app.workExperience || []).map((work: any) => ({
+              position: work.position || '',
+              company: work.company || '',
+              startDate: work.startDate || '',
+              endDate: work.endDate || '',
+              salary: work.salary || '',
+              reason: work.description || ''
+            })),
+            documents: (app.documents || []).reduce((acc: any, doc: any) => {
+              acc[doc.documentType] = doc.filePath;
+              return acc;
+            }, {})
+          }));
+          
+          // เพิ่มใบสมัครงานใหม่
+          for (const newApp of newApplicationsData) {
+            await addNewApplication(newApp);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error checking for new applications:', error);
+    }
+  };
+
+  // เพิ่มการตรวจสอบการเปลี่ยนแปลงสถานะแบบ real-time
+  useEffect(() => {
+    if (applications.length === 0) return;
+    
+    // ตรวจสอบการเปลี่ยนแปลงสถานะทุก 30 วินาที
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch('/api/resume-deposit');
+        if (response.ok) {
+          const responseData = await response.json();
+          if (responseData.success && responseData.data) {
+            const newData = responseData.data;
+            
+            // ตรวจสอบว่ามีการเปลี่ยนแปลงสถานะหรือไม่
+            let hasStatusChanged = false;
+            
+            for (let i = 0; i < applications.length; i++) {
+              const currentApp = applications[i];
+              const newApp = newData.find((app: any) => app.id === currentApp.id);
+              
+              if (newApp) {
+                const newStatus = newApp.status?.toLowerCase() || 'pending';
+                console.log(`🔍 Status comparison for ${currentApp.firstName} ${currentApp.lastName}:`, {
+                  current: currentApp.status,
+                  new: newApp.status,
+                  newNormalized: newStatus,
+                  changed: currentApp.status !== newStatus
+                });
+                
+                if (currentApp.status !== newStatus) {
+                  hasStatusChanged = true;
+                  console.log(`🔄 สถานะเปลี่ยนแปลงสำหรับ ${currentApp.firstName} ${currentApp.lastName}: ${currentApp.status} -> ${newStatus}`);
+                  break;
+                }
+              }
+            }
+            
+            if (hasStatusChanged) {
+              console.log('🔄 สถานะมีการเปลี่ยนแปลง - รีเฟรชข้อมูล');
+              setStatusUpdateNotification('สถานะมีการเปลี่ยนแปลง - กำลังอัปเดตข้อมูล...');
+              await fetchApplications();
+              setStatusUpdateNotification(null);
+            }
+          }
+        }
+      } catch (error) {
+          console.log('❌ Error checking status updates:', error);
+        }
+    }, 30000); // ตรวจสอบทุก 30 วินาที
+    
+    return () => clearInterval(interval);
+  }, [applications]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -3316,6 +3576,30 @@ export default function ApplicationData() {
         <p className="text-gray-600">
                 {departmentName ? `ฝ่าย: ${departmentName}` : 'รายการใบสมัครงานทั้งหมด'}
               </p>
+              
+              {/* แสดงข้อความแจ้งเตือนการอัปเดตสถานะ */}
+              {statusUpdateNotification && (
+                <div className="mt-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                    <span className="text-blue-800 text-sm font-medium">
+                      {statusUpdateNotification}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* แสดงข้อความแจ้งเตือนใบสมัครงานใหม่ */}
+              {newApplicationNotification && (
+                <div className="mt-4 p-3 bg-green-100 border border-green-300 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span className="text-green-800 text-sm font-medium">
+                      {newApplicationNotification}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
             <Button
               color="primary"
@@ -3339,7 +3623,7 @@ export default function ApplicationData() {
         ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {applications.map((application) => (
-            <Card key={application.id} className="shadow-lg hover:shadow-xl transition-shadow">
+            <Card key={application.id} className="shadow-lg hover:shadow-xl transition-shadow relative">
                 <CardHeader className="pb-3">
                     <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
@@ -3366,6 +3650,18 @@ export default function ApplicationData() {
                         </h3>
                           </div>
                   </div>
+                  
+                  {/* Status Chip */}
+                  <div className="absolute top-3 right-3">
+                    <Chip
+                      color={getStatusInfo(application.status).color}
+                      variant="flat"
+                      size="sm"
+                      className={`${getStatusInfo(application.status).bgColor} ${getStatusInfo(application.status).textColor} ${getStatusInfo(application.status).borderColor} border font-medium`}
+                    >
+                      {getStatusInfo(application.status).text}
+                    </Chip>
+                  </div>
                 </CardHeader>
                 <CardBody className="pt-0">
                 <div className="space-y-2 mb-4">
@@ -3390,6 +3686,7 @@ export default function ApplicationData() {
                     </div>
 
                       <div className="flex gap-2">
+                    {/* ย้อนกลับ: ไม่แสดงปุ่มสมัครงานจากหน้านี้ */}
                         <Button
                           color="primary"
                      variant="flat"

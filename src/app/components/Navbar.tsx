@@ -87,14 +87,14 @@ export default function Navbar() {
                 </div>
                 <span className="text-sm sm:text-base font-medium text-gray-700">Dashboard</span>
               </DropdownItem>
-              <DropdownItem key="profile" href="/register" className="flex items-center space-x-2 sm:space-x-3 py-2 sm:py-3 hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 transition-all duration-200">
+              {/* <DropdownItem key="profile" href="/register" className="flex items-center space-x-2 sm:space-x-3 py-2 sm:py-3 hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 transition-all duration-200">
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-100 rounded-lg flex items-center justify-center">
                   <svg className="w-3 h-3 sm:w-4 sm:h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
                 <span className="text-sm sm:text-base font-medium text-gray-700">โปรไฟล์</span>
-              </DropdownItem>
+              </DropdownItem> */}
               <DropdownItem 
                 key="logout" 
                 color="danger"

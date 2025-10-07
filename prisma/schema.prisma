@@ -53,6 +53,7 @@ model User {
   applications          ApplicationForm[]
   education             UserEducation[]
   workExperience        UserWorkExperience[]
+  resumeDeposits        ResumeDeposit[]
 
   @@map("users")
 }
@@ -430,6 +431,10 @@ model ResumeDeposit {
   education                                    ResumeDepositEducation[]
   previousGovernmentService                    ResumeDepositPreviousGovernmentService[]
   workExperience                               ResumeDepositWorkExperience[]
+  userId                                       String?                                  @map("user_id") @db.VarChar(50)
+  user                                         User?                                    @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "resume_deposits_user_id_idx")
 
   @@map("resume_deposits")
 }

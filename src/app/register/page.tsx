@@ -174,6 +174,11 @@ export default function ApplicationForm() {
   const departmentName = searchParams.get('department') || '';
   const departmentId = searchParams.get('departmentId') || '';
   const resumeId = searchParams.get('resumeId') || '';
+  // flag ให้โหลดจากฐานโดยตรง
+  const resumeFlag = searchParams.get('resume');
+  // แยกพารามิเตอร์ของฝากประวัติ (explicit)
+  const queryResumeEmail = searchParams.get('resumeEmail') || '';
+  const queryResumeUserId = searchParams.get('resumeUserId') || '';
   
   // อัปเดตข้อมูล department ในฟอร์มเมื่อมีข้อมูลจาก URL
   useEffect(() => {
@@ -187,6 +192,21 @@ export default function ApplicationForm() {
     }
   }, [departmentName, departmentId]);
 
+  // โหลดข้อมูลฝากประวัติโดยอัตโนมัติเมื่อผู้ใช้ล็อกอิน
+  // กรณีเข้าหน้า /register โดยไม่มี resumeId หรือ department ใน URL
+  useEffect(() => {
+    if (status === 'authenticated' && !resumeId && !departmentName && !departmentId && !resumeFlag) {
+      fetchProfileData();
+    }
+  }, [status, resumeId, departmentName, departmentId, resumeFlag]);
+
+  // ถ้ามีพารามิเตอร์ ?resume ให้บังคับโหลดข้อมูลจากฐานทันที
+  useEffect(() => {
+    if (status === 'authenticated' && resumeFlag) {
+      fetchProfileData();
+    }
+  }, [status, resumeFlag]);
+
   // ดึงข้อมูลฝากประวัติตาม resumeId เมื่อมีใน URL
   useEffect(() => {
     if (resumeId && status === 'authenticated') {
@@ -194,6 +214,74 @@ export default function ApplicationForm() {
       loadResumeById(resumeId);
     }
   }, [resumeId, status]);
+
+  // ดึงข้อมูลฝากประวัติเมื่อมี resumeEmail / resumeUserId ใน URL
+  useEffect(() => {
+    const loadByExplicitIdentity = async () => {
+      if (status !== 'authenticated') return;
+      if (!queryResumeEmail && !queryResumeUserId) return;
+      console.log('🔍 พบตัวระบุฝากประวัติใน URL:', { queryResumeEmail, queryResumeUserId });
+      try {
+        // 1) ลองด้วย userId ก่อน ถ้ามี
+        const primaryQ = queryResumeUserId
+          ? `?userId=${encodeURIComponent(queryResumeUserId)}`
+          : (queryResumeEmail ? `?email=${encodeURIComponent(queryResumeEmail)}` : '');
+        console.log('🔍 เรียก API (explicit identity primary):', `/api/resume-deposit${primaryQ}`);
+        let res = await fetch(`/api/resume-deposit${primaryQ}`);
+        let list: any[] = [];
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
+          list = (json?.data || json || []) as any[];
+        } else {
+          console.log('❌ API explicit identity primary response ไม่สำเร็จ:', res.status);
+        }
+
+        // 2) ถ้าไม่พบ และมีอีเมลให้ fallback (จาก URL หรือ session)
+        if ((!Array.isArray(list) || list.length === 0)) {
+          const fallbackEmail = queryResumeEmail || ((session?.user as any)?.email || '');
+          if (fallbackEmail) {
+            const fallbackQ = `?email=${encodeURIComponent(fallbackEmail)}`;
+            console.log('🔄 ไม่พบด้วย userId ลอง fallback ด้วยอีเมล:', fallbackEmail);
+            console.log('🔍 เรียก API (explicit identity fallback):', `/api/resume-deposit${fallbackQ}`);
+            res = await fetch(`/api/resume-deposit${fallbackQ}`);
+            if (res.ok) {
+              const json2 = await res.json().catch(() => ({}));
+              list = (json2?.data || json2 || []) as any[];
+            } else {
+              console.log('❌ API explicit identity fallback response ไม่สำเร็จ:', res.status);
+            }
+          }
+        }
+
+        if (!Array.isArray(list) || list.length === 0) {
+          console.log('❌ ไม่พบข้อมูลฝากประวัติจาก explicit identity และ fallback');
+          return;
+        }
+        // เลือกล่าสุด
+        list.sort((a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime());
+        const found = list[0];
+        console.log('✅ พบข้อมูลฝากประวัติ (explicit):', found.id);
+        // ดึงรายละเอียด
+        const detail = await fetch(`/api/resume-deposit/${found.id}`);
+        if (detail.ok) {
+          const dj = await detail.json().catch(() => ({}));
+          const data = dj?.data || dj || found;
+          setSavedResume(data);
+          if (typeof applyResumeToFormInputs === 'function') {
+            applyResumeToFormInputs(data);
+          }
+          if (data?.profileImageUrl) {
+            const imagePath = `/api/image?file=${data.profileImageUrl}`;
+            setProfileImage(imagePath);
+          }
+          console.log('✅ โหลด explicit resume เข้าฟอร์มสำเร็จ');
+        }
+      } catch (err) {
+        console.error('❌ ผิดพลาดในการโหลด explicit resume:', err);
+      }
+    };
+    loadByExplicitIdentity();
+  }, [status, queryResumeEmail, queryResumeUserId]);
 
   // ดึงข้อมูลฝากประวัติเมื่อมี department ใน URL (ค้นหาตามหลายวิธี)
   useEffect(() => {
@@ -337,15 +425,18 @@ export default function ApplicationForm() {
       setIsLoading(true);
       
       try {
-        // พยายามค้นจากอีเมล session ก่อน
+        // พยายามค้นจาก userId ก่อน แล้วค่อย fallback เป็นอีเมล
+        const userId = (session?.user as any)?.id || '';
         const userEmail = (session?.user as any)?.email || '';
-        console.log('🔍 ค้นหาข้อมูลฝากประวัติด้วยอีเมล:', userEmail);
+        console.log('🔍 ค้นหาข้อมูลฝากประวัติด้วย userId/email:', { userId, userEmail });
         
         let found: any = null;
         
-        // 1. ค้นหาจาก resume-deposit API
+        // 1. ค้นหาจาก resume-deposit API (ลอง userId ก่อน)
         try {
-          const q = userEmail ? `?email=${encodeURIComponent(userEmail)}` : '';
+          let q = '';
+          if (userId) q = `?userId=${encodeURIComponent(userId)}`;
+          else if (userEmail) q = `?email=${encodeURIComponent(userEmail)}`;
           console.log('🔍 เรียก API:', `/api/resume-deposit${q}`);
           
           const res = await fetch(`/api/resume-deposit${q}`);
@@ -355,7 +446,13 @@ export default function ApplicationForm() {
             console.log('🔍 ข้อมูลที่ได้รับ:', list.length, 'รายการ');
             
             const filtered = Array.isArray(list)
-              ? (userEmail ? list.filter((r) => (r?.email || '').toLowerCase() === userEmail.toLowerCase()) : list)
+              ? (
+                  userId
+                    ? list.filter((r) => (r?.userId || '') === userId)
+                    : userEmail
+                      ? list.filter((r) => (r?.email || '').toLowerCase() === userEmail.toLowerCase())
+                      : list
+                )
               : [];
               
             if (filtered.length > 0) {
@@ -1326,9 +1423,15 @@ export default function ApplicationForm() {
     try {
       // ดึงข้อมูลจาก ResumeDeposit API
       const userEmail = (session?.user as any)?.email || '';
+      const userId = (session?.user as any)?.id || '';
       console.log('🔍 fetchProfileData - UserEmail:', userEmail);
-      console.log('🔍 fetchProfileData - API URL:', `/api/resume-deposit?email=${encodeURIComponent(userEmail)}`);
-      const response = await fetch(`/api/resume-deposit?email=${encodeURIComponent(userEmail)}`);
+      console.log('🔍 fetchProfileData - UserId:', userId);
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', String(userId));
+      if (userEmail) params.set('email', String(userEmail));
+      const url = `/api/resume-deposit?${params.toString()}`;
+      console.log('🔍 fetchProfileData - API URL:', url);
+      const response = await fetch(url);
       
       if (response.ok) {
         const result = await response.json();
@@ -1880,6 +1983,7 @@ export default function ApplicationForm() {
     
     try {
       const userEmail = (session?.user as any)?.email || '';
+      const userId = (session?.user as any)?.id || '';
       if (!userEmail) {
         console.log('❌ ไม่พบอีเมลผู้ใช้');
         alert('ไม่พบอีเมลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
@@ -1887,7 +1991,12 @@ export default function ApplicationForm() {
       }
 
       // ค้นหาข้อมูลฝากประวัติล่าสุด
-      const res = await fetch(`/api/resume-deposit?email=${encodeURIComponent(userEmail)}`);
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', String(userId));
+      if (userEmail) params.set('email', String(userEmail));
+      const url = `/api/resume-deposit?${params.toString()}`;
+      console.log('🔎 refreshResumeData - URL:', url);
+      const res = await fetch(url);
       if (res.ok) {
         const json = await res.json().catch(() => ({}));
         const list = (json?.data || json || []) as any[];
@@ -4417,6 +4526,24 @@ export default function ApplicationForm() {
                          <p className="text-red-500 text-xs mt-1">{getErrorMessage('religion')}</p>
                        )}
                      </div>
+                {/* อีเมล */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">อีเมล<span className="text-red-500">*</span></label>
+                  <input
+                    type="email"
+                    name="email"
+                    data-error-key="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    placeholder="กรอกอีเมล เช่น example@email.com"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                      hasError('email') ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                    }`}
+                  />
+                  {hasError('email') && (
+                    <p className="text-red-500 text-xs mt-1">{getErrorMessage('email')}</p>
+                  )}
+                </div>
                     <div>
                                              <span className="text-sm text-gray-600">เพศ<span className="text-red-500">*</span></span>
                       <div className="flex gap-4 mt-2">
