@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '../../../../lib/prisma';
+import { PrismaClient } from '@prisma/client';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+
+const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,6 +50,14 @@ export async function POST(request: NextRequest) {
     
     // รูปภาพจะจัดการแยกผ่าน profile-image/upload API
     console.log('🔍 API - Profile image will be handled separately via profile-image/upload API');
+    
+    // Debug logs เพื่อตรวจสอบข้อมูลที่ได้รับ
+    console.log('🔍 API - Received education data:', data.education);
+    console.log('🔍 API - Received education data length:', data.education?.length || 0);
+    console.log('🔍 API - Received work experience data:', data.workExperience);
+    console.log('🔍 API - Received work experience data length:', data.workExperience?.length || 0);
+    console.log('🔍 API - Received previous government service data:', data.previousGovernmentService);
+    console.log('🔍 API - Received previous government service data length:', data.previousGovernmentService?.length || 0);
     
     // Create resume deposit record
     const resumeDeposit = await prisma.resumeDeposit.create({
@@ -160,27 +170,49 @@ export async function POST(request: NextRequest) {
         
         // Create related education records
         education: {
-          create: (data.education || []).filter((edu: any) => edu.level || edu.school || edu.institution).map((edu: any) => ({
-            level: edu.level || '',
-            school: edu.school || edu.institution || '',
-            major: edu.major || '',
-            startYear: edu.startYear || '',
-            endYear: edu.endYear || edu.year || '',
-            gpa: edu.gpa ? parseFloat(edu.gpa) : null
-          }))
+          create: (() => {
+            const educationData = (data.education || []).filter((edu: any) => {
+              const hasData = edu && (edu.level || edu.school || edu.institution);
+              console.log('🔍 API - Education filter check:', { edu, hasData });
+              return hasData;
+            }).map((edu: any) => {
+              console.log('🔍 API - Creating education record:', edu);
+              return {
+                level: edu.level || '',
+                school: edu.school || edu.institution || '',
+                major: edu.major || '',
+                startYear: edu.startYear || '',
+                endYear: edu.endYear || edu.year || '',
+                gpa: edu.gpa ? parseFloat(edu.gpa) : null
+              };
+            });
+            console.log('🔍 API - Education records to create:', educationData.length);
+            return educationData;
+          })()
         },
         
         // Create related work experience records
         workExperience: {
-          create: (data.workExperience || []).filter((work: any) => work.position || work.company).map((work: any) => ({
-            position: work.position || '',
-            company: work.company || '',
-            startDate: work.startDate ? new Date(work.startDate) : null,
-            endDate: work.endDate ? new Date(work.endDate) : null,
-            isCurrent: !!work.isCurrent,
-            description: work.description || work.reason || '',
-            salary: work.salary || ''
-          }))
+          create: (() => {
+            const workData = (data.workExperience || []).filter((work: any) => {
+              const hasData = work && (work.position || work.company);
+              console.log('🔍 API - Work experience filter check:', { work, hasData });
+              return hasData;
+            }).map((work: any) => {
+              console.log('🔍 API - Creating work experience record:', work);
+              return {
+                position: work.position || '',
+                company: work.company || '',
+                startDate: work.startDate ? new Date(work.startDate) : null,
+                endDate: work.endDate ? new Date(work.endDate) : null,
+                isCurrent: !!work.isCurrent,
+                description: work.description || work.reason || '',
+                salary: work.salary || ''
+              };
+            });
+            console.log('🔍 API - Work experience records to create:', workData.length);
+            return workData;
+          })()
         },
         
         // Create related previous government service records
@@ -188,7 +220,12 @@ export async function POST(request: NextRequest) {
           create: (() => {
             console.log('🔍 API - data.previousGovernmentService:', data.previousGovernmentService);
             console.log('🔍 API - data.previousGovernmentService.length:', data.previousGovernmentService?.length || 0);
-            return (data.previousGovernmentService || []).filter((gov: any) => gov.position || gov.department).map((gov: any) => {
+            const serviceData = (data.previousGovernmentService || []).filter((gov: any) => {
+              const hasData = gov && (gov.position || gov.department);
+              console.log('🔍 API - Previous government service filter check:', { gov, hasData });
+              return hasData;
+            }).map((gov: any) => {
+              console.log('🔍 API - Creating previous government service record:', gov);
               const serviceData: any = {
                 position: gov.position || '',
                 department: gov.department || '',
@@ -201,6 +238,8 @@ export async function POST(request: NextRequest) {
               }
               return serviceData;
             });
+            console.log('🔍 API - Previous government service records to create:', serviceData.length);
+            return serviceData;
           })()
         },
         
@@ -223,6 +262,12 @@ export async function POST(request: NextRequest) {
       }
     });
     
+    // ตรวจสอบข้อมูลที่ถูกสร้างขึ้นจริง
+    console.log('✅ ResumeDeposit created with ID:', resumeDeposit.id);
+    console.log('✅ Education records created:', resumeDeposit.education?.length || 0);
+    console.log('✅ Work experience records created:', resumeDeposit.workExperience?.length || 0);
+    console.log('✅ Previous government service records created:', resumeDeposit.previousGovernmentService?.length || 0);
+    
     return NextResponse.json({
       success: true,
       message: 'ฝากประวัติเรียบร้อยแล้ว',
@@ -239,6 +284,8 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
@@ -306,5 +353,7 @@ export async function GET(request: NextRequest) {
       { success: false, message: 'เกิดข้อผิดพลาดในการดึงข้อมูล' },
       { status: 500 }
     );
+  } finally {
+    await prisma.$disconnect();
   }
 }

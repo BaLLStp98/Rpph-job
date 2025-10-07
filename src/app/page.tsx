@@ -37,6 +37,13 @@ export default function Home() {
   const [attachments, setAttachments] = useState<DeptAttachment[]>([])
   const [attLoading, setAttLoading] = useState(false)
   const { isOpen, onOpen, onClose } = useDisclosure()
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 9
 
   useEffect(() => {
     // หากเข้าสู่ระบบแล้ว ให้นำผู้ใช้ไปหน้า Dashboard ทันที
@@ -99,6 +106,34 @@ export default function Home() {
   const isImage = (url: string) => /\.(png|jpg|jpeg|gif|webp)$/i.test(url)
   const isPdf = (url: string) => /\.pdf(\?|#|$)/i.test(url)
 
+  // Filter departments based on search query
+  const filteredDepartments = departments.filter((dept: Department) => {
+    if (searchQuery === '') return true
+    
+    const query = searchQuery.toLowerCase()
+    return (
+      dept.name?.toLowerCase().includes(query) ||
+      dept.positions?.toLowerCase().includes(query) ||
+      dept.education?.toLowerCase().includes(query) ||
+      dept.description?.toLowerCase().includes(query)
+    )
+  })
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query)
+    setCurrentPage(1) // Reset to first page when search changes
+  }
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredDepartments.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentDepartments = filteredDepartments.slice(startIndex, endIndex)
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex flex-col items-center justify-center p-2 sm:p-4 md:p-8">
       {/* Header */}
@@ -123,12 +158,71 @@ export default function Home() {
       {/* รายการแผนกจากฐานข้อมูล */}
       <div className="w-full max-w-6xl px-2">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-800">ฝ่ายที่เปิดรับสมัคร</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-800">ประกาศเปิดรับสมัคร</h2>
           {loading && <span className="text-sm text-gray-500">กำลังโหลด…</span>}
           {error && <span className="text-sm text-red-600">{error}</span>}
         </div>
+
+        {/* Search Input */}
+        <div className="mb-6">
+          <div className="relative max-w-md mx-auto">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="ค้นหาตำแหน่งงาน, ฝ่าย, วุฒิการศึกษา..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => handleSearchChange('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center"
+              >
+                <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <div className="mt-2 text-sm text-gray-600 text-center">
+              ผลการค้นหา: {filteredDepartments.length} รายการ
+            </div>
+          )}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-          {departments.map(dep => (
+          {currentDepartments.length === 0 ? (
+            <div className="col-span-full text-center py-12">
+              <div className="text-gray-400 mb-4">
+                <svg className="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m-6 4h6m-6 4h6" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchQuery ? 'ไม่พบผลการค้นหา' : 'ไม่มีข้อมูลฝ่าย'}
+              </h3>
+              <p className="text-gray-500 mb-4">
+                {searchQuery 
+                  ? `ไม่พบตำแหน่งงานที่ตรงกับ "${searchQuery}"` 
+                  : 'ยังไม่มีข้อมูลฝ่ายที่เปิดรับสมัคร'
+                }
+              </p>
+              {searchQuery && (
+                <button
+                  onClick={() => handleSearchChange('')}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  ล้างการค้นหา
+                </button>
+              )}
+            </div>
+          ) : (
+            currentDepartments.map(dep => (
             <Card key={dep.id} className="shadow-lg hover:shadow-xl transition-shadow duration-300 border-0 bg-white/80 backdrop-blur-sm relative rounded-xl">
               <CardHeader className="pb-2 sm:pb-3">
                 <div className="flex justify-between items-start w-full">
@@ -188,7 +282,7 @@ export default function Home() {
                     color="primary" 
                     variant="solid" 
                     size="sm" 
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-xs sm:text-sm border-0 rounded-xl"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm border-0 rounded-xl"
                     onClick={() => signIn('line', { callbackUrl: `/register?department=${encodeURIComponent(dep.name)}&departmentId=${encodeURIComponent(dep.id)}` })}
                   >
                     สมัครงาน
@@ -205,11 +299,82 @@ export default function Home() {
                 </div>
               </CardBody>
             </Card>
-          ))}
-          {!loading && !error && departments.length === 0 && (
-            <div className="col-span-full text-sm text-gray-500">ยังไม่มีข้อมูลฝ่าย</div>
+            ))
           )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center space-x-1 sm:space-x-2 mt-6 sm:mt-8">
+            {/* Previous Button */}
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              ก่อนหน้า
+            </button>
+
+            {/* Page Numbers */}
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+              // Show first page, last page, current page, and pages around current page
+              const shouldShow = 
+                page === 1 || 
+                page === totalPages || 
+                Math.abs(page - currentPage) <= 1
+
+              if (!shouldShow) {
+                // Show ellipsis
+                if (page === 2 && currentPage > 4) {
+                  return (
+                    <span key={page} className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 text-xs sm:text-sm">
+                      ...
+                    </span>
+                  )
+                }
+                if (page === totalPages - 1 && currentPage < totalPages - 3) {
+                  return (
+                    <span key={page} className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 text-xs sm:text-sm">
+                      ...
+                    </span>
+                  )
+                }
+                return null
+              }
+
+              return (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                    currentPage === page
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  {page}
+                </button>
+              )
+            })}
+
+            {/* Next Button */}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+              }`}
+            >
+              ถัดไป
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modal รายละเอียดแผนก */}

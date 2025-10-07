@@ -33,6 +33,9 @@ export default function Dashboard() {
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active')
   
+  // Search state
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  
   // Detail modal state
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [detailDepartment, setDetailDepartment] = useState<any | null>(null)
@@ -295,17 +298,17 @@ export default function Dashboard() {
     };
   }, []);
 
-  // ฟังก์ชันดึงข้อมูลฝ่ายและกลุ่มงานจาก resume-deposit
+  // ฟังก์ชันดึงข้อมูลฝ่ายและกลุ่มงานจาก departments
   const getDepartmentInfo = (deptName: string) => {
-    const resumeData = resumeDepositData.find((resume: any) => 
-      resume.department === deptName || resume.appliedPosition === deptName
-    );
+    const deptData = departmentsData.find((dept: any) => 
+      dept.name === deptName
+    ) as any;
     
-    if (resumeData) {
+    if (deptData) {
       return {
-        department: resumeData.department || 'ไม่ระบุ',
-        workGroup: resumeData.workGroup || 'ไม่ระบุ',
-        appliedPosition: resumeData.appliedPosition || 'ไม่ระบุ'
+        department: deptData.name || 'ไม่ระบุ',
+        workGroup: deptData.missionGroupName || 'ไม่ระบุ',
+        appliedPosition: deptData.positions || 'ไม่ระบุ'
       };
     }
     
@@ -316,22 +319,29 @@ export default function Dashboard() {
     };
   };
 
-  // Filter and sort departments based on selected department and status
-  const filteredDepartments = selectedDepartment === 'all' 
-    ? departmentsData
-        .filter((dept: any) => statusFilter === 'all' ? true : dept.status === statusFilter)
-        .sort((a: any, b: any) => {
-          const dateA = new Date(a.createdAt || a.updatedAt || '2024-01-01').getTime()
-          const dateB = new Date(b.createdAt || b.updatedAt || '2024-01-01').getTime()
-          return dateB - dateA
-        })
-    : departmentsData
-        .filter((dept: any) => dept.name === selectedDepartment && (statusFilter === 'all' ? true : dept.status === statusFilter))
-        .sort((a: any, b: any) => {
-          const dateA = new Date(a.createdAt || a.updatedAt || '2024-01-01').getTime()
-          const dateB = new Date(b.createdAt || b.updatedAt || '2024-01-01').getTime()
-          return dateB - dateA
-        })
+  // Filter and sort departments based on selected department, status, and search query
+  const filteredDepartments = departmentsData
+    .filter((dept: any) => {
+      // Status filter
+      const statusMatch = statusFilter === 'all' ? true : dept.status === statusFilter
+      
+      // Department filter
+      const departmentMatch = selectedDepartment === 'all' ? true : dept.name === selectedDepartment
+      
+      // Search filter
+      const searchMatch = searchQuery === '' ? true : 
+        dept.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dept.positions?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dept.education?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dept.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      return statusMatch && departmentMatch && searchMatch
+    })
+    .sort((a: any, b: any) => {
+      const dateA = new Date(a.createdAt || a.updatedAt || '2024-01-01').getTime()
+      const dateB = new Date(b.createdAt || b.updatedAt || '2024-01-01').getTime()
+      return dateB - dateA
+    })
 
   // Pagination logic
   const totalPages = Math.ceil(filteredDepartments.length / itemsPerPage)
@@ -346,6 +356,11 @@ export default function Dashboard() {
   const handleDepartmentSelect = (departmentName: string) => {
     setSelectedDepartment(departmentName)
     setCurrentPage(1) // Reset to first page when filter changes
+  }
+
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query)
+    setCurrentPage(1) // Reset to first page when search changes
   }
 
   // Helpers for attachment preview (align with Home page)
@@ -656,6 +671,39 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* Search Input */}
+              <div className="mb-6">
+                <div className="relative max-w-md">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="ค้นหาตำแหน่งงาน, ฝ่าย, วุฒิการศึกษา..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => handleSearchChange('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    >
+                      <svg className="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                {searchQuery && (
+                  <div className="mt-2 text-sm text-gray-600">
+                    ผลการค้นหา: {filteredDepartments.length} รายการ
+                  </div>
+                )}
+              </div>
+
               {/* Departments Cards - แสดง 9 cards */}
               {departmentsLoading ? (
                 <div className="flex justify-center items-center py-12">
@@ -664,7 +712,34 @@ export default function Dashboard() {
             </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+                  {filteredDepartments.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="text-gray-400 mb-4">
+                        <svg className="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m-6 4h6m-6 4h6" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        {searchQuery ? 'ไม่พบผลการค้นหา' : 'ไม่มีข้อมูลฝ่าย'}
+                      </h3>
+                      <p className="text-gray-500 mb-4">
+                        {searchQuery 
+                          ? `ไม่พบตำแหน่งงานที่ตรงกับ "${searchQuery}"` 
+                          : 'ยังไม่มีข้อมูลฝ่ายที่เปิดรับสมัคร'
+                        }
+                      </p>
+                      {searchQuery && (
+                        <button
+                          onClick={() => handleSearchChange('')}
+                          className="text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          ล้างการค้นหา
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
                     {currentDepartments.map((dept: any) => (
                       <Card key={dept.id} className="shadow-lg hover:shadow-xl transition-transform duration-300 border-0 bg-white/80 backdrop-blur-sm relative rounded-xl hover:-translate-y-1">
                         {/* New Badge for recently added departments */}
@@ -684,7 +759,7 @@ export default function Dashboard() {
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                           <h3 className="text-sm sm:text-base md:text-lg font-semibold text-gray-800 line-clamp-2">
-                                {dept.name}
+                                ตำแหน่ง: {dept.positions || 'ไม่ระบุตำแหน่ง'}
                           </h3>
                               {/* <p className="text-sm text-gray-600 line-clamp-2">
                                 {dept.description}
@@ -694,6 +769,14 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardBody className="pt-0">
                     <div className="space-y-2 sm:space-y-3">
+                            {/* ชื่อฝ่าย */}
+                            <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                              <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                              </svg>
+                              <span className="text-gray-600 truncate font-medium">ฝ่าย: {dept.name}</span>
+                            </div>
+
                             <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
                               <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -740,12 +823,6 @@ export default function Dashboard() {
                       
                      
 
-                      <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
-                        <svg className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2-2v2m8 0V6a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2V6" />
-                        </svg>
-                              <span className="text-gray-600 truncate">ตำแหน่งที่เปิดรับสมัคร: {dept.positions || ' ไม่ระบุ'}</span>
-                    </div>
 
                       {/* วันที่เปิดรับสมัคร */}
                       <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
@@ -776,7 +853,7 @@ export default function Dashboard() {
                       color="primary"
                       variant="solid"
                           size="sm"
-                          className={`flex-1 text-xs sm:text-sm border-0 rounded-xl ${userHasResume ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
+                          className={`flex-1 text-xs sm:text-sm border-0 rounded-xl text-white ${userHasResume ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 text-gray-600 cursor-not-allowed'}`}
                           isLoading={applyingDeptId === String(dept.id) || resumeDepositLoading}
                           onClick={() => {
                             setApplyingDeptId(String(dept.id))
@@ -806,79 +883,79 @@ export default function Dashboard() {
               </Card>
               ))}
             </div>
-
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="flex justify-center items-center space-x-1 sm:space-x-2 mt-6 sm:mt-8">
-                      {/* Previous Button */}
-                      <button
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-                          currentPage === 1
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                        }`}
-                      >
-                        ‹
-                      </button>
-
-                      {/* Page Numbers */}
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                        // Show first page, last page, current page, and pages around current page
-                        const shouldShow = 
-                          page === 1 || 
-                          page === totalPages || 
-                          Math.abs(page - currentPage) <= 1
-
-                        if (!shouldShow) {
-                          // Show ellipsis
-                          if (page === 2 && currentPage > 4) {
-                            return (
-                              <span key={page} className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 text-xs sm:text-sm">
-                                ...
-                              </span>
-                            )
-                          }
-                          if (page === totalPages - 1 && currentPage < totalPages - 3) {
-                            return (
-                              <span key={page} className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 text-xs sm:text-sm">
-                                ...
-                              </span>
-                            )
-                          }
-                          return null
-                        }
-
-                        return (
+                      {totalPages > 1 && (
+                        <div className="flex justify-center items-center space-x-1 sm:space-x-2 mt-6 sm:mt-8">
+                          {/* Previous Button */}
                           <button
-                            key={page}
-                            onClick={() => handlePageChange(page)}
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
                             className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-                              currentPage === page
-                                ? 'bg-blue-600 text-white'
+                              currentPage === 1
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                 : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                             }`}
                           >
-                            {page}
+                            ‹
                           </button>
-                        )
-                      })}
 
-                      {/* Next Button */}
-                      <button
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-                          currentPage === totalPages
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-                        }`}
-                      >
-                        ›
-                      </button>
-              </div>
-            )}
+                          {/* Page Numbers */}
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                            // Show first page, last page, current page, and pages around current page
+                            const shouldShow = 
+                              page === 1 || 
+                              page === totalPages || 
+                              Math.abs(page - currentPage) <= 1
+
+                            if (!shouldShow) {
+                              // Show ellipsis
+                              if (page === 2 && currentPage > 4) {
+                                return (
+                                  <span key={page} className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 text-xs sm:text-sm">
+                                    ...
+                                  </span>
+                                )
+                              }
+                              if (page === totalPages - 1 && currentPage < totalPages - 3) {
+                                return (
+                                  <span key={page} className="px-2 sm:px-3 py-1.5 sm:py-2 text-gray-500 text-xs sm:text-sm">
+                                    ...
+                                  </span>
+                                )
+                              }
+                              return null
+                            }
+
+                            return (
+                              <button
+                                key={page}
+                                onClick={() => handlePageChange(page)}
+                                className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                                  currentPage === page
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            )
+                          })}
+
+                          {/* Next Button */}
+                          <button
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className={`px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                              currentPage === totalPages
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                            }`}
+                          >
+                            ›
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </>
               )}
             </div>

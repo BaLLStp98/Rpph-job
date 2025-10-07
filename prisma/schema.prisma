@@ -245,6 +245,18 @@ model HospitalDepartment {
   @@map("hospital_departments")
 }
 
+model MissionGroup {
+  id          String       @id @default(cuid())
+  name        String       @db.VarChar(200)
+  description String?      @db.Text
+  status      String       @default("ACTIVE") @db.VarChar(20)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  departments Department[]
+
+  @@map("mission_groups")
+}
+
 model Department {
   id                   String                 @id @default(cuid())
   name                 String                 @db.VarChar(200)
@@ -262,9 +274,11 @@ model Department {
   education            String?                @db.Text
   gender               Gender                 @default(UNKNOWN)
   positions            String?                @db.Text
+  missionGroupId       String?                @map("mission_group_id") @db.VarChar(50)
   createdAt            DateTime               @default(now()) @map("created_at")
   updatedAt            DateTime               @updatedAt @map("updated_at")
   attachments          DepartmentAttachment[]
+  missionGroup         MissionGroup?          @relation(fields: [missionGroupId], references: [id])
 
   @@map("departments")
 }

@@ -7,8 +7,13 @@ export async function POST(request: NextRequest) {
   try {
     const applicationData = await request.json()
     
-    // Create application in database
-    const application = await prisma.applicationForm.create({
+    // Debug log เพื่อตรวจสอบข้อมูลที่ได้รับ
+    console.log('📝 Received education data:', applicationData.education);
+    console.log('💼 Received work experience data:', applicationData.workExperience);
+    console.log('🏛️ Received previous government service data:', applicationData.previousGovernmentService);
+    
+    // Create resume deposit in database
+    const resumeDeposit = await prisma.resumeDeposit.create({
       data: {
         firstName: applicationData.firstName || '',
         lastName: applicationData.lastName || '',
@@ -24,8 +29,7 @@ export async function POST(request: NextRequest) {
         availableDate: applicationData.availableDate ? new Date(applicationData.availableDate) : null,
         expectedSalary: applicationData.expectedSalary || null,
         department: applicationData.department || null,
-        departmentId: applicationData.departmentId || null,
-        appliedPosition: applicationData.appliedPosition || null,
+        expectedPosition: applicationData.appliedPosition || null,
         currentAddress: applicationData.currentAddress || null,
         current_address_house_number: applicationData.current_address_house_number || null,
         current_address_village_number: applicationData.current_address_village_number || null,
@@ -71,33 +75,42 @@ export async function POST(request: NextRequest) {
         status: 'PENDING',
         // ข้อมูลการศึกษา
         education: {
-          create: (applicationData.education || []).map((e: any) => ({
-            level: e.level,
-            institution: e.institution,
-            major: e.major || null,
-            year: e.year || null,
-            gpa: e.gpa ? parseFloat(e.gpa) : null
-          }))
+          create: (applicationData.education || []).filter((e: any) => e && (e.level || e.institution)).map((e: any) => {
+            console.log('📝 Creating education record:', e);
+            return {
+              level: e.level || '',
+              school: e.institution || '',
+              major: e.major || null,
+              startYear: e.year || null,
+              endYear: e.year || null,
+              gpa: e.gpa ? parseFloat(e.gpa) : null
+            };
+          })
         },
         // ข้อมูลประสบการณ์ทำงาน
         workExperience: {
-          create: (applicationData.workExperience || []).map((w: any) => ({
-            position: w.position,
-            company: w.company,
-            startDate: w.startDate ? new Date(w.startDate) : null,
-            endDate: w.endDate ? new Date(w.endDate) : null,
-            salary: w.salary || null,
-            reason: w.reason || null
-          }))
+          create: (applicationData.workExperience || []).filter((w: any) => w && (w.position || w.company)).map((w: any) => {
+            console.log('💼 Creating work experience record:', w);
+            return {
+              position: w.position || '',
+              company: w.company || '',
+              startDate: w.startDate ? new Date(w.startDate) : null,
+              endDate: w.endDate ? new Date(w.endDate) : null,
+              salary: w.salary || null,
+              description: w.reason || null,
+              isCurrent: w.endDate === null || w.endDate === '' || w.endDate === 'ปัจจุบัน'
+            };
+          })
         },
         // ข้อมูลการรับราชการก่อนหน้า
         previousGovernmentService: {
-          create: (applicationData.previousGovernmentService || []).map((g: any) => {
+          create: (applicationData.previousGovernmentService || []).filter((g: any) => g && (g.position || g.department)).map((g: any) => {
+            console.log('🏛️ Creating previous government service record:', g);
             const serviceData: any = {
-              position: g.position,
-              department: g.department,
-              reason: g.reason,
-              date: g.date
+              position: g.position || '',
+              department: g.department || '',
+              reason: g.reason || '',
+              date: g.date || ''
             };
             // เพิ่ม type field เฉพาะเมื่อมี
             if (g.type) {
@@ -109,10 +122,24 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // ตรวจสอบข้อมูลที่ถูกสร้างขึ้นจริง
+    const createdResumeDeposit = await prisma.resumeDeposit.findUnique({
+      where: { id: resumeDeposit.id },
+      include: {
+        education: true,
+        workExperience: true,
+        previousGovernmentService: true
+      }
+    });
+
+    console.log('✅ Created resume deposit with education records:', createdResumeDeposit?.education?.length || 0);
+    console.log('✅ Created resume deposit with work experience records:', createdResumeDeposit?.workExperience?.length || 0);
+    console.log('✅ Created resume deposit with previous government service records:', createdResumeDeposit?.previousGovernmentService?.length || 0);
+
     return NextResponse.json({
       success: true,
-      message: 'Application created successfully',
-      data: application
+      message: 'Resume deposit created successfully',
+      data: createdResumeDeposit
     })
 
   } catch (error) {
@@ -120,7 +147,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: 'Failed to submit application',
+        message: 'Failed to submit resume deposit',
         error: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
@@ -139,13 +166,12 @@ export async function GET(request: NextRequest) {
     if (department) {
       whereClause = {
         OR: [
-          { department: { contains: department } },
-          { departmentId: { contains: department } }
+          { department: { contains: department } }
         ]
       }
     }
     
-    const applications = await prisma.applicationForm.findMany({
+    const resumeDeposits = await prisma.resumeDeposit.findMany({
       where: whereClause,
       include: {
         education: true,
@@ -157,15 +183,15 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({
       success: true,
-      data: applications
+      data: resumeDeposits
     })
     
   } catch (error) {
-    console.error('Error fetching applications:', error)
+    console.error('Error fetching resume deposits:', error)
     return NextResponse.json(
       {
         success: false,
-        message: 'Failed to fetch applications',
+        message: 'Failed to fetch resume deposits',
         error: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }

@@ -459,14 +459,44 @@ export default function Departments() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   const { isOpen: isAddOpen, onOpen: onAddOpen, onClose: onAddClose } = useDisclosure();
-  // Mission groups (derived from departments.missionGroupName to avoid backend dependency)
+  // Mission groups (ดึงข้อมูลจากฐานข้อมูล)
   const [missionGroups, setMissionGroups] = useState<Array<{ id: string; name: string }>>([]);
   const [newMissionGroupId, setNewMissionGroupId] = useState<string>(''); // store group name as key
   const [editMissionGroupId, setEditMissionGroupId] = useState<string>(''); // store group name as key
   const [departmentsByGroup, setDepartmentsByGroup] = useState<Record<string, Array<{ id: string; name: string; code: string }>>>({});
+  const [loadingMissionGroups, setLoadingMissionGroups] = useState(false);
 
-  // Rebuild mission groups and mapping from loaded departments
-  useEffect(() => {
+  // ดึงข้อมูลกลุ่มงานจากฐานข้อมูล
+  const fetchMissionGroups = async () => {
+    try {
+      setLoadingMissionGroups(true);
+      const response = await fetch('/api/prisma/mission-groups');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          setMissionGroups(data.data);
+          console.log('✅ Mission Groups loaded:', data.data);
+        } else {
+          console.error('❌ Failed to load mission groups:', data);
+          // Fallback to derived groups
+          rebuildMissionGroupsFromDepartments();
+        }
+      } else {
+        console.error('❌ API Error loading mission groups:', response.status);
+        // Fallback to derived groups
+        rebuildMissionGroupsFromDepartments();
+      }
+    } catch (error) {
+      console.error('❌ Error fetching mission groups:', error);
+      // Fallback to derived groups
+      rebuildMissionGroupsFromDepartments();
+    } finally {
+      setLoadingMissionGroups(false);
+    }
+  };
+
+  // Fallback: สร้างกลุ่มงานจาก departments (เดิม)
+  const rebuildMissionGroupsFromDepartments = () => {
     const groupMap: Record<string, Array<{ id: string; name: string; code: string }>> = {};
     const nameSet = new Set<string>();
     departments.forEach((d: any) => {
@@ -478,6 +508,18 @@ export default function Departments() {
     });
     setDepartmentsByGroup(groupMap);
     setMissionGroups(Array.from(nameSet).map(n => ({ id: n, name: n })));
+  };
+
+  // ดึงข้อมูลกลุ่มงานเมื่อ component mount
+  useEffect(() => {
+    fetchMissionGroups();
+  }, []);
+
+  // Rebuild mission groups and mapping from loaded departments (fallback)
+  useEffect(() => {
+    if (missionGroups.length === 0) {
+      rebuildMissionGroupsFromDepartments();
+    }
   }, [departments]);
   
   // Date picker states
@@ -505,17 +547,42 @@ export default function Departments() {
         }));
         setDepartments(list);
         console.log('📊 Loaded departments:', list.length, 'total');
+        console.log('📊 Sample department with mission group:', list[0]);
       } else {
-        console.error('Failed to fetch departments');
+        console.error('❌ Failed to fetch departments');
         // Fallback to mock data if API fails
         setDepartments(mockDepartments);
       }
     } catch (error) {
-      console.error('Error fetching departments:', error);
+      console.error('❌ Error fetching departments:', error);
       // Fallback to mock data if API fails
       setDepartments(mockDepartments);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ดึงข้อมูลฝ่ายตามกลุ่มงาน
+  const fetchDepartmentsByGroup = async (missionGroupId: string) => {
+    try {
+      console.log('🔍 Fetching departments for group:', missionGroupId);
+      const response = await fetch(`/api/prisma/departments/by-mission-group?missionGroupId=${missionGroupId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          console.log('✅ Departments by group loaded:', data.data);
+          return data.data;
+        } else {
+          console.error('❌ Failed to load departments by group:', data);
+          return [];
+        }
+      } else {
+        console.error('❌ API Error loading departments by group:', response.status);
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Error fetching departments by group:', error);
+      return [];
     }
   };
 
@@ -651,8 +718,8 @@ export default function Departments() {
 
   const handleEditDepartment = (department: Department) => {
     setEditingDepartment(department);
-    // ตั้งค่า mission group จากชื่อกลุ่มงาน (ใช้ชื่อเป็น key)
-    setEditMissionGroupId((department as any).missionGroupName || '');
+    // ตั้งค่า mission group จาก ID ของกลุ่มงาน
+    setEditMissionGroupId((department as any).missionGroupId || '');
     // mapping ถูกสร้างจาก departments อยู่แล้ว
     onEditOpen();
     
@@ -1242,7 +1309,7 @@ export default function Departments() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">ฝ่ายทั้งหมด</p>
-                  <p className="text-2xl font-bold text-gray-800">{departments.length}</p>
+                  <p className="text-2xl font-bold text-gray-800">{filteredDepartments.length}</p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
                   <BuildingOfficeIcon className="w-6 h-6 text-blue-600" />
@@ -1257,7 +1324,7 @@ export default function Departments() {
                 <div>
                   <p className="text-sm text-gray-600">ฝ่ายที่เปิดใช้งาน</p>
                   <p className="text-2xl font-bold text-green-600">
-                    {departments.filter(d => d.status === 'active').length}
+                    {filteredDepartments.filter(d => d.status === 'active').length}
                   </p>
                 </div>
                 <div className="p-3 bg-green-100 rounded-lg">
@@ -1273,7 +1340,7 @@ export default function Departments() {
                 <div>
                   <p className="text-sm text-gray-600">จำนวนตำแหน่งที่เปิดรับสมัคร</p>
                   <p className="text-2xl font-bold text-purple-600">
-                    {departments.reduce((sum, d) => sum + d.employeeCount, 0)}
+                    {filteredDepartments.reduce((sum, d) => sum + d.employeeCount, 0)}
                   </p>
                 </div>
                 <div className="p-3 bg-purple-100 rounded-lg">
@@ -1306,20 +1373,24 @@ export default function Departments() {
                       setFilterDepartmentName('');
                       if (val && !departmentsByGroup[val]) {
                         try {
-                          const res = await fetch(`/api/prisma/departments/by-mission-group?missionGroupId=${val}`);
-                          const json = await res.json();
-                          if (json.success) setDepartmentsByGroup(prev => ({ ...prev, [val]: json.data }));
+                          const departments = await fetchDepartmentsByGroup(val);
+                          setDepartmentsByGroup(prev => ({ ...prev, [val]: departments }));
                         } catch (err) {
-                          console.error('Error fetching departments by group:', err);
+                          console.error('❌ Error fetching departments by group:', err);
                         }
                       }
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    disabled={loadingMissionGroups}
                   >
                     <option value="">ทั้งหมด</option>
-                    {missionGroups.map(g => (
-                      <option key={g.id} value={g.id}>{g.name}</option>
-                    ))}
+                    {loadingMissionGroups ? (
+                      <option value="" disabled>กำลังโหลด...</option>
+                    ) : (
+                      missionGroups.map(g => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -1330,8 +1401,9 @@ export default function Departments() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                   >
                     <option value="">ทั้งหมด</option>
-                    {(departmentsByGroup[filterMissionGroupId] || [])
-                      .map(dep => (<option key={dep.id} value={dep.name}>{dep.name}</option>))}
+                    {departments.map(dep => (
+                      <option key={dep.id} value={dep.name}>{dep.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="flex items-end">
@@ -1760,20 +1832,24 @@ export default function Departments() {
                             setEditingDepartment(prev => prev ? { ...prev, name: '' } : prev);
                             if (val && !departmentsByGroup[val]) {
                               try {
-                                const res = await fetch(`/api/prisma/departments/by-mission-group?missionGroupId=${val}`);
-                                const json = await res.json();
-                                if (json.success) setDepartmentsByGroup(prev => ({ ...prev, [val]: json.data }));
+                                const departments = await fetchDepartmentsByGroup(val);
+                                setDepartmentsByGroup(prev => ({ ...prev, [val]: departments }));
                               } catch (err) {
-                                console.error('Error fetching departments by group:', err);
+                                console.error('❌ Error fetching departments by group:', err);
                               }
                             }
                           }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          disabled={loadingMissionGroups}
                         >
                           <option value="">เลือกกลุ่มงาน</option>
-                          {missionGroups.map(g => (
-                            <option key={g.id} value={g.id}>{g.name}</option>
-                          ))}
+                          {loadingMissionGroups ? (
+                            <option value="" disabled>กำลังโหลด...</option>
+                          ) : (
+                            missionGroups.map(g => (
+                              <option key={g.id} value={g.id}>{g.name}</option>
+                            ))
+                          )}
                         </select>
                       </div>
 
@@ -1783,11 +1859,16 @@ export default function Departments() {
                           value={editingDepartment.name}
                           onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, name: e.target.value } : null)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          disabled={!editMissionGroupId}
                         >
                           <option value="">เลือกฝ่าย</option>
-                          {(departmentsByGroup[editMissionGroupId] || []).map(dep => (
-                            <option key={dep.id} value={dep.name}>{dep.name}</option>
-                          ))}
+                          {editMissionGroupId ? (
+                            (departmentsByGroup[editMissionGroupId] || []).map(dep => (
+                              <option key={dep.id} value={dep.name}>{dep.name}</option>
+                            ))
+                          ) : (
+                            <option value="" disabled>เลือกกลุ่มงานก่อน</option>
+                          )}
                         </select>
                       </div>
                       <div className="space-y-2">
@@ -2311,20 +2392,24 @@ export default function Departments() {
                             setNewDepartment(prev => ({ ...prev, name: '' }));
                             if (val && !departmentsByGroup[val]) {
                               try {
-                                const res = await fetch(`/api/prisma/departments/by-mission-group?missionGroupId=${val}`);
-                                const json = await res.json();
-                                if (json.success) setDepartmentsByGroup(prev => ({ ...prev, [val]: json.data }));
+                                const departments = await fetchDepartmentsByGroup(val);
+                                setDepartmentsByGroup(prev => ({ ...prev, [val]: departments }));
                               } catch (err) {
-                                console.error('Error fetching departments by group:', err);
+                                console.error('❌ Error fetching departments by group:', err);
                               }
                             }
                           }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          disabled={loadingMissionGroups}
                         >
                           <option value="">เลือกกลุ่มงาน</option>
-                          {missionGroups.map(g => (
-                            <option key={g.id} value={g.id}>{g.name}</option>
-                          ))}
+                          {loadingMissionGroups ? (
+                            <option value="" disabled>กำลังโหลด...</option>
+                          ) : (
+                            missionGroups.map(g => (
+                              <option key={g.id} value={g.id}>{g.name}</option>
+                            ))
+                          )}
                         </select>
                       </div>
 
@@ -2344,11 +2429,16 @@ export default function Departments() {
                             }));
                           }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          disabled={!newMissionGroupId}
                         >
                           <option value="">เลือกฝ่าย</option>
-                          {(departmentsByGroup[newMissionGroupId] || []).map(dep => (
-                            <option key={dep.id} value={dep.name}>{dep.name}</option>
-                          ))}
+                          {newMissionGroupId ? (
+                            (departmentsByGroup[newMissionGroupId] || []).map(dep => (
+                              <option key={dep.id} value={dep.name}>{dep.name}</option>
+                            ))
+                          ) : (
+                            <option value="" disabled>เลือกกลุ่มงานก่อน</option>
+                          )}
                         </select>
                       </div>
                       <div className="space-y-2">

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button, Spinner } from '@heroui/react';
-import { DocumentTextIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, DocumentIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 
 // Interface สำหรับข้อมูลที่ส่งมาจาก application-data
@@ -205,6 +205,22 @@ export default function PrintAllDocuments() {
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
   const searchParams = useSearchParams();
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // helper: แปลง path ให้เป็น public URL ที่ปลอดภัย
+  const toPublicUrl = (rawPath?: string): string => {
+    if (!rawPath) return '';
+    const p = rawPath.startsWith('http') ? rawPath : (rawPath.startsWith('/') ? rawPath : `/${rawPath}`);
+    return encodeURI(p);
+  };
+
+  // helper: แก้ปัญหา _next/image ซ้อน /api/image?file=...
+  const resolveProfileImage = (raw?: string): string => {
+    if (!raw) return '';
+    if (raw.startsWith('/api/image?')) return raw; // อย่าห่อซ้ำ
+    if (raw.startsWith('http')) return raw;
+    if (raw.startsWith('/')) return raw;
+    return `/api/image?file=${encodeURIComponent(raw)}`;
+  };
 
   // ฟังก์ชันสำหรับแปลงวันที่เป็นรูปแบบไทย
   const formatDateThai = (dateString: string) => {
@@ -419,8 +435,8 @@ export default function PrintAllDocuments() {
         birthDate: data.birthDate || '',
         age: data.age || '',
         race: data.race || '',
-        placeOfBirth: data.placeOfBirth || '',
-        placeOfBirthProvince: data.placeOfBirthProvince || '',
+        placeOfBirth: data.placeOfBirth || data.birthPlace || '',
+        placeOfBirthProvince: data.placeOfBirthProvince || data.birthProvince || '',
         gender: data.gender === 'MALE' ? 'ชาย' : data.gender === 'FEMALE' ? 'หญิง' : data.gender || '',
         nationality: data.nationality || '',
         religion: data.religion || '',
@@ -439,6 +455,8 @@ export default function PrintAllDocuments() {
         emergencyContactLastName: data.emergencyContactLastName || '',
         emergencyContactRelationship: data.emergencyContactRelationship || data.emergencyRelationship || '',
         emergencyContactPhone: data.emergencyContactPhone || data.emergencyPhone || '',
+        emergencyPhone: data.emergencyPhone || data.emergencyContactPhone || '',
+        emergencyRelationship: data.emergencyRelationship || data.emergencyContactRelationship || '',
         emergencyAddress: data.emergencyAddress || undefined,
         emergencyWorkplace: data.emergencyWorkplace || undefined,
         appliedPosition: data.expectedPosition || data.appliedPosition || data.position || '',
@@ -510,14 +528,13 @@ export default function PrintAllDocuments() {
         emergency_address_district: data.emergency_address_district || data.emergencyDistrict || '',
         emergency_address_province: data.emergency_address_province || data.emergencyProvince || '',
         emergency_address_postal_code: data.emergency_address_postal_code || data.emergencyPostalCode || '',
-        emergency_address_phone: data.emergency_address_phone || data.emergencyPhone || '',
+        emergency_address_phone: data.emergency_address_phone || data.emergencyPhone || data.emergencyContactPhone || '',
         medicalRights: data.medicalRights || undefined,
         multipleEmployers: data.multipleEmployers || data.otherEmployers || [],
         staffInfo: data.staffInfo || undefined,
         profileImage: data.profileImage || data.photo || data.avatar || data.profileImageUrl || data.image || data.picture || data.profile_image || data.user_image || '',
         updatedAt: data.updatedAt || data.modifiedAt || '',
         documents: data.documents || undefined,
-        // เพิ่มฟิลด์อื่นๆ ที่อาจมีในฐานข้อมูล
         placeOfBirth: data.placeOfBirth || data.birthPlace || '',
         placeOfBirthProvince: data.placeOfBirthProvince || data.birthProvince || '',
         age: data.age || data.ageYears || '',
@@ -532,11 +549,11 @@ export default function PrintAllDocuments() {
         email: data.email || data.emailAddress || data.contactEmail || '',
         addressAccordingToHouseRegistration: data.addressAccordingToHouseRegistration || data.houseRegistrationAddress || data.registeredAddress || '',
         currentAddress: data.currentAddress || data.address || data.currentResidence || data.presentAddress || '',
-        emergencyContact: data.emergencyContact || data.emergencyContactName || data.emergencyPerson || '',
-        emergencyContactFirstName: data.emergencyContactFirstName || data.emergencyFirstName || '',
+        emergencyContact: data.emergencyContact || data.emergencyContactName || data.emergencyPerson || data.emergencyName || '',
+        emergencyContactFirstName: data.emergencyContactFirstName || data.emergencyFirstName || data.emergencyName || '',
         emergencyContactLastName: data.emergencyContactLastName || data.emergencyLastName || data.emergencySurname || '',
-        emergencyContactRelationship: data.emergencyContactRelationship || data.emergencyRelationship || '',
-        emergencyContactPhone: data.emergencyContactPhone || data.emergencyPhone || '',
+        emergencyContactRelationship: data.emergencyContactRelationship || data.emergencyRelationship || data.emergencyRelation || '',
+        emergencyContactPhone: data.emergencyContactPhone || data.emergencyPhone || data.emergencyContactNumber || '',
         appliedPosition: data.appliedPosition || data.expectedPosition || data.position || data.jobPosition || data.desiredPosition || '',
         expectedSalary: data.expectedSalary || data.salary || data.desiredSalary || data.expectedWage || '',
         availableDate: data.availableDate || data.availableStartDate || data.startDate || data.availableFrom || '',
@@ -601,6 +618,21 @@ export default function PrintAllDocuments() {
           console.log('📄 Fetched documents:', documents);
           console.log('📄 Documents count:', documents.length);
           setUploadedDocuments(documents);
+
+          // หากยังไม่มีรูปโปรไฟล์ ให้พยายามดึงจากไฟล์แนบ (ไฟล์รูปแรกหรือ documentType ที่สื่อถึงรูปโปรไฟล์)
+          const currentImg = applicationData.profileImage || (applicationData as any).profileImageUrl;
+          if (!currentImg && Array.isArray(documents) && documents.length > 0) {
+            const profileDoc = documents.find((d: any) =>
+              (d.documentType && ['profileImage','profile_photo','photo','avatar'].includes(String(d.documentType)))
+              && d.mimeType && d.mimeType.startsWith('image/')
+            ) || documents.find((d: any) => d.mimeType && d.mimeType.startsWith('image/'));
+
+            if (profileDoc && profileDoc.filePath) {
+              const derivedUrl = toPublicUrl(profileDoc.filePath);
+              setApplicationData(prev => prev ? ({ ...prev, profileImage: derivedUrl }) : prev);
+              console.log('🖼️ Derived profile image from attachments:', derivedUrl);
+            }
+          }
         } catch (error) {
           console.error('❌ Error fetching documents:', error);
           setUploadedDocuments([]);
@@ -676,9 +708,9 @@ export default function PrintAllDocuments() {
     }
   }, [searchParams]);
 
-  // ฟังก์ชันพิมพ์
+  // ฟังก์ชันพิมพ์เฉพาะ 4 หน้าใบสมัครงาน
   const handlePrint = () => {
-    // เพิ่ม CSS สำหรับการพิมพ์เพื่อให้รูปภาพคมชัด
+    // เพิ่ม CSS สำหรับการพิมพ์เพื่อให้รูปภาพคมชัดและซ่อนเอกสารแนบ
     const printStyles = `
       @media print {
         img {
@@ -694,6 +726,14 @@ export default function PrintAllDocuments() {
           image-rendering: -webkit-optimize-contrast !important;
           image-rendering: crisp-edges !important;
         }
+        /* ซ่อนเอกสารแนบ */
+        .hide-on-print {
+          display: none !important;
+        }
+        /* ซ่อนส่วนที่เกิน 4 หน้า */
+        .page-5-and-beyond {
+          display: none !important;
+        }
       }
     `;
     
@@ -702,13 +742,169 @@ export default function PrintAllDocuments() {
     styleSheet.textContent = printStyles;
     document.head.appendChild(styleSheet);
     
+    // ซ่อนเอกสารแนบก่อนพิมพ์
+    const documentSections = document.querySelectorAll('.document-section');
+    documentSections.forEach(section => {
+      section.classList.add('hide-on-print');
+    });
+    
     // พิมพ์
     window.print();
     
-    // ลบ stylesheet หลังจากพิมพ์เสร็จ
+    // ลบ stylesheet และแสดงเอกสารแนบกลับมาหลังพิมพ์เสร็จ
     setTimeout(() => {
       document.head.removeChild(styleSheet);
+      documentSections.forEach(section => {
+        section.classList.remove('hide-on-print');
+      });
     }, 1000);
+  };
+
+  // ฟังก์ชันพิมพ์เฉพาะไฟล์แนบ
+  const handlePrintAttachments = () => {
+    console.log('🔍 Print Attachments - Uploaded Documents:', uploadedDocuments);
+    console.log('🔍 Print Attachments - Documents Count:', uploadedDocuments.length);
+    
+    if (uploadedDocuments.length === 0) {
+      alert('ไม่มีไฟล์แนบให้พิมพ์');
+      return;
+    }
+
+    // สร้าง HTML สำหรับไฟล์แนบเท่านั้น
+    const attachmentsHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>ไฟล์แนบ - ใบสมัครงาน</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          
+          body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Sarabun', sans-serif;
+            background: white;
+          }
+          
+          .attachment-page {
+            width: 210mm;
+            height: 297mm;
+            page-break-after: always;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            position: relative;
+          }
+          
+          .attachment-page:last-child {
+            page-break-after: auto;
+          }
+          
+          .attachment-header {
+            position: absolute;
+            top: 20mm;
+            left: 20mm;
+            right: 20mm;
+            text-align: center;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+          }
+          
+          .attachment-content {
+            width: 170mm;
+            height: 220mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e5e7eb;
+            background: #f9fafb;
+          }
+          
+          .attachment-preview {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+          }
+          
+          .attachment-footer {
+            position: absolute;
+            bottom: 20mm;
+            left: 20mm;
+            right: 20mm;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 10px;
+          }
+          
+          .no-print {
+            display: none !important;
+          }
+        </style>
+      </head>
+      <body>
+        ${uploadedDocuments.map((doc, index) => {
+          console.log(`🔍 Document ${index + 1}:`, doc);
+          return `
+          <div class="attachment-page">
+            <div class="attachment-header">
+              <h2 style="margin: 0; color: #1f2937; font-size: 18px;">
+                ไฟล์แนบที่ ${index + 1}: ${getDocumentTypeName(doc.documentType)}
+              </h2>
+              <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">
+                ${doc.fileName || doc.originalName || 'ไม่ระบุชื่อไฟล์'}
+              </p>
+            </div>
+            
+            <div class="attachment-content">
+              <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background-color: #f9fafb;">
+                <iframe 
+                  src="${getAttachmentUrl(doc.filePath)}" 
+                  className="attachment-preview"
+                  style="width: 100%; height: 100%; border: none; object-fit: contain; object-position: center; display: block; margin: 0 auto;"
+                  title="${doc.mimeType === 'application/pdf' ? 'PDF' : 'Image'} Preview"
+                  onError="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                ></iframe>
+              </div>
+                <div style="display: none; text-align: center; color: #6b7280;">
+                <p>ไม่สามารถแสดงไฟล์ได้</p>
+                  <p>ไฟล์: ${doc.fileName || doc.originalName || 'ไม่ระบุชื่อ'}</p>
+                <p>ประเภท: ${doc.mimeType === 'application/pdf' ? 'PDF' : 'รูปภาพ'}</p>
+                </div>
+            </div>
+            
+            <div class="attachment-footer">
+              <p>หน้า ${index + 1} จาก ${uploadedDocuments.length} | ประเภท: ${getDocumentTypeName(doc.documentType)} | วันที่อัปโหลด: ${new Date(doc.createdAt || doc.updatedAt || Date.now()).toLocaleDateString('th-TH')}</p>
+            </div>
+          </div>
+        `;
+        }).join('')}
+      </body>
+      </html>
+    `;
+
+    // สร้าง Blob URL และเปิดในหน้าต่างใหม่
+    const blob = new Blob([attachmentsHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, '_blank');
+    
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+        // ลบ URL หลังจากพิมพ์เสร็จ
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 1000);
+      };
+    }
   };
 
   // แสดง loading state
@@ -734,6 +930,7 @@ export default function PrintAllDocuments() {
           <Button 
             color="primary" 
             onClick={() => window.location.reload()}
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg transition-all duration-200"
           >
             ลองใหม่
           </Button>
@@ -813,11 +1010,50 @@ export default function PrintAllDocuments() {
             width: 100% !important;
             height: 100% !important;
             border: none !important;
+            object-fit: contain !important;
+            object-position: center !important;
+            display: block !important;
+            margin: 0 auto !important;
           }
-          .document-container img {
+          .attachment-preview iframe {
             width: 100% !important;
             height: 100% !important;
+            border: none !important;
             object-fit: contain !important;
+            object-position: center !important;
+            display: block !important;
+            margin: 0 auto !important;
+          }
+          /* CSS สำหรับการจัดตำแหน่งเนื้อหาใน iframe */
+          .document-container iframe img,
+          .document-container iframe embed,
+          .document-container iframe object {
+            max-width: 100% !important;
+            max-height: 100% !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+            object-position: center !important;
+            display: block !important;
+            margin: 0 auto !important;
+          }
+          /* CSS สำหรับ PDF ใน iframe */
+          .document-container iframe[title*="PDF"] {
+            width: 100% !important;
+            height: 100% !important;
+            border: none !important;
+            display: block !important;
+            margin: 0 auto !important;
+          }
+          /* CSS สำหรับรูปภาพใน iframe */
+          .document-container iframe[title*="Image"] {
+            width: 100% !important;
+            height: 100% !important;
+            border: none !important;
+            object-fit: contain !important;
+            object-position: center !important;
+            display: block !important;
+            margin: 0 auto !important;
           }
           /* CSS สำหรับหน้าใหม่ของเอกสารแนบ */
           .page-break-before {
@@ -873,26 +1109,18 @@ export default function PrintAllDocuments() {
       {/* Print Buttons */}
       <div className="mb-4 no-print">
         <div className="flex gap-3 flex-wrap">
-          <Button
-            color="success"
-            variant="solid"
-            size="lg"
-            startContent={<DocumentTextIcon className="w-5 h-5" />}
-            onClick={handlePrint}
-          >
-            พิมพ์เฉพาะใบสมัคร
-          </Button>
-          <Button
-            color="primary"
-            variant="solid"
-            size="lg"
-            startContent={<DocumentTextIcon className="w-5 h-5" />}
-            onClick={() => window.print()}
-          >
-            พิมพ์ทั้งหมด (รวมไฟล์แนบ)
-          </Button>
-        </div>
+        <Button
+          color="primary"
+          variant="solid"
+          size="lg"
+          startContent={<DocumentTextIcon className="w-5 h-5" />}
+          onClick={handlePrint}
+          className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg transition-all duration-200"
+        >
+          พิมพ์ใบสมัคร
+        </Button>
       </div>
+          </div>
 
       {/* Print Container */}
       <div ref={containerRef} className="print-a4-container bg-white shadow-lg">
@@ -912,59 +1140,47 @@ export default function PrintAllDocuments() {
               </h1>
               
               {/* ช่องติดรูปถ่าย */}
-              <div className="w-[1.3in] h-[1.5in] border-2 border-gray-400 flex items-center justify-center absolute right-0 top-0" style={{ 
-                imageRendering: 'auto' as any
-              }}>
+              <div className="w-[1.3in] h-[1.5in] border-2 border-gray-400 flex items-center justify-center absolute right-0 top-0">
                 {applicationData?.profileImage && applicationData.profileImage.trim() !== '' ? (
                   <div className="w-full h-full flex items-center justify-center relative profile-image-container">
-                    {/* Test with different image sources */}
-                    <Image
-                      src={applicationData.profileImage.startsWith('http') ? applicationData.profileImage : `/api/image?file=${encodeURIComponent(applicationData.profileImage)}`}
+                    {/* ใช้ <img> เพื่อหลีกเลี่ยง _next/image ซ้อน /api/image?file= */}
+                    <img
+                      src={resolveProfileImage(applicationData.profileImage)}
                       alt="รูปถ่ายผู้สมัคร"
-                      width={300}
-                      height={375}
                       className="w-full h-full object-cover border border-gray-200"
-                      style={{ 
-                        objectFit: 'cover',
-                        objectPosition: 'center top',
-                        imageRendering: 'auto' as any
-                      }}
-                      quality={100}
-                      priority={true}
-                      unoptimized={false}
+                      style={{ objectFit: 'cover', objectPosition: 'center top' }}
                       onError={(e) => {
-                        console.error('❌ Failed to load profile image:', applicationData?.profileImage);
-                        console.error('❌ Image src:', e.currentTarget.src);
-                        console.error('❌ Image error details:', e);
+                        try {
+                          if (process.env.NODE_ENV !== 'production') {
+                            console.warn('❗ Failed to load profile image:', applicationData.profileImage);
+                            console.warn('❗ Image src:', (e.currentTarget as HTMLImageElement).src);
+                          }
+                        } catch {}
                         
                         // Try alternative image sources
                         const alternativeSources = [
-                          `/api/image?file=${encodeURIComponent(applicationData?.profileImage || '')}`,
-                          `/uploads/${applicationData?.profileImage || ''}`,
-                          `/public/uploads/${applicationData?.profileImage || ''}`,
-                          applicationData?.profileImage || ''
+                          `/api/image?file=${encodeURIComponent(applicationData.profileImage || '')}`,
+                          `/uploads/${applicationData.profileImage || ''}`,
+                          `/public/uploads/${applicationData.profileImage || ''}`,
+                          applicationData.profileImage || ''
                         ];
                         
                         console.log('🔄 Trying alternative sources:', alternativeSources);
                         
-                        const img = e.currentTarget as HTMLImageElement;
-                        img.style.display = 'none';
-                        const parent = img.parentElement;
+                        const imgEl = e.currentTarget as HTMLImageElement;
+                        imgEl.style.display = 'none';
+                        const parent = imgEl.parentElement;
                         if (parent) {
                           parent.innerHTML = `
                             <div class="text-center p-2">
                               <div class="text-xs text-gray-500 mb-1">ติดรูปถ่าย</div>
                               <div class="text-xs text-gray-500">ขนาด ๑ นิ้ว</div>
                               <div class="text-xs text-red-500 mt-1">ไม่สามารถโหลดรูปได้</div>
-                              <div class="text-xs text-red-400 mt-1">URL: ${e.currentTarget.src}</div>
-                              <div class="text-xs text-blue-400 mt-1">Original: ${applicationData?.profileImage || ''}</div>
+                              <div class="text-xs text-red-400 mt-1">URL: ${(e.currentTarget as HTMLImageElement).src}</div>
+                              <div class="text-xs text-blue-400 mt-1">Original: ${applicationData.profileImage || 'undefined'}</div>
                             </div>
                           `;
                         }
-                      }}
-                      onLoad={() => {
-                        console.log('✅ Profile image loaded successfully:', applicationData?.profileImage);
-                        console.log('✅ Image src:', applicationData?.profileImage?.startsWith('http') ? applicationData.profileImage : `/api/image?file=${encodeURIComponent(applicationData?.profileImage || '')}`);
                       }}
                     />
                     {/* Overlay สำหรับแสดงข้อมูลรูปภาพ */}
@@ -1028,19 +1244,19 @@ export default function PrintAllDocuments() {
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>เชื้อชาติ</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                        <span className="text-xm font-medium text-gray-800">{applicationData?.race || ''}</span>
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.race || ''}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>สัญชาติ</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                        <span className="text-xm font-medium text-gray-800">{applicationData?.nationality || ''}</span>
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.nationality || ''}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>ศาสนา</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                        <span className="text-xm font-medium text-gray-800">{applicationData?.religion || ''}</span>
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.religion || ''}</span>
                     </div>
                   </div>
                 </div>
@@ -1076,7 +1292,7 @@ export default function PrintAllDocuments() {
                       {applicationData?.maritalStatus === 'สมรส' && applicationData?.spouseInfo 
                         ? `${applicationData.spouseInfo.firstName || ''} ${applicationData.spouseInfo.lastName || ''}`.trim()
                         : ''}
-                      </span>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1088,13 +1304,13 @@ export default function PrintAllDocuments() {
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>เลขที่</span>
                     <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                        <span className="text-xm font-medium text-gray-800">{applicationData?.idNumber || ''}</span>
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.idNumber || ''}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span>ออกให้ ณ อำเภอ/เขต</span>
                     <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                        <span className="text-xm font-medium text-gray-800">{applicationData?.idCardIssuedAt || ''}</span>
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.idCardIssuedAt || ''}</span>
                     </div>
                   </div>
                 </div>
@@ -1102,15 +1318,15 @@ export default function PrintAllDocuments() {
                   <div className="flex items-center gap-1 flex-1 min-w-0">
                     <span className="whitespace-nowrap">วันที่ออกบัตร</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                        <span className="text-xm font-medium text-gray-800">{getThaiDay(applicationData?.idCardIssueDate || '')}</span>
+                      <span className="text-xm font-medium text-gray-800">{getThaiDay(applicationData?.idCardIssueDate || '')}</span>
                     </div>
                     <span>เดือน</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                        <span className="text-xm font-medium text-gray-800">{getThaiMonthName(applicationData?.idCardIssueDate || '')}</span>
+                      <span className="text-xm font-medium text-gray-800">{getThaiMonthName(applicationData?.idCardIssueDate || '')}</span>
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                        <span className="text-xm font-medium text-gray-800">{getGregorianYear(applicationData?.idCardIssueDate || '')}</span>
+                      <span className="text-xm font-medium text-gray-800">{getGregorianYear(applicationData?.idCardIssueDate || '')}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
@@ -1673,11 +1889,11 @@ export default function PrintAllDocuments() {
                         readOnly
                       />
                       <div className="flex-1">
-                        <span>สำเนาบัตรประจำตัวประชาชน</span>
+                      <span>สำเนาบัตรประจำตัวประชาชน</span>
                         {uploadedDocuments.filter(doc => doc.documentType === 'idCard').map((doc, index) => (
                           <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
                             
-                          </div>
+                    </div>
                         ))}
                       </div>
                     </div>
@@ -1691,11 +1907,11 @@ export default function PrintAllDocuments() {
                         readOnly
                       />
                       <div className="flex-1">
-                        <span>สำเนาทะเบียนบ้าน</span>
+                      <span>สำเนาทะเบียนบ้าน</span>
                         {uploadedDocuments.filter(doc => doc.documentType === 'houseRegistration').map((doc, index) => (
                           <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
                             
-                          </div>
+                    </div>
                         ))}
                       </div>
                     </div>
@@ -1709,11 +1925,11 @@ export default function PrintAllDocuments() {
                         readOnly
                       />
                       <div className="flex-1">
-                        <span>สำเนาหลักฐานทางทหาร (เฉพาะผู้สมัครเพศชาย) ได้แก่ ใบสำคัญ (แบบ สด.๙) สมุดประจำตัวทหารกองหนุน (แบบ สด.๘) สำเนาทะเบียนทหารกองประจำการ (สด.๓) หรือ สด.๔๓ แล้วแต่กรณี</span>
+                      <span>สำเนาหลักฐานทางทหาร (เฉพาะผู้สมัครเพศชาย) ได้แก่ ใบสำคัญ (แบบ สด.๙) สมุดประจำตัวทหารกองหนุน (แบบ สด.๘) สำเนาทะเบียนทหารกองประจำการ (สด.๓) หรือ สด.๔๓ แล้วแต่กรณี</span>
                         {uploadedDocuments.filter(doc => doc.documentType === 'militaryCertificate').map((doc, index) => (
                           <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
                             
-                          </div>
+                    </div>
                         ))}
                       </div>
                     </div>
@@ -1727,11 +1943,11 @@ export default function PrintAllDocuments() {
                         readOnly
                       />
                       <div className="flex-1">
-                        <span>สำเนาหลักฐานการศึกษา เช่น ใบประกาศนียบัตร หรือ ใบปริญญาบัตร และระเบียนแสดงผลการเรียน (Transcript)</span>
+                      <span>สำเนาหลักฐานการศึกษา เช่น ใบประกาศนียบัตร หรือ ใบปริญญาบัตร และระเบียนแสดงผลการเรียน (Transcript)</span>
                         {uploadedDocuments.filter(doc => doc.documentType === 'educationCertificate').map((doc, index) => (
                           <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
                             
-                          </div>
+                    </div>
                         ))}
                       </div>
                     </div>
@@ -1745,11 +1961,11 @@ export default function PrintAllDocuments() {
                         readOnly
                       />
                       <div className="flex-1">
-                        <span>ใบรับรองแพทย์ ซึ่งออกไม่เกิน ๑ เดือน (ออกโดยโรงพยาบาลราชพิพัฒน์เท่านั้น)</span>
+                      <span>ใบรับรองแพทย์ ซึ่งออกไม่เกิน ๑ เดือน (ออกโดยโรงพยาบาลราชพิพัฒน์เท่านั้น)</span>
                         {uploadedDocuments.filter(doc => doc.documentType === 'medicalCertificate').map((doc, index) => (
                           <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
                             
-                          </div>
+                    </div>
                         ))}
                       </div>
                     </div>
@@ -1763,11 +1979,11 @@ export default function PrintAllDocuments() {
                         readOnly
                       />
                       <div className="flex-1">
-                        <span>ใบอนุญาตที่เกี่ยวข้องกับตำแหน่ง เช่น ใบอนุญาตขับรถยนต์ หรือใบอนุญาตขับเรือ ใบประกอบวิชาชีพ ฯลฯ</span>
+                      <span>ใบอนุญาตที่เกี่ยวข้องกับตำแหน่ง เช่น ใบอนุญาตขับรถยนต์ หรือใบอนุญาตขับเรือ ใบประกอบวิชาชีพ ฯลฯ</span>
                         {uploadedDocuments.filter(doc => doc.documentType === 'drivingLicense').map((doc, index) => (
                           <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
                             
-                          </div>
+                    </div>
                         ))}
                       </div>
                     </div>
@@ -1781,7 +1997,7 @@ export default function PrintAllDocuments() {
                         readOnly
                       />
                       <div className="flex-1">
-                        <span>เอกสารอื่นๆ (ถ้ามี) เช่น สำเนาหลักฐานการเปลี่ยนชื่อตัว ชื่อสกุล สำเนาหลักฐานการสมรสหรือใบหย่า</span>
+                      <span>เอกสารอื่นๆ (ถ้ามี) เช่น สำเนาหลักฐานการเปลี่ยนชื่อตัว ชื่อสกุล สำเนาหลักฐานการสมรสหรือใบหย่า</span>
                         {uploadedDocuments.filter(doc => doc.documentType === 'nameChangeCertificate').map((doc, index) => (
                           <div key={index} className="text-xs text-gray-600 ml-4 mt-1">
                             
@@ -1978,24 +2194,31 @@ export default function PrintAllDocuments() {
           </div>
         </div>
       </div>
-      
 
       {/* ส่วนแสดงไฟล์แนบทั้งหมด - ด้านล่างสุด */}
-      {console.log('🔍 Uploaded Documents Count:', uploadedDocuments.length)}
-      {console.log('📄 Uploaded Documents:', uploadedDocuments)}
+      {/* Debug logs */}
+      {(() => {
+        console.log('🔍 Uploaded Documents Count:', uploadedDocuments.length);
+        console.log('📄 Uploaded Documents:', uploadedDocuments);
+        return null;
+      })()}
       
       {/* Debug: แสดงจำนวนไฟล์แนบ */}
       
 
       {/* พื้นที่แสดงไฟล์แนบทุกหน้าของไฟล์แนบ */}
-      {console.log('🔍 Render - Uploaded Documents Count:', uploadedDocuments.length)}
-      {console.log('🔍 Render - Uploaded Documents:', uploadedDocuments)}
+      {/* Debug logs */}
+      {(() => {
+        console.log('🔍 Render - Uploaded Documents Count:', uploadedDocuments.length);
+        console.log('🔍 Render - Uploaded Documents:', uploadedDocuments);
+        return null;
+      })()}
       
       {/* แสดงข้อมูลทดสอบเมื่อไม่มีไฟล์แนบจริง */}
       {uploadedDocuments.length === 0 && !loading && (
         <div className="mt-12">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">เอกสารแนบทั้งหมด (ทดสอบ)</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">เอกสารไฟล์แนบ (ทดสอบ)</h2>
             <div className="w-full h-1 border-b-2 border-dotted border-gray-600"></div>
             <p className="text-sm text-gray-600 mt-2">
               จำนวนเอกสาร: 2 ฉบับ (ข้อมูลทดสอบ)
@@ -2091,7 +2314,7 @@ export default function PrintAllDocuments() {
       )}
       
       {uploadedDocuments.length > 0 && (
-        <div className="mt-12">
+        <div className="mt-12 document-section">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">เอกสารแนบทั้งหมด</h2>
             <div className="w-full h-1 border-b-2 border-dotted border-gray-600"></div>
@@ -2113,7 +2336,7 @@ export default function PrintAllDocuments() {
                           เอกสารที่ {index + 1}: {getDocumentTypeName(doc.documentType)}
                         </h3>
                         <p className="text-sm text-blue-600">
-                          {doc.fileName} • {(doc.fileSize / 1024 / 1024).toFixed(2)} MB
+                          {doc.fileName}
                         </p>
                       </div>
                       <div className="text-right">
@@ -2128,12 +2351,7 @@ export default function PrintAllDocuments() {
                   <div className="bg-white border-2 border-t-0 border-blue-200 rounded-b-xl shadow-lg overflow-hidden" style={{ width: '210mm', margin: '0 auto' }}>
                     <div className="w-full" style={{ width: '210mm', height: '297mm', minHeight: '297mm' }}>
                       {/* Debug: แสดงข้อมูลไฟล์ */}
-                      <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-xs p-2 rounded z-10">
-                        <div>File: {doc.fileName}</div>
-                        <div>Path: {doc.filePath}</div>
-                        <div>Type: {doc.mimeType}</div>
-                        <div>Size: {(doc.fileSize / 1024 / 1024).toFixed(2)} MB</div>
-                      </div>
+                      {/* ลบ overlay debug แสดงข้อมูลไฟล์ตามคำขอ */}
                       
                       {/* ตรวจสอบว่าไฟล์มีอยู่จริงหรือไม่ */}
                       {(() => {
@@ -2143,36 +2361,26 @@ export default function PrintAllDocuments() {
                         console.log('🔍 File Name:', doc.fileName);
                         console.log('🔍 MIME Type:', doc.mimeType);
                         
-                        return doc.mimeType === 'application/pdf' ? (
+                        return (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-50" style={{ width: '210mm', height: '297mm' }}>
                           <iframe
                             src={fileUrl}
                             className="w-full h-full border-0"
-                            title={`PDF Preview - ${doc.fileName}`}
-                            style={{ width: '210mm', minHeight: '297mm' }}
-                            onLoad={() => {
-                              console.log('✅ PDF loaded successfully:', doc.fileName);
-                            }}
-                            onError={(e) => {
-                              console.error('❌ Error loading PDF:', doc.fileName);
-                              console.error('❌ PDF URL:', fileUrl);
-                              console.error('❌ Original Path:', doc.filePath);
-                              e.currentTarget.style.display = 'none';
-                              const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-50" style={{ width: '210mm', height: '297mm' }}>
-                            <img
-                              src={fileUrl}
-                              alt={doc.fileName}
-                              className="max-w-full max-h-full object-contain shadow-lg"
+                              title={`${doc.mimeType === 'application/pdf' ? 'PDF' : 'Image'} Preview - ${doc.fileName}`}
+                              style={{ 
+                                width: '100%', 
+                                height: '100%',
+                                objectFit: 'contain',
+                                objectPosition: 'center',
+                                display: 'block',
+                                margin: '0 auto'
+                              }}
                               onLoad={() => {
-                                console.log('✅ Image loaded successfully:', doc.fileName);
+                                console.log(`✅ ${doc.mimeType === 'application/pdf' ? 'PDF' : 'Image'} loaded successfully via iframe:`, doc.fileName);
                               }}
                               onError={(e) => {
-                                console.error('❌ Error loading image:', doc.fileName);
-                                console.error('❌ Image URL:', fileUrl);
+                                console.error(`❌ Error loading ${doc.mimeType === 'application/pdf' ? 'PDF' : 'image'} via iframe:`, doc.fileName);
+                                console.error('❌ File URL:', fileUrl);
                                 console.error('❌ Original Path:', doc.filePath);
                                 e.currentTarget.style.display = 'none';
                                 const fallback = e.currentTarget.nextElementSibling as HTMLElement;
@@ -2185,7 +2393,7 @@ export default function PrintAllDocuments() {
                       
                       {/* Fallback message */}
                       <div 
-                        className="hidden w-full h-full flex items-center justify-center bg-gray-50 text-gray-500 text-lg"
+                        className="hidden w-full h-full items-center justify-center bg-gray-50 text-gray-500 text-lg"
                         style={{ minHeight: '297mm' }}
                       >
                         <div className="text-center p-8">
@@ -2231,7 +2439,7 @@ export default function PrintAllDocuments() {
       
       {/* แสดงข้อความเมื่อไม่มีไฟล์แนบ */}
       {uploadedDocuments.length === 0 && (
-        <div className="mt-12">
+        <div className="mt-12 document-section">
           {/* Debug Information */}
           <div className="mb-8 p-4 bg-yellow-100 border border-yellow-300 rounded-lg">
             <h3 className="text-lg font-semibold text-yellow-800 mb-2">Debug: ข้อมูลไฟล์แนบ</h3>

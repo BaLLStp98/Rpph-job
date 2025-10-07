@@ -12,19 +12,13 @@ import {
 } from '@heroui/react';
 import {
   HomeIcon,
-  UsersIcon,
-  DocumentTextIcon,
-  ClipboardDocumentListIcon,
-  ChartBarIcon,
-  CogIcon,
   BellIcon,
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
-  Bars3Icon,
   BuildingOfficeIcon,
   UserGroupIcon,
   DocumentCheckIcon,
-  BriefcaseIcon
+  CogIcon
 } from '@heroicons/react/24/outline';
 
 interface AdminLayoutProps {
@@ -38,7 +32,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const menuItems = [
     {
       key: 'dashboard',
-      title: 'แดชบอร์ด',
+      title: 'หน้าแรก',
       icon: HomeIcon,
       href: '/admin'
     },
@@ -59,30 +53,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       title: 'การจัดการต่อสัญญา',
       icon: DocumentCheckIcon,
       href: '/admin/contract-renewal'
-    },
-    {
-      key: 'applications',
-      title: 'ใบสมัครงาน',
-      icon: BriefcaseIcon,
-      href: '/admin'
-    },
-    {
-      key: 'resume-deposits',
-      title: 'การฝากประวัติ',
-      icon: ClipboardDocumentListIcon,
-      href: '/admin/resume-deposits'
-    },
-    {
-      key: 'reports',
-      title: 'รายงาน',
-      icon: ChartBarIcon,
-      href: '/admin/reports'
-    },
-    {
-      key: 'settings',
-      title: 'ตั้งค่า',
-      icon: CogIcon,
-      href: '/admin/settings'
     }
   ];
 
@@ -137,7 +107,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {/* Top Navigation */}
         <header className="bg-white border-b border-gray-200 px-4 lg:px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            {/* <div className="flex items-center gap-4">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 className="lg:hidden p-2 rounded-md hover:bg-gray-100"
@@ -145,7 +115,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 <Bars3Icon className="w-5 h-5" />
               </button>
               <h1 className="text-lg lg:text-xl font-semibold text-gray-800">ระบบจัดการ</h1>
-            </div>
+            </div> */}
               
               <div className="flex items-center gap-2 lg:gap-4">
                 {/* Notifications */}

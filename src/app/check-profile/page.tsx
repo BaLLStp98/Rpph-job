@@ -32,8 +32,8 @@ export default function CheckProfilePage() {
         setLoading(true)
         
         try {
-          // ใช้ Line ID จาก session เพื่อตรวจสอบข้อมูล
-          const lineId = session.user?.id;
+          // ใช้ Line ID จาก session เพื่อตรวจสอบข้อมูลฝากประวัติ
+          const lineId = (session.user as any)?.lineId || session.user?.id;
           console.log('Check Profile - Line ID from session:', lineId);
 
           if (!lineId) {
@@ -43,30 +43,45 @@ export default function CheckProfilePage() {
             return;
           }
 
-          const response = await fetch(`/api/prisma/users?lineId=${encodeURIComponent(lineId)}`);
+          // ตรวจสอบข้อมูลฝากประวัติแทนที่จะตรวจสอบข้อมูลผู้ใช้
+          const response = await fetch(`/api/resume-deposit?lineId=${encodeURIComponent(lineId)}`);
           console.log('Check Profile - API response status:', response.status);
 
           if (response.ok) {
             const data = await response.json();
             console.log('Check Profile - API response data:', data);
 
-            // ตรวจสอบว่ามีข้อมูลผู้ใช้จริงๆ หรือไม่
+            // ตรวจสอบว่ามีข้อมูลฝากประวัติจริงๆ หรือไม่
             if (data.success && data.data && Array.isArray(data.data) && data.data.length > 0) {
-              console.log('Check Profile - Found user data, redirect to dashboard');
-              setHasApplicationData(true);
-              setStep('redirecting');
-              router.replace('/dashboard');
-              return;
+              // ตรวจสอบว่าข้อมูลฝากประวัติสมบูรณ์หรือไม่ (ไม่ใช่ draft)
+              const hasCompleteResume = data.data.some((resume: any) => 
+                resume.status && resume.status !== 'DRAFT'
+              );
+              
+              if (hasCompleteResume) {
+                console.log('Check Profile - Found complete resume data, redirect to dashboard');
+                setHasApplicationData(true);
+                setStep('redirecting');
+                router.replace('/dashboard');
+                return;
+              } else {
+                console.log('Check Profile - Found draft resume data, redirect to register');
+                setHasApplicationData(false);
+                setStep('redirecting');
+                setLoading(false);
+                router.replace('/register');
+                return;
+              }
             } else {
-              console.log('Check Profile - No user data found in response:', data);
+              console.log('Check Profile - No resume data found in response:', data);
             }
           } else if (response.status === 404) {
-            console.log('Check Profile - No user data (404)');
+            console.log('Check Profile - No resume data (404)');
           } else {
             console.log('Check Profile - API response not ok:', response.status);
           }
 
-          // ไม่มีข้อมูล ให้ไป register
+          // ไม่มีข้อมูลฝากประวัติ ให้ไป register
           setHasApplicationData(false);
           setStep('redirecting');
           setLoading(false);
@@ -157,7 +172,7 @@ export default function CheckProfilePage() {
               />
             </div>
             <h2 className="text-xl font-semibold text-gray-800 mb-2">
-              กำลังตรวจสอบข้อมูลการสมัครงาน
+              กำลังตรวจสอบข้อมูลฝากประวัติ
             </h2>
             <p className="text-gray-600">
               กรุณารอสักครู่...
@@ -183,7 +198,7 @@ export default function CheckProfilePage() {
               />
             </div>
             <h2 className="text-xl font-semibold text-gray-800 mb-2">
-              {hasApplicationData ? 'พบข้อมูลการสมัครงาน' : 'ไม่พบข้อมูลการสมัครงาน'}
+              {hasApplicationData ? 'พบข้อมูลฝากประวัติแล้ว' : 'ไม่พบข้อมูลฝากประวัติ'}
             </h2>
             <p className="text-gray-600">
               {hasApplicationData 

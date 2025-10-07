@@ -208,7 +208,7 @@ export default function ContractRenewalPage() {
             <p className="mt-2 text-gray-600">จัดการการต่อสัญญาจ้างงานของพนักงาน</p>
           </div>
           <div className="flex items-center gap-4">
-            <Button
+                <Button
               color="primary"
               startContent={<ArrowPathIcon className="w-4 h-4 lg:w-5 lg:h-5" />}
               onPress={fetchContracts}
@@ -216,125 +216,125 @@ export default function ContractRenewalPage() {
               className="lg:size-md"
             >
               รีเฟรช
-            </Button>
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
       <div className="space-y-8">
-        {/* สถิติ */}
+          {/* สถิติ */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
           <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
             <CardBody className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
-                <div>
+                  <div>
                   <p className="text-blue-100 text-sm lg:text-base">ทั้งหมด</p>
                   <p className="text-2xl lg:text-3xl font-bold">{stats.total}</p>
-                </div>
+                  </div>
                 <DocumentCheckIcon className="w-6 h-6 lg:w-8 lg:h-8 text-blue-200" />
-              </div>
-            </CardBody>
-          </Card>
+                </div>
+              </CardBody>
+            </Card>
 
           <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
             <CardBody className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
-                <div>
+                  <div>
                   <p className="text-yellow-100 text-sm lg:text-base">รอดำเนินการ</p>
                   <p className="text-2xl lg:text-3xl font-bold">{stats.pending}</p>
-                </div>
+                  </div>
                 <ClockIcon className="w-6 h-6 lg:w-8 lg:h-8 text-yellow-200" />
-              </div>
-            </CardBody>
-          </Card>
+                </div>
+              </CardBody>
+            </Card>
 
           <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
             <CardBody className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
-                <div>
+                  <div>
                   <p className="text-green-100 text-sm lg:text-base">อนุมัติ</p>
                   <p className="text-2xl lg:text-3xl font-bold">{stats.approved}</p>
-                </div>
+                  </div>
                 <CheckCircleIcon className="w-6 h-6 lg:w-8 lg:h-8 text-green-200" />
-              </div>
-            </CardBody>
-          </Card>
+                </div>
+              </CardBody>
+            </Card>
 
           <Card className="bg-gradient-to-r from-red-500 to-red-600 text-white">
             <CardBody className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
-                <div>
+                  <div>
                   <p className="text-red-100 text-sm lg:text-base">ปฏิเสธ</p>
                   <p className="text-2xl lg:text-3xl font-bold">{stats.rejected}</p>
-                </div>
+                  </div>
                 <XCircleIcon className="w-6 h-6 lg:w-8 lg:h-8 text-red-200" />
-              </div>
-            </CardBody>
-          </Card>
+                </div>
+              </CardBody>
+            </Card>
 
           <Card className="bg-gradient-to-r from-gray-500 to-gray-600 text-white">
             <CardBody className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
-                <div>
+                  <div>
                   <p className="text-gray-100 text-sm lg:text-base">หมดอายุ</p>
                   <p className="text-2xl lg:text-3xl font-bold">{stats.expired}</p>
-                </div>
+                  </div>
                 <CalendarIcon className="w-6 h-6 lg:w-8 lg:h-8 text-gray-200" />
-              </div>
-            </CardBody>
-          </Card>
-        </div>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
 
         {/* ฟิลเตอร์และค้นหา */}
         <Card>
           <CardBody className="p-4 lg:p-6">
             <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1">
-                <Input
+                <div className="flex-1">
+                  <Input
                   placeholder="ค้นหาด้วยชื่อ, ตำแหน่ง, หรือแผนก..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                   startContent={<MagnifyingGlassIcon className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400" />}
-                  className="w-full"
+                    className="w-full"
                   size="sm"
-                />
-              </div>
+                  />
+                </div>
               <div className="flex gap-4">
-                <Select
+                  <Select
                   placeholder="กรองตามสถานะ"
-                  selectedKeys={[statusFilter]}
-                  onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string)}
+                    selectedKeys={[statusFilter]}
+                    onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string)}
                   className="w-full lg:w-48"
                   size="sm"
-                >
-                  <SelectItem key="all">ทั้งหมด</SelectItem>
+                  >
+                    <SelectItem key="all">ทั้งหมด</SelectItem>
                   <SelectItem key="pending">รอดำเนินการ</SelectItem>
                   <SelectItem key="approved">อนุมัติ</SelectItem>
                   <SelectItem key="rejected">ปฏิเสธ</SelectItem>
                   <SelectItem key="expired">หมดอายุ</SelectItem>
-                </Select>
+                  </Select>
+                </div>
               </div>
-            </div>
-          </CardBody>
-        </Card>
+            </CardBody>
+          </Card>
 
-        {/* ตารางข้อมูล */}
+          {/* ตารางข้อมูล */}
         <Card>
           <CardHeader>
             <h2 className="text-xl font-semibold">รายการต่อสัญญา</h2>
-          </CardHeader>
+            </CardHeader>
           <CardBody>
             <Table aria-label="Contracts table">
-              <TableHeader>
-                <TableColumn>ชื่อ-นามสกุล</TableColumn>
+                <TableHeader>
+                  <TableColumn>ชื่อ-นามสกุล</TableColumn>
                 <TableColumn>ตำแหน่ง</TableColumn>
                 <TableColumn>แผนก</TableColumn>
                 <TableColumn>สัญญาเดิม</TableColumn>
                 <TableColumn>สัญญาใหม่</TableColumn>
-                <TableColumn>สถานะ</TableColumn>
-                <TableColumn>การดำเนินการ</TableColumn>
-              </TableHeader>
-              <TableBody>
+                  <TableColumn>สถานะ</TableColumn>
+                  <TableColumn>การดำเนินการ</TableColumn>
+                </TableHeader>
+                <TableBody>
                 {filteredContracts.map((contract) => (
                   <TableRow key={contract.id}>
                     <TableCell>
@@ -345,53 +345,53 @@ export default function ContractRenewalPage() {
                         />
                         <div>
                           <p className="font-medium">{contract.employeeName}</p>
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
+                      </TableCell>
+                          <TableCell>
                       <p className="font-medium">{contract.position}</p>
-                    </TableCell>
-                    <TableCell>
+                          </TableCell>
+                          <TableCell>
                       <p className="text-gray-600">{contract.department}</p>
-                    </TableCell>
-                    <TableCell>
+                          </TableCell>
+                          <TableCell>
                       <p className="text-sm text-gray-600">
                         {new Date(contract.currentContractEnd).toLocaleDateString('th-TH')}
                       </p>
-                    </TableCell>
-                    <TableCell>
+                          </TableCell>
+                          <TableCell>
                       <p className="text-sm text-gray-600">
                         {new Date(contract.newContractStart).toLocaleDateString('th-TH')} - {new Date(contract.newContractEnd).toLocaleDateString('th-TH')}
                       </p>
-                    </TableCell>
-                    <TableCell>
+                          </TableCell>
+                          <TableCell>
                       <Chip
                         color={getStatusColor(contract.status) as any}
                         variant="flat"
                         size="sm"
                       >
-                        {getStatusText(contract.status)}
-                      </Chip>
-                    </TableCell>
-                    <TableCell>
+                              {getStatusText(contract.status)}
+                            </Chip>
+                          </TableCell>
+                          <TableCell>
                       <div className="flex items-center gap-2">
-                        <Button
+                            <Button
                           size="sm"
-                          color="primary"
-                          variant="flat"
-                          startContent={<EyeIcon className="w-4 h-4" />}
+                              color="primary"
+                              variant="flat"
+                              startContent={<EyeIcon className="w-4 h-4" />}
                           onPress={() => handleViewDetails(contract)}
-                        >
-                          ดูรายละเอียด
-                        </Button>
+                            >
+                              ดูรายละเอียด
+                            </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                          </TableCell>
+                        </TableRow>
                 ))}
-              </TableBody>
-            </Table>
-          </CardBody>
-        </Card>
+                </TableBody>
+              </Table>
+            </CardBody>
+          </Card>
       </div>
 
       {/* Detail Modal */}
@@ -424,15 +424,15 @@ export default function ContractRenewalPage() {
                         <div>
                           <label className="text-sm font-medium text-gray-600">ชื่อ-นามสกุล</label>
                           <p className="text-gray-800">{selectedContract?.employeeName || '-'}</p>
-                        </div>
+                          </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ตำแหน่ง</label>
                           <p className="text-gray-800">{selectedContract?.position || '-'}</p>
-                        </div>
+                          </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">แผนก</label>
                           <p className="text-gray-800">{selectedContract?.department || '-'}</p>
-                        </div>
+                          </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">สถานะ</label>
                           <p className="text-gray-800">{getStatusText(selectedContract?.status || '')}</p>
@@ -441,7 +441,7 @@ export default function ContractRenewalPage() {
                     </div>
 
                     {/* ข้อมูลสัญญา */}
-                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
                       <h4 className="text-lg font-semibold text-gray-800 mb-4">ข้อมูลสัญญา</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -451,11 +451,11 @@ export default function ContractRenewalPage() {
                         <div>
                           <label className="text-sm font-medium text-gray-600">สัญญาใหม่เริ่ม</label>
                           <p className="text-gray-800">{selectedContract?.newContractStart ? new Date(selectedContract.newContractStart).toLocaleDateString('th-TH') : '-'}</p>
-                        </div>
+                          </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">สัญญาใหม่สิ้นสุด</label>
                           <p className="text-gray-800">{selectedContract?.newContractEnd ? new Date(selectedContract.newContractEnd).toLocaleDateString('th-TH') : '-'}</p>
-                        </div>
+                      </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">วันที่สร้าง</label>
                           <p className="text-gray-800">{selectedContract?.createdAt ? new Date(selectedContract.createdAt).toLocaleDateString('th-TH') : '-'}</p>
@@ -471,25 +471,25 @@ export default function ContractRenewalPage() {
                 </Button>
                 {selectedContract?.status === 'pending' && (
                   <>
-                    <Button 
+                  <Button 
                       color="success" 
                       onPress={() => handleStatusChange(selectedContract.id, 'approved')}
                     >
                       อนุมัติ
-                    </Button>
-                    <Button 
+                  </Button>
+                  <Button 
                       color="danger" 
                       onPress={() => handleStatusChange(selectedContract.id, 'rejected')}
                     >
                       ปฏิเสธ
-                    </Button>
+                  </Button>
                   </>
                 )}
               </ModalFooter>
             </>
           )}
-        </ModalContent>
-      </Modal>
+            </ModalContent>
+          </Modal>
     </div>
   );
 }

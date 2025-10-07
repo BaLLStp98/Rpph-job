@@ -39,6 +39,7 @@ interface ApplicationData {
   status: string;
   createdAt: string;
   profileImage?: string;
+  profileImageUrl?: string;
   // ข้อมูลส่วนตัว
   prefix?: string;
   birthDate?: string;
@@ -228,9 +229,11 @@ const ApplicationFormView = ({
               
               <div className="flex justify-center mb-6">
                 <div className="relative">
-                  {application.profileImage ? (
+                  {application.profileImage || application.profileImageUrl ? (
                     <img
-                      src={application.profileImage}
+                      src={(application.profileImageUrl || application.profileImage)!.startsWith('http') ?
+                        (application.profileImageUrl || application.profileImage)! :
+                        `/api/image?file=${encodeURIComponent(application.profileImageUrl || application.profileImage || '')}`}
                       alt="รูปโปรไฟล์"
                       className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 shadow-lg"
                     />
@@ -1614,7 +1617,7 @@ const ApplicationFormView = ({
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">แผนก</label>
+              <label className="text-sm font-medium text-gray-700">ฝ่าย</label>
               <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                 {application.department || '-'}
               </div>
@@ -1706,14 +1709,14 @@ const ApplicationFormView = ({
                      
           {/* ข้อมูลผู้แนะนำ */}
           <div className="mt-8 space-y-4">
-            <h4 className="text-md font-semibold text-gray-700">ข้อมูลผู้แนะนำ</h4>
+            <h4 className="text-md font-semibold text-gray-700">ข้อมูลผู้อ้างอิง</h4>
              <div className="space-y-2">
-               <label className="text-sm font-medium text-gray-700">ผู้แนะนำ</label>
+               <label className="text-sm font-medium text-gray-700">ผู้อ้างอิง</label>
                    {isEditing ? (
                      <textarea
                        value={application.references || ''}
                        onChange={(e) => onInputChange?.('references', e.target.value)}
-                       placeholder="กรุณากรอกข้อมูลผู้แนะนำ"
+                       placeholder="กรุณากรอกข้อมูลผู้อ้างอิง"
                        rows={3}
                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                      />
@@ -1810,15 +1813,15 @@ const ApplicationFormView = ({
                         </span>
                       </div>
                       <div className="flex gap-2">
-                        <Button
+                <Button
                           color="secondary"
                           variant="bordered"
-                          size="sm"
+                  size="sm"
                           className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
                           onClick={() => window.open(application.documents?.idCard, '_blank')}
-                        >
+                >
                           ดูตัวอย่าง
-                        </Button>
+                </Button>
                         <Button
                           color="danger"
                           variant="bordered"
@@ -1864,7 +1867,7 @@ const ApplicationFormView = ({
                         >
                           ลบ
                         </Button>
-                      </div>
+                    </div>
                     </div>
                   ) : (
                     <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
@@ -1891,8 +1894,8 @@ const ApplicationFormView = ({
                           </Button>
                         </div>
                       </div>
-                    </div>
-                  )}
+                  </div>
+                )}
                 </div>
               </div>
 
@@ -2003,7 +2006,7 @@ const ApplicationFormView = ({
                           </Button>
                         </div>
                       </div>
-                    </div>
+                  </div>
                 )}
                 </div>
               </div>
@@ -2118,7 +2121,7 @@ const ApplicationFormView = ({
                     </div>
                   )}
                 </div>
-            </div>
+              </div>
 
               {/* ใบรับรองการเกณฑ์ทหาร */}
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
@@ -2227,7 +2230,7 @@ const ApplicationFormView = ({
                           </Button>
                         </div>
                       </div>
-                    </div>
+                  </div>
                 )}
                 </div>
               </div>
@@ -2339,10 +2342,10 @@ const ApplicationFormView = ({
                           </Button>
                         </div>
                       </div>
-                    </div>
+                  </div>
                 )}
-                </div>
             </div>
+          </div>
 
               {/* ใบขับขี่ */}
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
@@ -2451,7 +2454,7 @@ const ApplicationFormView = ({
                           </Button>
                         </div>
                       </div>
-                    </div>
+            </div>
           )}
                 </div>
               </div>
@@ -2563,7 +2566,7 @@ const ApplicationFormView = ({
                           </Button>
                         </div>
                       </div>
-                    </div>
+              </div>
             )}
                 </div>
               </div>
@@ -2579,8 +2582,6 @@ export default function ApplicationData() {
   const [applications, setApplications] = useState<ApplicationData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editingApplication, setEditingApplication] = useState<ApplicationData | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
   // Upload states
@@ -2593,6 +2594,8 @@ export default function ApplicationData() {
   // Modal states
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selectedApplication, setSelectedApplication] = useState<ApplicationData | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingApplication, setEditingApplication] = useState<ApplicationData | null>(null);
 
   // ฟังก์ชันสำหรับดึงข้อมูลใบสมัครงาน
   const fetchApplications = async () => {
@@ -2629,7 +2632,9 @@ export default function ApplicationData() {
           institution: edu.school || '',
           school: edu.school || '',
           major: edu.major || '',
-          year: edu.endYear || '',
+          startYear: edu.startYear || '',
+          endYear: edu.endYear || '',
+          year: edu.endYear || '', // Keep for backward compatibility
           graduationYear: edu.endYear || '',
           gpa: edu.gpa?.toString() || ''
         })),
@@ -2767,22 +2772,408 @@ export default function ApplicationData() {
   // ฟังก์ชันสำหรับปิด modal
   const handleCloseDetails = () => {
     setSelectedApplication(null);
-    setEditingApplication(null);
     setIsEditing(false);
+    setEditingApplication(null);
     onClose();
   };
 
   // ฟังก์ชันเริ่มแก้ไขข้อมูล
-  const handleEditApplication = (application: ApplicationData) => {
-    setEditingApplication({ ...application });
-    setIsEditing(true);
+  const handleEditApplication = () => {
+    if (selectedApplication) {
+      console.log('🔍 Starting edit mode for application:', selectedApplication.id);
+      console.log('🔍 Selected application data:', selectedApplication);
+      
+      // สร้าง deep copy ของข้อมูลเพื่อป้องกันการแก้ไขข้อมูลต้นฉบับ
+      const deepCopy = JSON.parse(JSON.stringify(selectedApplication));
+      setEditingApplication(deepCopy);
+      setIsEditing(true);
+      
+      console.log('🔍 Editing application set:', deepCopy);
+    } else {
+      console.error('❌ No selected application to edit');
+      alert('ไม่พบข้อมูลที่ต้องการแก้ไข');
+    }
   };
 
   // ฟังก์ชันยกเลิกการแก้ไข
   const handleCancelEdit = () => {
-    setEditingApplication(null);
     setIsEditing(false);
+    setEditingApplication(null);
   };
+
+  // ฟังก์ชันบันทึกข้อมูล
+  const handleSaveApplication = async () => {
+    if (!editingApplication) {
+      console.error('❌ No editing application found');
+      alert('ไม่พบข้อมูลที่กำลังแก้ไข');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      
+      console.log('🔍 Saving application:', editingApplication.id);
+      console.log('🔍 Data being sent:', JSON.stringify(editingApplication, null, 2));
+      
+      // ตรวจสอบข้อมูลที่จำเป็น
+      if (!editingApplication.id) {
+        throw new Error('ไม่พบ ID ของข้อมูลที่ต้องการบันทึก');
+      }
+      
+      if (!editingApplication.firstName || !editingApplication.lastName) {
+        throw new Error('กรุณากรอกชื่อและนามสกุล');
+      }
+      
+      // ตรวจสอบข้อมูลที่ส่งไปยัง API
+      const dataToSend = {
+        ...editingApplication,
+        // ตรวจสอบและแปลงข้อมูลให้ถูกต้อง
+        idCardIssueDate: editingApplication.idCardIssueDate ? new Date(editingApplication.idCardIssueDate) : null,
+        idCardExpiryDate: editingApplication.idCardExpiryDate ? new Date(editingApplication.idCardExpiryDate) : null,
+        birthDate: editingApplication.birthDate ? new Date(editingApplication.birthDate) : null,
+        availableDate: editingApplication.availableDate ? new Date(editingApplication.availableDate) : null,
+        age: editingApplication.age ? parseInt(editingApplication.age.toString()) : null
+      };
+      
+      console.log('🔍 Processed data for API:', JSON.stringify(dataToSend, null, 2));
+      
+      // ตรวจสอบข้อมูล education ก่อนส่ง
+      if (dataToSend.education && Array.isArray(dataToSend.education)) {
+        console.log('🔍 Education data being sent:', dataToSend.education);
+        dataToSend.education.forEach((edu: any, index: number) => {
+          console.log(`🔍 Education ${index}:`, {
+            level: edu.level,
+            school: edu.school,
+            major: edu.major,
+            startYear: edu.startYear,
+            endYear: edu.endYear,
+            gpa: edu.gpa
+          });
+        });
+      }
+      
+      const response = await fetch(`/api/resume-deposit/${editingApplication.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataToSend),
+      });
+
+      console.log('🔍 API Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
+      console.log('🔍 Response status:', response.status);
+      console.log('🔍 Response ok:', response.ok);
+
+      if (!response.ok) {
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          try {
+            console.warn('❗ API Error Response:', {
+              status: response.status,
+              statusText: response.statusText,
+              data: errorData
+            });
+          } catch (logError) {
+            console.log('❌ Error logging failed:', logError);
+          }
+          errorMessage = errorData?.message || errorMessage;
+        } catch (parseError) {
+          try {
+            console.warn('❗ Failed to parse error response:', parseError);
+          } catch (logError) {
+            console.log('❌ Error logging failed:', logError);
+          }
+          errorMessage = `HTTP error! status: ${response.status} - ${response.statusText}`;
+        }
+        // แสดงข้อผิดพลาดและออกจากฟังก์ชันโดยไม่ throw เพื่อหลีกเลี่ยง overlay
+        try {
+          window.alert(`เกิดข้อผิดพลาดในการบันทึกข้อมูล:\n${errorMessage}`);
+        } catch {}
+        setIsSaving(false);
+        return;
+      }
+
+      const result = await response.json();
+      console.log('✅ Save successful:', result);
+
+      // ใช้ข้อมูลที่ API ส่งกลับมาแทนข้อมูลที่แก้ไข
+      const updatedData = result.data;
+      if (updatedData) {
+        // แปลงข้อมูลจาก API ให้ตรงกับรูปแบบที่ใช้ใน frontend
+        const formattedData = {
+          id: updatedData.id,
+          firstName: updatedData.firstName || '',
+          lastName: updatedData.lastName || '',
+          email: updatedData.email || '',
+          phone: updatedData.phone || '',
+          appliedPosition: updatedData.expectedPosition || '',
+          department: updatedData.department || '',
+          status: updatedData.status || '',
+          createdAt: updatedData.createdAt || '',
+          profileImage: updatedData.profileImageUrl || '',
+          profileImageUrl: updatedData.profileImageUrl || '',
+          // ข้อมูลส่วนตัว
+          prefix: updatedData.prefix || '',
+          birthDate: updatedData.birthDate || '',
+          age: updatedData.age?.toString() || '',
+          race: updatedData.race || '',
+          placeOfBirth: updatedData.placeOfBirth || '',
+          placeOfBirthProvince: updatedData.placeOfBirthProvince || '',
+          gender: updatedData.gender === 'MALE' ? 'ชาย' : updatedData.gender === 'FEMALE' ? 'หญิง' : updatedData.gender || '',
+          nationality: updatedData.nationality || '',
+          religion: updatedData.religion || '',
+          maritalStatus: updatedData.maritalStatus === 'SINGLE' ? 'โสด' : 
+                        updatedData.maritalStatus === 'MARRIED' ? 'สมรส' : 
+                        updatedData.maritalStatus === 'DIVORCED' ? 'หย่า' : 
+                        updatedData.maritalStatus === 'WIDOWED' ? 'หม้าย' : updatedData.maritalStatus || '',
+          currentAddress: updatedData.address || '',
+          // ข้อมูลบัตรประชาชน
+          idNumber: updatedData.idNumber || '',
+          idCardIssuedAt: updatedData.idCardIssuedAt || '',
+          idCardIssueDate: updatedData.idCardIssueDate || '',
+          idCardExpiryDate: updatedData.idCardExpiryDate || '',
+          // ข้อมูลการติดต่อ
+          emergencyContact: updatedData.emergencyContact || '',
+          emergencyPhone: updatedData.emergencyPhone || '',
+          emergencyRelationship: updatedData.emergencyRelationship || '',
+          // ข้อมูลการศึกษา
+          education: (updatedData.education || []).map((edu: any) => ({
+            level: edu.level || '',
+            institution: edu.school || '',
+            school: edu.school || '',
+            major: edu.major || '',
+            startYear: edu.startYear || '',
+            endYear: edu.endYear || '',
+            year: edu.endYear || '',
+            graduationYear: edu.endYear || '',
+            gpa: edu.gpa?.toString() || ''
+          })),
+          // ข้อมูลประสบการณ์ทำงาน
+          workExperience: (updatedData.workExperience || []).map((work: any) => ({
+            position: work.position || '',
+            company: work.company || '',
+            startDate: work.startDate || '',
+            endDate: work.endDate || '',
+            salary: work.salary || '',
+            reason: work.reason || ''
+          })),
+          // ข้อมูลการรับราชการก่อนหน้า
+          previousGovernmentService: (updatedData.previousGovernmentService || []).map((gov: any) => ({
+            position: gov.position || '',
+            department: gov.department || '',
+            reason: gov.reason || '',
+            date: gov.date || '',
+            type: gov.type || 'civilServant'
+          })),
+          // ข้อมูลอื่นๆ
+          skills: updatedData.skills || '',
+          languages: updatedData.languages || '',
+          computerSkills: updatedData.computerSkills || '',
+          certificates: updatedData.certificates || '',
+          references: updatedData.references || '',
+          expectedPosition: updatedData.expectedPosition || '',
+          expectedSalary: updatedData.expectedSalary || '',
+          availableDate: updatedData.availableDate || '',
+          currentWork: updatedData.currentWork || false,
+          unit: updatedData.unit || '',
+          additionalInfo: updatedData.additionalInfo || '',
+          notes: updatedData.notes || '',
+          // ข้อมูลคู่สมรส
+          spouse_first_name: updatedData.spouse_first_name || '',
+          spouse_last_name: updatedData.spouse_last_name || '',
+          // ข้อมูลเจ้าหน้าที่
+          staff_position: updatedData.staff_position || '',
+          staff_department: updatedData.staff_department || '',
+          staff_start_work: updatedData.staff_start_work || ''
+        };
+
+        // อัปเดตข้อมูลใน state ด้วยข้อมูลที่ API ส่งกลับมา
+      setApplications(prev => 
+        prev.map(app => 
+            app.id === updatedData.id ? formattedData : app
+        )
+      );
+
+      // อัปเดต selectedApplication
+        setSelectedApplication(formattedData);
+        
+        console.log('✅ Updated application data with API response:', formattedData);
+      } else {
+        // ถ้าไม่มีข้อมูลจาก API ให้ใช้ข้อมูลที่แก้ไข
+        setApplications(prev => 
+          prev.map(app => 
+            app.id === editingApplication.id ? editingApplication : app
+          )
+        );
+      setSelectedApplication(editingApplication);
+      }
+
+      setIsEditing(false);
+      setEditingApplication(null);
+      
+      // รีเฟรชข้อมูลจากฐานข้อมูลเพื่อให้แน่ใจว่าข้อมูลเป็นข้อมูลล่าสุด
+      try {
+        console.log('🔄 Refreshing data from database...');
+        await fetchApplications();
+        console.log('✅ Data refreshed successfully');
+      } catch (refreshError) {
+        console.warn('⚠️ Failed to refresh data, but save was successful:', refreshError);
+      }
+      
+      window.alert('บันทึกข้อมูลเรียบร้อยแล้ว');
+    } catch (error) {
+      try {
+        console.warn('❗ Error saving application:', error);
+      } catch (logError) {
+        console.log('❌ Error logging failed:', logError);
+      }
+      
+      let errorMessage = 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // แสดงข้อความข้อผิดพลาดที่ชัดเจน
+      try {
+        console.warn('❗ Final error message:', errorMessage);
+        window.alert(`เกิดข้อผิดพลาดในการบันทึกข้อมูล:\n${errorMessage}`);
+      } catch (logError) {
+        console.log('❌ Error logging failed:', logError);
+        window.alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ฟังก์ชันลบข้อมูลใบสมัครงาน
+  const handleDeleteApplication = async (applicationId: string) => {
+    if (!applicationId) return;
+    const confirmed = window.confirm('ยืนยันการลบข้อมูลใบสมัครงานนี้หรือไม่? การลบไม่สามารถย้อนกลับได้');
+    if (!confirmed) return;
+
+    try {
+      setIsSaving(true);
+
+      const res = await fetch(`/api/resume-deposit/${applicationId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) {
+        let message = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          message = err?.message || message;
+        } catch {}
+        window.alert(`ลบไม่สำเร็จ: ${message}`);
+        return;
+      }
+
+      // เอารายการที่ลบออกจาก state
+      setApplications(prev => prev.filter(app => app.id !== applicationId));
+      // ปิด modal ถ้ากำลังดู/แก้ไขรายการนั้นอยู่
+      if (selectedApplication?.id === applicationId) {
+        setSelectedApplication(null);
+        setIsEditing(false);
+        setEditingApplication(null);
+        onClose();
+      }
+      window.alert('ลบข้อมูลเรียบร้อยแล้ว');
+    } catch (e) {
+      console.error('❌ Error deleting application:', e);
+      window.alert('เกิดข้อผิดพลาดในการลบข้อมูล');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ฟังก์ชันอัปเดตข้อมูลที่กำลังแก้ไข
+  const handleInputChange = (field: string, value: any) => {
+    if (!editingApplication) {
+      console.error('❌ No editing application found for input change');
+      return;
+    }
+
+    console.log('🔍 Input change:', { field, value, editingApplicationId: editingApplication.id });
+
+    // จัดการกรณี path เป็นรูปแบบ parent[index].child เช่น education[0].level
+    const arrayPathMatch = field.match(/^(\w+)\[(\d+)\]\.([\w.]+)$/);
+    if (arrayPathMatch) {
+      const parentKey = arrayPathMatch[1];
+      const index = parseInt(arrayPathMatch[2], 10);
+      const childKey = arrayPathMatch[3];
+
+      console.log('🔍 Array path match:', { parentKey, index, childKey });
+
+      setEditingApplication(prev => {
+        if (!prev) return prev;
+        
+        const newData = { ...prev };
+        if (!newData[parentKey as keyof ApplicationData]) {
+          (newData as any)[parentKey] = [];
+        }
+        
+        const array = [...(newData[parentKey as keyof ApplicationData] as any[])];
+        if (!array[index]) {
+          array[index] = {};
+        }
+        
+        const newItem = { ...array[index] };
+        setNestedValue(newItem, childKey, value);
+        array[index] = newItem;
+        
+        (newData as any)[parentKey] = array;
+        
+        console.log('🔍 Updated array data:', { parentKey, array });
+        console.log('🔍 Final education data:', newData.education);
+        return newData;
+      });
+    } else {
+      // จัดการกรณี path ธรรมดา
+      console.log('🔍 Simple path update:', { field, value });
+      
+      setEditingApplication(prev => {
+        if (!prev) return prev;
+        const newData = { ...prev };
+        setNestedValue(newData, field, value);
+        
+        console.log('🔍 Updated simple data:', { field, value, newData });
+        return newData;
+      });
+    }
+  };
+
+  // ฟังก์ชันช่วยสำหรับ set nested value
+  const setNestedValue = (obj: any, path: string, value: any) => {
+    console.log('🔍 setNestedValue called:', { path, value, obj });
+    
+    const keys = path.split('.');
+    const lastKey = keys.pop()!;
+    
+    console.log('🔍 Path keys:', keys, 'Last key:', lastKey);
+    
+    const target = keys.reduce((current, key) => {
+      if (!current[key]) {
+        console.log('🔍 Creating new object for key:', key);
+        current[key] = {};
+      }
+      return current[key];
+    }, obj);
+    
+    console.log('🔍 Target object before setting:', target);
+    target[lastKey] = value;
+    console.log('🔍 Target object after setting:', target);
+  };
+
 
   // ฟังก์ชันอัปโหลดไฟล์
   const handleFileUpload = async (file: File, documentType: string, applicationId: string) => {
@@ -2840,93 +3231,7 @@ export default function ApplicationData() {
     }
   };
 
-  // ฟังก์ชันบันทึกข้อมูล
-  const handleSaveApplication = async () => {
-    if (!editingApplication) return;
 
-    try {
-      setIsSaving(true);
-      
-      const response = await fetch(`/api/resume-deposit/${editingApplication.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(editingApplication),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update application');
-      }
-
-      // อัปเดตข้อมูลใน state
-      setApplications(prev => 
-        prev.map(app => 
-          app.id === editingApplication.id ? editingApplication : app
-        )
-      );
-
-      // อัปเดต selectedApplication ถ้าเป็นตัวเดียวกัน
-      if (selectedApplication?.id === editingApplication.id) {
-        setSelectedApplication(editingApplication);
-      }
-
-      setIsEditing(false);
-      setEditingApplication(null);
-      alert('บันทึกข้อมูลเรียบร้อยแล้ว');
-    } catch (error) {
-      console.error('Error saving application:', error);
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // ฟังก์ชันอัปเดตข้อมูลที่กำลังแก้ไข (รองรับ path ของ array เช่น education[0].level)
-  const handleInputChange = (field: string, value: any) => {
-    if (!editingApplication) return;
-
-    // จัดการกรณี path เป็นรูปแบบ parent[index].child เช่น education[0].level
-    const arrayPathMatch = field.match(/^(\w+)\[(\d+)\]\.([\w.]+)$/);
-    if (arrayPathMatch) {
-      const parentKey = arrayPathMatch[1];
-      const index = parseInt(arrayPathMatch[2], 10);
-      const childKey = arrayPathMatch[3];
-
-      setEditingApplication(prev => {
-        const previous = prev as any;
-        const parentArray = Array.isArray(previous[parentKey]) ? [...previous[parentKey]] : [];
-        const targetItem = { ...(parentArray[index] || {}) };
-        targetItem[childKey] = value;
-        parentArray[index] = targetItem;
-
-        return {
-          ...(previous as any),
-          [parentKey]: parentArray
-        } as any;
-      });
-      return;
-    }
-
-    // จัดการกรณี path เป็นรูปแบบ parent.child
-    if (field.includes('.')) {
-      const [parent, child] = field.split('.');
-      setEditingApplication(prev => ({
-        ...prev!,
-        [parent]: {
-          ...(prev as any)[parent],
-          [child]: value
-        }
-      }));
-      return;
-    }
-
-    // คีย์ปกติระดับบนสุด
-    setEditingApplication(prev => ({
-      ...prev!,
-      [field]: value
-    }));
-  };
 
 
 
@@ -2966,8 +3271,8 @@ export default function ApplicationData() {
 
   // ฟังก์ชันสำหรับพิมพ์เอกสาร
   const handlePrintDocument = (application: ApplicationData) => {
-    // ส่งเฉพาะ ID ไปยัง official-documents เพื่อให้ดึงข้อมูลจาก API
-    const printUrl = `/official-documents?id=${application.id}`;
+    // ส่งเฉพาะ ID ไปยัง print-all เพื่อให้ดึงข้อมูลจาก API
+    const printUrl = `/official-documents/print-all?id=${application.id}`;
     window.open(printUrl, '_blank');
   };
 
@@ -3005,11 +3310,11 @@ export default function ApplicationData() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                ข้อมูลใบสมัครงาน
-              </h1>
-              <p className="text-gray-600">
-                {departmentName ? `แผนก: ${departmentName}` : 'รายการใบสมัครงานทั้งหมด'}
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                  ข้อมูลใบสมัครงาน
+                </h1>
+        <p className="text-gray-600">
+                {departmentName ? `ฝ่าย: ${departmentName}` : 'รายการใบสมัครงานทั้งหมด'}
               </p>
             </div>
             <Button
@@ -3022,7 +3327,7 @@ export default function ApplicationData() {
               กลับไป Dashboard
             </Button>
           </div>
-        </div>
+          </div>
           
       {applications.length === 0 ? (
         <Card className="p-8 text-center">
@@ -3037,14 +3342,28 @@ export default function ApplicationData() {
             <Card key={application.id} className="shadow-lg hover:shadow-xl transition-shadow">
                 <CardHeader className="pb-3">
                     <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
+                  <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
+                    {application.profileImage || application.profileImageUrl ? (
+                      <img
+                        src={(application.profileImageUrl || application.profileImage)!.startsWith('http') ? 
+                          (application.profileImageUrl || application.profileImage)! : 
+                          `/api/image?file=${encodeURIComponent(application.profileImageUrl || application.profileImage || '')}`}
+                        alt={`${application.firstName} ${application.lastName}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-full h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold ${(application.profileImage || application.profileImageUrl) ? 'hidden' : ''}`}>
                     {application.firstName?.charAt(0)}{application.lastName?.charAt(0)}
+                    </div>
                             </div>
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-800">
                       {application.prefix} {application.firstName} {application.lastName}
                         </h3>
-                    <p className="text-sm text-gray-600">{application.email}</p>
                           </div>
                   </div>
                 </CardHeader>
@@ -3055,7 +3374,7 @@ export default function ApplicationData() {
                     <span className="text-sm font-medium">{application.appliedPosition}</span>
                       </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">แผนก:</span>
+                    <span className="text-sm text-gray-600">ฝ่าย:</span>
                     <span className="text-sm font-medium">{application.department || '-'}</span>
                       </div>
                   <div className="flex justify-between">
@@ -3081,14 +3400,6 @@ export default function ApplicationData() {
                         >
                           ดูรายละเอียด
                         </Button>
-                        <Button
-                     color="warning"
-                     variant="flat"
-                          size="sm"
-                     onClick={() => handleEditApplication(application)}
-                   >
-                     แก้ไข
-                   </Button>
                    <Button
                      color="secondary"
                      variant="flat"
@@ -3119,14 +3430,121 @@ export default function ApplicationData() {
           }}
         >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">
-            <h2 className="text-xl font-semibold">
-                  รายละเอียดใบสมัครงาน
-                </h2>
-            <p className="text-sm text-gray-600">
-              {selectedApplication?.prefix} {selectedApplication?.firstName} {selectedApplication?.lastName}
-            </p>
-            </ModalHeader>
+          <ModalHeader className="flex items-center gap-4">
+            <div className="relative w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
+              {selectedApplication?.profileImage || selectedApplication?.profileImageUrl ? (
+                <img
+                  src={(selectedApplication.profileImageUrl || selectedApplication.profileImage)!.startsWith('http') ? 
+                    (selectedApplication.profileImageUrl || selectedApplication.profileImage)! : 
+                    `/api/image?file=${encodeURIComponent(selectedApplication.profileImageUrl || selectedApplication.profileImage || '')}`}
+                  alt={`${selectedApplication?.firstName} ${selectedApplication?.lastName}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`w-full h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold ${(selectedApplication?.profileImage || selectedApplication?.profileImageUrl) ? 'hidden' : ''}`}>
+                {selectedApplication?.firstName?.charAt(0)}{selectedApplication?.lastName?.charAt(0)}
+              </div>
+              
+              {/* ปุ่มจัดการรูปภาพโปรไฟล์ */}
+              <div className="absolute -bottom-1 -right-1 flex gap-1">
+                {/* ปุ่มอัพโหลดรูปภาพใหม่ */}
+                <label className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1.5 cursor-pointer transition-colors shadow-lg">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file && selectedApplication) {
+                        try {
+                          const formData = new FormData();
+                          formData.append('profileImage', file);
+                          formData.append('resumeId', selectedApplication.id);
+
+                          const response = await fetch('/api/profile-image/upload', {
+                            method: 'POST',
+                            body: formData
+                          });
+
+                          if (response.ok) {
+                            const result = await response.json();
+                            // อัพเดตข้อมูลใน state
+                            setApplications(prev => 
+                              prev.map(app => 
+                                app.id === selectedApplication.id 
+                                  ? { ...app, profileImageUrl: result.profileImage }
+                                  : app
+                              )
+                            );
+                            setSelectedApplication(prev => 
+                              prev ? { ...prev, profileImageUrl: result.profileImage } : null
+                            );
+                            alert('อัพโหลดรูปภาพเรียบร้อยแล้ว');
+                          } else {
+                            alert('เกิดข้อผิดพลาดในการอัพโหลดรูปภาพ');
+                          }
+                        } catch (error) {
+                          console.error('Error uploading image:', error);
+                          alert('เกิดข้อผิดพลาดในการอัพโหลดรูปภาพ');
+                        }
+                      }
+                    }}
+                  />
+                </label>
+                
+                {/* ปุ่มลบรูปภาพ (แสดงเฉพาะเมื่อมีรูปภาพ) */}
+                {(selectedApplication?.profileImage || selectedApplication?.profileImageUrl) && (
+                  <button
+                    onClick={async () => {
+                      if (selectedApplication && confirm('คุณต้องการลบรูปภาพโปรไฟล์หรือไม่?')) {
+                        try {
+                          // TODO: เรียก API ลบรูปภาพ
+                          // const response = await fetch(`/api/profile-image/${selectedApplication.id}`, {
+                          //   method: 'DELETE'
+                          // });
+                          
+                          // อัพเดตข้อมูลใน state
+                          setApplications(prev => 
+                            prev.map(app => 
+                              app.id === selectedApplication.id 
+                                ? { ...app, profileImage: undefined, profileImageUrl: undefined }
+                                : app
+                            )
+                          );
+                          setSelectedApplication(prev => 
+                            prev ? { ...prev, profileImage: undefined, profileImageUrl: undefined } : null
+                          );
+                          alert('ลบรูปภาพเรียบร้อยแล้ว');
+                        } catch (error) {
+                          console.error('Error deleting image:', error);
+                          alert('เกิดข้อผิดพลาดในการลบรูปภาพ');
+                        }
+                      }
+                    }}
+                    className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 transition-colors shadow-lg"
+                    title="ลบรูปภาพ"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-xl font-semibold">รายละเอียดใบสมัครงาน</h2>
+              <p className="text-sm text-gray-600">
+                {selectedApplication?.prefix} {selectedApplication?.firstName} {selectedApplication?.lastName}
+              </p>
+            </div>
+          </ModalHeader>
            <ModalBody>
                              {selectedApplication && (
                  <ApplicationFormView 
@@ -3141,45 +3559,50 @@ export default function ApplicationData() {
            <ModalFooter>
              {isEditing ? (
                <>
-                <Button
-                   color="danger" 
-                  variant="light"
-                   onPress={handleCancelEdit}
-                   disabled={isSaving}
-                >
+                 <Button color="danger" variant="light" onPress={handleCancelEdit}>
                    ยกเลิก
-                </Button>
-                    <Button
+                 </Button>
+                 <Button 
                    color="success" 
                    onPress={handleSaveApplication}
-                   disabled={isSaving}
                    isLoading={isSaving}
+                   disabled={isSaving}
                  >
-                   {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
-                    </Button>
+                   {isSaving ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
+                 </Button>
                </>
              ) : (
                <>
                  <Button color="danger" variant="light" onPress={handleCloseDetails}>
                    ปิด
+                 </Button>
+                  {selectedApplication && (
+                    <Button 
+                      color="danger"
+                      variant="flat"
+                      onPress={() => handleDeleteApplication(selectedApplication.id)}
+                      disabled={isSaving}
+                    >
+                      ลบ
                     </Button>
-                <Button
+                  )}
+                 <Button 
                    color="warning" 
-                   variant="flat" 
-                   onPress={() => selectedApplication && handleEditApplication(selectedApplication)}
+                   variant="flat"
+                   onPress={handleEditApplication}
                  >
                    แก้ไข
-                </Button>
-                            <Button
-                              color="primary"
+                 </Button>
+                 <Button
+                   color="primary"
                    onPress={() => selectedApplication && handlePrintDocument(selectedApplication)}
                    startContent={<PrinterIcon className="w-4 h-4" />}
                  >
                    พิมพ์เอกสาร
-                            </Button>
+                 </Button>
                </>
              )}
-            </ModalFooter>
+           </ModalFooter>
           </ModalContent>
         </Modal>
     </div>
