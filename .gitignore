@@ -41,3 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Upload files - ignore all uploaded files
+/public/uploads/
+/public/uploads/**
+
+/public/image
+/public/image/*

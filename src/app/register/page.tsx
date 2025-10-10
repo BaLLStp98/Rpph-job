@@ -507,7 +507,7 @@ export default function ApplicationForm() {
           if (found.status && found.status !== 'DRAFT') {
             console.log('✅ พบข้อมูลฝากประวัติที่สมบูรณ์แล้ว - ข้ามไปหน้า Dashboard');
             // แสดงข้อความแจ้งเตือน
-            alert('คุณมีข้อมูลฝากประวัติแล้ว กำลังนำทางไปหน้า Dashboard');
+            console.log('ℹ️ คุณมีข้อมูลฝากประวัติแล้ว กำลังนำทางไปหน้า Dashboard');
             // ข้ามไปหน้า Dashboard
             router.push('/dashboard');
             return;
@@ -761,6 +761,44 @@ export default function ApplicationForm() {
   // บันทึกเฉพาะแท็บปัจจุบัน (partial save)
   const saveCurrentTab = async () => {
     if (isSaving) return;
+    
+    // ตรวจสอบข้อมูลก่อนบันทึก
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      
+      // แสดงข้อผิดพลาดเฉพาะแท็บปัจจุบัน
+      const tabErrors = Object.keys(validationErrors).filter(key => {
+        if (activeTab === 'personal') {
+          return key.includes('prefix') || key.includes('firstName') || key.includes('lastName') || 
+                 key.includes('age') || key.includes('birthDate') || key.includes('placeOfBirth') ||
+                 key.includes('race') || key.includes('nationality') || key.includes('religion') ||
+                 key.includes('gender') || key.includes('maritalStatus') || key.includes('idNumber') ||
+                 key.includes('registeredAddress') || key.includes('currentAddress') || 
+                 key.includes('emergency') || key.includes('spouse') || key.includes('medicalRights') ||
+                 key.includes('multipleEmployers') || key.includes('appliedPosition') ||
+                 key.includes('expectedSalary') || key.includes('availableDate') || key.includes('department');
+        } else if (activeTab === 'education') {
+          return key.includes('education');
+        } else if (activeTab === 'work') {
+          return key.includes('workExperience') || key.includes('previousGovernmentService');
+        } else if (activeTab === 'skills') {
+          return key.includes('skills') || key.includes('languages') || key.includes('computerSkills');
+        } else if (activeTab === 'position') {
+          return key.includes('appliedPosition') || key.includes('expectedSalary') || 
+                 key.includes('availableDate') || key.includes('department');
+        } else if (activeTab === 'documents') {
+          return key.includes('documents');
+        }
+        return false;
+      });
+      
+      if (tabErrors.length > 0) {
+        console.error(`❌ ข้อมูลในแท็บ ${activeTab} ไม่ครบถ้วน\n\nมีข้อผิดพลาด ${tabErrors.length} รายการ:\n\n${tabErrors.map(key => `• ${validationErrors[key]}`).join('\n')}`);
+        return;
+      }
+    }
+    
     try {
       setIsSaving(true);
 
@@ -903,7 +941,7 @@ export default function ApplicationForm() {
 
       // หากยังไม่มีเรคคอร์ด ให้บังคับเริ่มจากแท็บ personal ก่อน
       if (!savedResume?.id && tab !== 'personal') {
-        alert('กรุณาบันทึกข้อมูลส่วนตัวก่อน');
+        console.log('⚠️ กรุณาบันทึกข้อมูลส่วนตัวก่อน');
         setIsSaving(false);
         return;
       }
@@ -990,7 +1028,7 @@ export default function ApplicationForm() {
 
       // ไปแท็บถัดไปอัตโนมัติหลังบันทึกสำเร็จ หรือ redirect ไปหน้า dashboard
       if (tab === 'documents') {
-        alert('บันทึกข้อมูลเรียบร้อยแล้ว');
+        console.log('✅ บันทึกข้อมูลเรียบร้อยแล้ว');
         // Redirect ไปหน้า dashboard
         window.location.href = '/dashboard';
       } else {
@@ -1003,10 +1041,10 @@ export default function ApplicationForm() {
         };
         const next = flow[tab as keyof typeof flow];
         if (next) setActiveTab(next);
-        alert('บันทึกสำเร็จ');
+        console.log('✅ บันทึกสำเร็จ');
       }
     } catch (err: any) {
-      alert(err?.message || 'เกิดข้อผิดพลาดในการบันทึก');
+      console.error('❌ เกิดข้อผิดพลาดในการบันทึก:', err?.message || 'Unknown error');
         } finally {
       setIsSaving(false);
     }
@@ -1233,7 +1271,7 @@ export default function ApplicationForm() {
     setErrors({});
     
     // แสดงข้อความแจ้งเตือน
-    alert('✅ กรอกข้อมูลตัวอย่างเรียบร้อยแล้ว!\n\n📝 กรอกเฉพาะช่องที่ว่างเท่านั้น\n🔒 ข้อมูลที่มีอยู่แล้วจะไม่ถูกทับ');
+    console.log('✅ กรอกข้อมูลตัวอย่างเรียบร้อยแล้ว!\n\n📝 กรอกเฉพาะช่องที่ว่างเท่านั้น\n🔒 ข้อมูลที่มีอยู่แล้วจะไม่ถูกทับ');
   };
   // section refs for in-page navigation like official-documents
   const sectionRefs = {
@@ -1763,7 +1801,7 @@ export default function ApplicationForm() {
       
       if (!userEmail && !userName) {
         console.log('❌ ไม่พบข้อมูลผู้ใช้ใน session');
-        alert('ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
+        console.error('❌ ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
         return;
       }
       
@@ -1966,11 +2004,11 @@ export default function ApplicationForm() {
         }
       } else {
         console.log('❌ ไม่สามารถดึงข้อมูลฝากประวัติได้:', res.status);
-        alert('ไม่สามารถดึงข้อมูลฝากประวัติได้');
+        console.error('❌ ไม่สามารถดึงข้อมูลฝากประวัติได้');
       }
     } catch (error) {
       console.error('❌ เกิดข้อผิดพลาดในการดึงข้อมูลฝากประวัติ:', error);
-      alert('เกิดข้อผิดพลาดในการดึงข้อมูลฝากประวัติ');
+      console.error('❌ เกิดข้อผิดพลาดในการดึงข้อมูลฝากประวัติ');
     } finally {
       setIsLoading(false);
     }
@@ -1986,7 +2024,7 @@ export default function ApplicationForm() {
       const userId = (session?.user as any)?.id || '';
       if (!userEmail) {
         console.log('❌ ไม่พบอีเมลผู้ใช้');
-        alert('ไม่พบอีเมลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
+        console.error('❌ ไม่พบอีเมลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
         return;
       }
 
@@ -2030,22 +2068,22 @@ export default function ApplicationForm() {
             setUploadedDocuments(documents);
             
             console.log('✅ รีเฟรชข้อมูลฝากประวัติสำเร็จ');
-            alert('รีเฟรชข้อมูลฝากประวัติเรียบร้อยแล้ว');
+            console.log('✅ รีเฟรชข้อมูลฝากประวัติเรียบร้อยแล้ว');
           } else {
             console.log('❌ ไม่สามารถดึงรายละเอียดข้อมูลได้');
-            alert('ไม่สามารถดึงรายละเอียดข้อมูลได้');
+            console.error('❌ ไม่สามารถดึงรายละเอียดข้อมูลได้');
           }
         } else {
           console.log('❌ ไม่พบข้อมูลฝากประวัติ');
-          alert('ไม่พบข้อมูลฝากประวัติ');
+          console.log('⚠️ ไม่พบข้อมูลฝากประวัติ');
         }
       } else {
         console.log('❌ ไม่สามารถเชื่อมต่อ API ได้');
-        alert('ไม่สามารถเชื่อมต่อ API ได้');
+        console.error('❌ ไม่สามารถเชื่อมต่อ API ได้');
       }
     } catch (error) {
       console.error('❌ เกิดข้อผิดพลาดในการรีเฟรชข้อมูล:', error);
-      alert('เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
+      console.error('❌ เกิดข้อผิดพลาดในการรีเฟรชข้อมูล');
     } finally {
       setIsLoading(false);
     }
@@ -2136,7 +2174,7 @@ export default function ApplicationForm() {
         });
     }
 
-    alert('โหลดข้อมูลจากโปรไฟล์เรียบร้อยแล้ว');
+    console.log('✅ โหลดข้อมูลจากโปรไฟล์เรียบร้อยแล้ว');
   };
 
   const getErrorMessage = (fieldName: string) => {
@@ -2465,7 +2503,7 @@ export default function ApplicationForm() {
   // ฟังก์ชันสำหรับการบันทึกข้อมูลเอกสาร
   const handleDocumentUpload = async (file: File, documentType: string) => {
     if (!savedResume?.id) {
-      alert('กรุณาบันทึกข้อมูลส่วนตัวก่อน');
+      console.log('⚠️ กรุณาบันทึกข้อมูลส่วนตัวก่อน');
       return;
     }
 
@@ -2477,13 +2515,13 @@ export default function ApplicationForm() {
         // อัปเดตข้อมูลเอกสารที่อัปโหลดแล้ว
         const documents = await fetchUploadedDocuments(savedResume.id);
         setUploadedDocuments(documents);
-        alert('อัปโหลดเอกสารสำเร็จ');
+        console.log('✅ อัปโหลดเอกสารสำเร็จ');
       } else {
-        alert(result.message || 'เกิดข้อผิดพลาดในการอัปโหลดเอกสาร');
+        console.error('❌ เกิดข้อผิดพลาดในการอัปโหลดเอกสาร:', result.message || 'Unknown error');
       }
     } catch (error) {
       console.error('Error uploading document:', error);
-      alert('เกิดข้อผิดพลาดในการอัปโหลดเอกสาร');
+      console.error('❌ เกิดข้อผิดพลาดในการอัปโหลดเอกสาร');
     } finally {
       setIsUploading(false);
     }
@@ -2524,7 +2562,7 @@ export default function ApplicationForm() {
   // ฟังก์ชันลบไฟล์เอกสารแนบ
   const handleDeleteDocument = async (documentId: string, documentType: string) => {
     if (!savedResume?.id) {
-      alert('ไม่พบข้อมูลฝากประวัติ');
+      console.log('⚠️ ไม่พบข้อมูลฝากประวัติ');
       return;
     }
 
@@ -2555,13 +2593,13 @@ export default function ApplicationForm() {
           }
         }));
         
-        alert('ลบไฟล์สำเร็จ');
+        console.log('✅ ลบไฟล์สำเร็จ');
       } else {
-        alert(result.message || 'เกิดข้อผิดพลาดในการลบไฟล์');
+        console.error('❌ เกิดข้อผิดพลาดในการลบไฟล์:', result.message || 'Unknown error');
       }
     } catch (error) {
       console.error('Delete document error:', error);
-      alert('เกิดข้อผิดพลาดในการลบไฟล์');
+      console.error('❌ เกิดข้อผิดพลาดในการลบไฟล์');
     } finally {
       setIsUploading(false);
     }
@@ -2726,6 +2764,237 @@ export default function ApplicationForm() {
       return thaiDate;
     }
   };
+  // ฟังก์ชัน validation สำหรับตรวจสอบข้อมูลทั้งหมดในทุกแท็บ
+  const validateAllTabs = () => {
+    const errors: Record<string, string> = {};
+    
+    // ข้อมูลส่วนตัว (จำเป็น) - 1.1 ข้อมูลส่วนตัว
+    if (!formData.prefix || formData.prefix.trim() === '') {
+      errors.prefix = 'กรุณาเลือกคำนำหน้า';
+    }
+    if (!formData.firstName || formData.firstName.trim() === '') {
+      errors.firstName = 'กรุณากรอกชื่อ';
+    }
+    if (!formData.lastName || formData.lastName.trim() === '') {
+      errors.lastName = 'กรุณากรอกนามสกุล';
+    }
+    if (!formData.idNumber || formData.idNumber.trim() === '') {
+      errors.idNumber = 'กรุณากรอกเลขบัตรประชาชน';
+    } else if (!/^[0-9]{13}$/.test(formData.idNumber.replace(/[-\s]/g, ''))) {
+      errors.idNumber = 'กรุณากรอกเลขบัตรประชาชนให้ถูกต้อง (13 หลัก)';
+    }
+    if (!formData.birthDate) {
+      errors.birthDate = 'กรุณาเลือกวันเกิด';
+    }
+    if (!formData.age || formData.age.trim() === '') {
+      errors.age = 'กรุณากรอกอายุ';
+    }
+    if (!formData.placeOfBirth || formData.placeOfBirth.trim() === '') {
+      errors.placeOfBirth = 'กรุณากรอกสถานที่เกิด';
+    }
+    if (!formData.gender || formData.gender === 'UNKNOWN') {
+      errors.gender = 'กรุณาเลือกเพศ';
+    }
+    if (!formData.nationality || formData.nationality.trim() === '') {
+      errors.nationality = 'กรุณากรอกสัญชาติ';
+    }
+    if (!formData.religion || formData.religion.trim() === '') {
+      errors.religion = 'กรุณากรอกศาสนา';
+    }
+    if (!formData.maritalStatus || formData.maritalStatus === 'UNKNOWN') {
+      errors.maritalStatus = 'กรุณาเลือกสถานภาพ';
+    }
+    
+    // ที่อยู่ตามทะเบียนบ้าน (จำเป็น) - 1.2 ที่อยู่ตามทะเบียนบ้าน
+    if (!formData.registeredAddress?.houseNumber || formData.registeredAddress.houseNumber.trim() === '') {
+      errors.registeredAddressHouseNumber = 'กรุณากรอกบ้านเลขที่';
+    }
+    if (!formData.registeredAddress?.villageNumber || formData.registeredAddress.villageNumber.trim() === '') {
+      errors.registeredAddressVillageNumber = 'กรุณากรอกหมู่ที่';
+    }
+    if (!formData.registeredAddress?.subDistrict || formData.registeredAddress.subDistrict.trim() === '') {
+      errors.registeredAddressSubDistrict = 'กรุณากรอกตำบล/แขวง';
+    }
+    if (!formData.registeredAddress?.district || formData.registeredAddress.district.trim() === '') {
+      errors.registeredAddressDistrict = 'กรุณากรอกอำเภอ/เขต';
+    }
+    if (!formData.registeredAddress?.province || formData.registeredAddress.province.trim() === '') {
+      errors.registeredAddressProvince = 'กรุณากรอกจังหวัด';
+    }
+    if (!formData.registeredAddress?.postalCode || formData.registeredAddress.postalCode.trim() === '') {
+      errors.registeredAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์';
+    }
+    if (!formData.registeredAddress?.mobile || formData.registeredAddress.mobile.trim() === '') {
+      errors.registeredAddressMobile = 'กรุณากรอกโทรศัพท์มือถือ';
+    }
+    
+    // ที่อยู่ปัจจุบัน (จำเป็น)
+    if (!formData.currentAddressDetail?.houseNumber || formData.currentAddressDetail.houseNumber.trim() === '') {
+      errors.currentAddressHouseNumber = 'กรุณากรอกเลขที่';
+    }
+    if (!formData.currentAddressDetail?.villageNumber || formData.currentAddressDetail.villageNumber.trim() === '') {
+      errors.currentAddressVillageNumber = 'กรุณากรอกหมู่ที่';
+    }
+    if (!formData.currentAddressDetail?.subDistrict || formData.currentAddressDetail.subDistrict.trim() === '') {
+      errors.currentAddressSubDistrict = 'กรุณากรอกตำบล/แขวง';
+    }
+    if (!formData.currentAddressDetail?.district || formData.currentAddressDetail.district.trim() === '') {
+      errors.currentAddressDistrict = 'กรุณากรอกอำเภอ/เขต';
+    }
+    if (!formData.currentAddressDetail?.province || formData.currentAddressDetail.province.trim() === '') {
+      errors.currentAddressProvince = 'กรุณากรอกจังหวัด';
+    }
+    if (!formData.currentAddressDetail?.postalCode || formData.currentAddressDetail.postalCode.trim() === '') {
+      errors.currentAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์';
+    }
+    if (!formData.currentAddressDetail?.mobilePhone || formData.currentAddressDetail.mobilePhone.trim() === '') {
+      errors.currentAddressMobilePhone = 'กรุณากรอกโทรศัพท์มือถือ';
+    }
+    if (!formData.phone) errors.phone = 'กรุณากรอกเบอร์โทรศัพท์';
+    if (!formData.email) errors.email = 'กรุณากรอกอีเมล';
+    
+    // ผู้ติดต่อฉุกเฉิน (จำเป็น) - 1.6 บุคคลที่สามารถติดต่อได้ทันที
+    if (!formData.emergencyContactFirstName || formData.emergencyContactFirstName.trim() === '') {
+      errors.emergencyContactFirstName = 'กรุณากรอกชื่อผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyContactLastName || formData.emergencyContactLastName.trim() === '') {
+      errors.emergencyContactLastName = 'กรุณากรอกนามสกุลผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyRelationship || formData.emergencyRelationship.trim() === '') {
+      errors.emergencyRelationship = 'กรุณากรอกความสัมพันธ์กับผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyPhone || formData.emergencyPhone.trim() === '') {
+      errors.emergencyPhone = 'กรุณากรอกเบอร์โทรศัพท์ผู้ติดต่อฉุกเฉิน';
+    } else if (!/^[0-9]{10}$/.test(formData.emergencyPhone.replace(/[-\s]/g, ''))) {
+      errors.emergencyPhone = 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง (10 หลัก)';
+    }
+    if (!formData.emergencyAddress?.houseNumber || formData.emergencyAddress.houseNumber.trim() === '') {
+      errors.emergencyAddressHouseNumber = 'กรุณากรอกบ้านเลขที่ผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyAddress?.villageNumber || formData.emergencyAddress.villageNumber.trim() === '') {
+      errors.emergencyAddressVillageNumber = 'กรุณากรอกหมู่ที่ผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyAddress?.subDistrict || formData.emergencyAddress.subDistrict.trim() === '') {
+      errors.emergencyAddressSubDistrict = 'กรุณากรอกตำบล/แขวงผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyAddress?.district || formData.emergencyAddress.district.trim() === '') {
+      errors.emergencyAddressDistrict = 'กรุณากรอกอำเภอ/เขตผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyAddress?.province || formData.emergencyAddress.province.trim() === '') {
+      errors.emergencyAddressProvince = 'กรุณากรอกจังหวัดผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyAddress?.postalCode || formData.emergencyAddress.postalCode.trim() === '') {
+      errors.emergencyAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์ผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyWorkplace?.name || formData.emergencyWorkplace.name.trim() === '') {
+      errors.emergencyWorkplaceName = 'กรุณากรอกชื่อสถานที่ทำงานผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyWorkplace?.district || formData.emergencyWorkplace.district.trim() === '') {
+      errors.emergencyWorkplaceDistrict = 'กรุณากรอกอำเภอ/เขตสถานที่ทำงานผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyWorkplace?.province || formData.emergencyWorkplace.province.trim() === '') {
+      errors.emergencyWorkplaceProvince = 'กรุณากรอกจังหวัดสถานที่ทำงานผู้ติดต่อฉุกเฉิน';
+    }
+    if (!formData.emergencyWorkplace?.phone || formData.emergencyWorkplace.phone.trim() === '') {
+      errors.emergencyWorkplacePhone = 'กรุณากรอกโทรศัพท์สถานที่ทำงานผู้ติดต่อฉุกเฉิน';
+    } else if (!/^[0-9]{10}$/.test(formData.emergencyWorkplace.phone.replace(/[-\s]/g, ''))) {
+      errors.emergencyWorkplacePhone = 'กรุณากรอกเบอร์โทรศัพท์สถานที่ทำงานให้ถูกต้อง (10 หลัก)';
+    }
+    
+    // ข้อมูลคู่สมรส (จำเป็นถ้าเลือกสมรส) - มี *
+    if (formData.maritalStatus === 'สมรส') {
+      if (!formData.spouseInfo?.firstName || !formData.spouseInfo?.lastName) {
+        errors.spouseInfoFirstName = 'กรุณากรอกชื่อ-สกุล คู่สมรส';
+        errors.spouseInfoLastName = 'กรุณากรอกชื่อ-สกุล คู่สมรส';
+      }
+    }
+    
+    // ข้อมูลสิทธิการรักษา (จำเป็นถ้าเลือก) - มี *
+    if (formData.medicalRights?.hasUniversalHealthcare && !formData.medicalRights?.universalHealthcareHospital) {
+      errors.medicalRightsUniversalHealthcareHospital = 'กรุณากรอกชื่อโรงพยาบาล';
+    }
+    if (formData.medicalRights?.hasSocialSecurity && !formData.medicalRights?.socialSecurityHospital) {
+      errors.medicalRightsSocialSecurityHospital = 'กรุณากรอกชื่อโรงพยาบาล';
+    }
+    
+    // ข้อมูลการศึกษา (จำเป็น) - 2.1 ข้อมูลการศึกษา
+    if (!formData.education || formData.education.length === 0) {
+      errors.education = 'กรุณาเพิ่มข้อมูลการศึกษาอย่างน้อย 1 รายการ';
+    } else {
+      formData.education.forEach((edu, index) => {
+        if (!edu.level || edu.level.trim() === '') {
+          errors[`education${index}Level`] = 'กรุณาเลือกระดับการศึกษา';
+        }
+        if (!edu.institution || edu.institution.trim() === '') {
+          errors[`education${index}Institution`] = 'กรุณากรอกชื่อสถาบัน';
+        }
+        if (!edu.major || edu.major.trim() === '') {
+          errors[`education${index}Major`] = 'กรุณากรอกสาขาวิชา';
+        }
+        if (!edu.year || edu.year.trim() === '') {
+          errors[`education${index}Year`] = 'กรุณากรอกปีที่จบ';
+        }
+      });
+    }
+    
+    // ข้อมูลการทำงาน (จำเป็น) - 3.1 ข้อมูลการทำงาน
+    if (!formData.workExperience || formData.workExperience.length === 0) {
+      errors.workExperience = 'กรุณาเพิ่มข้อมูลการทำงานอย่างน้อย 1 รายการ';
+    } else {
+      formData.workExperience.forEach((work, index) => {
+        if (!work.company || work.company.trim() === '') {
+          errors[`workExperience${index}Company`] = 'กรุณากรอกชื่อบริษัท';
+        }
+        if (!work.position || work.position.trim() === '') {
+          errors[`workExperience${index}Position`] = 'กรุณากรอกตำแหน่ง';
+        }
+        if (!work.startDate || work.startDate.trim() === '') {
+          errors[`workExperience${index}StartDate`] = 'กรุณากรอกวันที่เริ่มงาน';
+        }
+        if (!work.endDate || work.endDate.trim() === '') {
+          errors[`workExperience${index}EndDate`] = 'กรุณากรอกวันที่สิ้นสุดงาน';
+        }
+      });
+    }
+    
+    // ข้อมูลความรู้ความสามารถ (จำเป็น) - มี *
+    if (!formData.skills || formData.skills.trim() === '') {
+      errors.skills = 'กรุณากรอกความรู้ ความสามารถ และทักษะพิเศษ';
+    }
+    if (!formData.languages || formData.languages.trim() === '') {
+      errors.languages = 'กรุณากรอกภาษาที่ใช้ได้';
+    }
+    if (!formData.computerSkills || formData.computerSkills.trim() === '') {
+      errors.computerSkills = 'กรุณากรอกทักษะคอมพิวเตอร์';
+    }
+    
+    // ข้อมูลการสมัคร (จำเป็น)
+    if (!formData.appliedPosition) errors.appliedPosition = 'กรุณากรอกตำแหน่งที่สมัคร';
+    if (!formData.expectedSalary) errors.expectedSalary = 'กรุณากรอกเงินเดือนที่คาดหวัง';
+    if (!formData.availableDate) errors.availableDate = 'กรุณากรอกวันที่พร้อมเริ่มงาน';
+    // ตรวจสอบ department เฉพาะเมื่อไม่มี department จาก URL parameter
+    if (!searchParams.get('department') && !formData.department) {
+      errors.department = 'กรุณาเลือกแผนกจากหน้า Dashboard หรือกรอกฝ่าย/กลุ่มงาน';
+    }
+    
+    // เอกสารแนบ (จำเป็น) - มี *
+    const hasIdCard = formData.documents?.idCard || uploadedDocuments.some(doc => doc.documentType === 'idCard');
+    const hasHouseRegistration = formData.documents?.houseRegistration || uploadedDocuments.some(doc => doc.documentType === 'houseRegistration');
+    const hasEducationCertificate = formData.documents?.educationCertificate || uploadedDocuments.some(doc => doc.documentType === 'educationCertificate');
+    const hasMilitaryCertificate = formData.documents?.militaryCertificate || uploadedDocuments.some(doc => doc.documentType === 'militaryCertificate');
+    const hasMedicalCertificate = formData.documents?.medicalCertificate || uploadedDocuments.some(doc => doc.documentType === 'medicalCertificate');
+    const hasDrivingLicense = formData.documents?.drivingLicense || uploadedDocuments.some(doc => doc.documentType === 'drivingLicense');
+    
+    if (!hasIdCard) errors.idCard = 'กรุณาอัปโหลดสำเนาบัตรประชาชน';
+    if (!hasHouseRegistration) errors.houseRegistration = 'กรุณาอัปโหลดสำเนาทะเบียนบ้าน';
+    if (!hasEducationCertificate) errors.educationCertificate = 'กรุณาอัปโหลดสำเนาใบประกาศนียบัตร';
+    if (!hasMilitaryCertificate) errors.militaryCertificate = 'กรุณาอัปโหลดสำเนาใบรับรองทหาร';
+    if (!hasMedicalCertificate) errors.medicalCertificate = 'กรุณาอัปโหลดสำเนาใบรับรองแพทย์';
+    if (!hasDrivingLicense) errors.drivingLicense = 'กรุณาอัปโหลดสำเนาใบขับขี่';
+    
+    return errors;
+  };
+
   const validateForm = () => {
     const errors: { [key: string]: string } = {};
     
@@ -2770,6 +3039,7 @@ export default function ApplicationForm() {
     if (!formData.currentAddressDetail?.province) errors.currentAddressProvince = 'กรุณากรอกจังหวัด';
     if (!formData.currentAddressDetail?.postalCode) errors.currentAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์';
     if (!formData.currentAddressDetail?.mobilePhone) errors.currentAddressMobilePhone = 'กรุณากรอกโทรศัพท์มือถือ';
+    if (!formData.phone) errors.phone = 'กรุณากรอกเบอร์โทรศัพท์';
     if (!formData.email) errors.email = 'กรุณากรอกอีเมล';
     
     // ผู้ติดต่อฉุกเฉิน (จำเป็น) - 1.6 บุคคลที่สามารถติดต่อได้ทันที
@@ -2831,13 +3101,15 @@ export default function ApplicationForm() {
       errors.emergencyWorkplacePhone = 'กรุณากรอกเบอร์โทรศัพท์สถานที่ทำงานให้ถูกต้อง (10 หลัก)';
     }
     
-    // ข้อมูลการสมัคร (จำเป็น)
-    if (!formData.appliedPosition) errors.appliedPosition = 'กรุณากรอกตำแหน่งที่สมัคร';
-    if (!formData.expectedSalary) errors.expectedSalary = 'กรุณากรอกเงินเดือนที่คาดหวัง';
-    if (!formData.availableDate) errors.availableDate = 'กรุณากรอกวันที่พร้อมเริ่มงาน';
-    // ตรวจสอบ department เฉพาะเมื่อไม่มี department จาก URL parameter
-    if (!searchParams.get('department') && !formData.department) {
-      errors.department = 'กรุณาเลือกแผนกจากหน้า Dashboard หรือกรอกฝ่าย/กลุ่มงาน';
+    // ข้อมูลการสมัคร (จำเป็น) - ตรวจสอบในแท็บ position
+    if (activeTab === 'position') {
+      if (!formData.appliedPosition) errors.appliedPosition = 'กรุณากรอกตำแหน่งที่สมัคร';
+      if (!formData.expectedSalary) errors.expectedSalary = 'กรุณากรอกเงินเดือนที่คาดหวัง';
+      if (!formData.availableDate) errors.availableDate = 'กรุณากรอกวันที่พร้อมเริ่มงาน';
+      // ตรวจสอบ department เฉพาะเมื่อไม่มี department จาก URL parameter
+      if (!searchParams.get('department') && !formData.department) {
+        errors.department = 'กรุณาเลือกแผนกจากหน้า Dashboard หรือกรอกฝ่าย/กลุ่มงาน';
+      }
     }
     
     // ข้อมูลคู่สมรส (จำเป็นถ้าเลือกสมรส) - มี *
@@ -2944,15 +3216,17 @@ export default function ApplicationForm() {
       });
     }
     
-    // ข้อมูลความรู้ความสามารถ (จำเป็น) - มี *
-    if (!formData.skills || formData.skills.trim() === '') {
-      errors.skills = 'กรุณากรอกความรู้ ความสามารถ และทักษะพิเศษ';
-    }
-    if (!formData.languages || formData.languages.trim() === '') {
-      errors.languages = 'กรุณากรอกภาษาที่ใช้ได้';
-    }
-    if (!formData.computerSkills || formData.computerSkills.trim() === '') {
-      errors.computerSkills = 'กรุณากรอกทักษะคอมพิวเตอร์';
+    // ข้อมูลความรู้ความสามารถ (จำเป็น) - ตรวจสอบในแท็บ skills
+    if (activeTab === 'skills') {
+      if (!formData.skills || formData.skills.trim() === '') {
+        errors.skills = 'กรุณากรอกความรู้ ความสามารถ และทักษะพิเศษ';
+      }
+      if (!formData.languages || formData.languages.trim() === '') {
+        errors.languages = 'กรุณากรอกภาษาที่ใช้ได้';
+      }
+      if (!formData.computerSkills || formData.computerSkills.trim() === '') {
+        errors.computerSkills = 'กรุณากรอกทักษะคอมพิวเตอร์';
+      }
     }
     
     // เอกสารแนบ (จำเป็น) - มี *
@@ -2990,16 +3264,23 @@ export default function ApplicationForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const validationErrors = validateForm();
+    // ตรวจสอบข้อมูลทั้งหมดในทุกแท็บก่อนส่ง
+    const validationErrors = validateAllTabs();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      console.error('❌ ข้อมูลไม่ครบถ้วน - มีข้อผิดพลาด', Object.keys(validationErrors).length, 'รายการ');
+      console.error('❌ ข้อผิดพลาด:', validationErrors);
+      
+      // แสดงข้อความแจ้งเตือน
+      const errorMessages = Object.values(validationErrors).slice(0, 5); // แสดงแค่ 5 ข้อผิดพลาดแรก
+      const remainingErrors = Object.keys(validationErrors).length - 5;
+      const message = `❌ ข้อมูลไม่ครบถ้วน\n\nมีข้อผิดพลาด ${Object.keys(validationErrors).length} รายการ:\n\n${errorMessages.join('\n')}${remainingErrors > 0 ? `\n\nและอีก ${remainingErrors} รายการ...` : ''}`;
+      console.error(message);
       
       // Scroll ไปยังตำแหน่งที่มี error แรก
       const firstErrorKey = Object.keys(validationErrors)[0];
       scrollToError(firstErrorKey);
       
-      // แสดง notification ว่ามี error
-      // alert(`กรุณาแก้ไขข้อมูลใน ${Object.keys(validationErrors).length} ฟิลด์ที่แสดงข้อผิดพลาด`);
       return;
     }
     
@@ -3012,28 +3293,29 @@ export default function ApplicationForm() {
     try {
       const timestamp = new Date().toISOString();
 
-        // บันทึกข้อมูลไปที่ ResumeDeposit ที่เดียวเท่านั้น
-        console.log('🔍 Mode: RESUME DEPOSIT (ฝากประวัติ) - บันทึกไปที่ตาราง ResumeDeposit เท่านั้น');
-        console.log('🔍 departmentId:', departmentId);
-        console.log('🔍 departmentName:', departmentName);
-        console.log('🔍 resumeId:', resumeId);
+      // บันทึกข้อมูลไปที่ ResumeDeposit ที่เดียวเท่านั้น
+      console.log('🔍 Mode: RESUME DEPOSIT (ฝากประวัติ) - บันทึกไปที่ตาราง ResumeDeposit เท่านั้น');
+      console.log('🔍 departmentId:', departmentId);
+      console.log('🔍 departmentName:', departmentName);
+      console.log('🔍 resumeId:', resumeId);
 
-        // ถ้ามี resumeId ให้อัปเดตข้อมูลเดิม ถ้าไม่มีให้สร้างใหม่
-        if (resumeId) {
-          console.log('🔍 อัปเดตข้อมูล ResumeDeposit ที่มีอยู่แล้ว ID:', resumeId);
-          await updateResumeDeposit(resumeId);
-        } else {
-          console.log('🔍 สร้าง ResumeDeposit ใหม่');
+      // ถ้ามี resumeId ให้อัปเดตข้อมูลเดิม ถ้าไม่มีให้สร้างใหม่
+      if (resumeId) {
+        console.log('🔍 อัปเดตข้อมูล ResumeDeposit ที่มีอยู่แล้ว ID:', resumeId);
+        await updateResumeDeposit(resumeId);
+      } else {
+        console.log('🔍 สร้าง ResumeDeposit ใหม่');
         await saveToResumeDeposit();
-        }
-        
-        // บันทึกข้อมูลสำเร็จ
-        console.log('✅ บันทึกข้อมูลสำเร็จ');
-        alert('บันทึกข้อมูลประวัติการศึกษาและประวัติการทำงานเรียบร้อยแล้ว');
-        setIsSaving(false);
+      }
+      
+      // บันทึกข้อมูลสำเร็จ
+      console.log('✅ บันทึกข้อมูลสำเร็จ');
+      console.log('✅ บันทึกข้อมูลเรียบร้อยแล้ว');
+      
     } catch (error) {
       console.error('❌ Error in handleSubmit:', error);
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+      console.error('❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล:', error);
+    } finally {
       setIsSaving(false);
     }
   };
@@ -3205,16 +3487,14 @@ export default function ApplicationForm() {
 
       const res = await fetch(`/api/resume-deposit/${id}`, {
         method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(resumePayload)
       });
 
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         console.error('❌ ResumeDeposit update failed:', res.status, json);
-        alert(json?.message || 'ไม่สามารถอัปเดตข้อมูลฝากประวัติได้');
-        setIsSaving(false);
-        return;
+        throw new Error(json?.message || 'ไม่สามารถอัปเดตข้อมูลฝากประวัติได้');
       }
 
       const updatedResumeId = json?.data?.id;
@@ -3281,13 +3561,10 @@ export default function ApplicationForm() {
         }
 
       console.log('✅ ResumeDeposit updated successfully');
-      alert('อัปเดตข้อมูลฝากประวัติเรียบร้อยแล้ว');
       
     } catch (error) {
       console.error('❌ Error updating ResumeDeposit:', error);
-      alert('เกิดข้อผิดพลาดในการอัปเดตข้อมูลฝากประวัติ');
-    } finally {
-      setIsSaving(false);
+      throw error; // Re-throw error to be handled by handleSubmit
     }
   };
 
@@ -3464,9 +3741,7 @@ export default function ApplicationForm() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         console.error('❌ ResumeDeposit create failed:', res.status, json);
-        alert(json?.message || 'ไม่สามารถบันทึกข้อมูลฝากประวัติได้');
-        setIsSaving(false);
-        return;
+        throw new Error(json?.message || 'ไม่สามารถบันทึกข้อมูลฝากประวัติได้');
       }
 
       const resumeId = json?.data?.id;
@@ -3533,13 +3808,10 @@ export default function ApplicationForm() {
       }
 
       console.log('✅ ResumeDeposit saved successfully');
-      alert('บันทึกข้อมูลฝากประวัติเรียบร้อยแล้ว');
       
     } catch (error) {
       console.error('❌ Error saving to ResumeDeposit:', error);
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูลฝากประวัติ');
-    } finally {
-      setIsSaving(false);
+      throw error; // Re-throw error to be handled by handleSubmit
     }
   };
 
@@ -3786,7 +4058,7 @@ export default function ApplicationForm() {
 
       <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8">
         {/* ปุ่มทดสอบ validation และกรอกข้อมูลตัวอย่าง */}
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+         {/*<div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-blue-800 mb-2">ทดสอบการตรวจสอบข้อมูล</h3>
@@ -3800,7 +4072,7 @@ export default function ApplicationForm() {
                   const randomData = generateRandomData();
                   setFormData(randomData);
                   setErrors({});
-                  alert('🎲 กรอกข้อมูลตัวอย่างแบบ Random เรียบร้อยแล้ว! ข้อมูลจะแตกต่างกันทุกครั้งที่กดปุ่มนี้');
+                  console.log('🎲 กรอกข้อมูลตัวอย่างแบบ Random เรียบร้อยแล้ว! ข้อมูลจะแตกต่างกันทุกครั้งที่กดปุ่มนี้');
                 }}
                 className="bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100"
               >
@@ -3918,7 +4190,7 @@ export default function ApplicationForm() {
                       }
                     });
                     setErrors({});
-                    alert('🔄 ล้างข้อมูลเรียบร้อยแล้ว! ตอนนี้คุณสามารถกรอกข้อมูลใหม่ได้');
+                    console.log('🔄 ล้างข้อมูลเรียบร้อยแล้ว! ตอนนี้คุณสามารถกรอกข้อมูลใหม่ได้');
                   }
                 }}
                 className="bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100"
@@ -3949,9 +4221,9 @@ export default function ApplicationForm() {
                   console.log('• hasMilitaryCertificate:', formData.documents?.militaryCertificate || uploadedDocuments.some(doc => doc.documentType === 'militaryCertificate'));
                   
                   if (Object.keys(errors).length === 0) {
-                    alert('✅ ข้อมูลครบถ้วนแล้ว! สามารถกดบันทึกได้');
+                    console.log('✅ ข้อมูลครบถ้วนแล้ว! สามารถกดบันทึกได้');
                   } else {
-                    alert(`❌ ข้อมูลไม่ครบถ้วน\n\nมีข้อผิดพลาด ${Object.keys(errors).length} รายการ:\n\n${Object.keys(errors).map(key => `• ${errors[key]}`).join('\n')}`);
+                    console.error(`❌ ข้อมูลไม่ครบถ้วน\n\nมีข้อผิดพลาด ${Object.keys(errors).length} รายการ:\n\n${Object.keys(errors).map(key => `• ${errors[key]}`).join('\n')}`);
                   }
                 }}
               >
@@ -3959,7 +4231,7 @@ export default function ApplicationForm() {
               </Button>
             </div>
           </div>
-        </div>
+        </div>*/}
         
         {/* Hidden file input for profile image upload */}
         <input
@@ -4007,14 +4279,14 @@ export default function ApplicationForm() {
                   
                   console.log('🔍 Updated formData.profileImage:', file);
                   console.log('🔍 Updated savedResume.profileImageUrl:', data.profileImage);
-                  alert('อัปโหลดรูปภาพเรียบร้อยแล้ว (จะบันทึกเมื่อบันทึกข้อมูลส่วนตัว)')
+                  console.log('✅ อัปโหลดรูปภาพเรียบร้อยแล้ว (จะบันทึกเมื่อบันทึกข้อมูลส่วนตัว)')
                 } else {
                   console.error('❌ Profile image upload failed:', data);
-                  alert('อัปโหลดรูปภาพไม่สำเร็จ')
+                  console.error('❌ อัปโหลดรูปภาพไม่สำเร็จ')
                 }
               } catch (err) {
                 console.error(err)
-                alert('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ')
+                console.error('❌ เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ')
               } finally {
                 if (fileInputRef.current) fileInputRef.current.value = ''
               }
@@ -4040,14 +4312,14 @@ export default function ApplicationForm() {
                 
                 console.log('🔍 Updated formData.profileImage:', file);
                 console.log('🔍 Updated savedResume.profileImageUrl:', data.profileImage);
-                alert('อัปโหลดรูปภาพเรียบร้อยแล้ว')
+                console.log('✅ อัปโหลดรูปภาพเรียบร้อยแล้ว')
               } else {
                 console.error('❌ Profile image upload failed:', data);
-                alert('อัปโหลดรูปภาพไม่สำเร็จ')
+                console.error('❌ อัปโหลดรูปภาพไม่สำเร็จ')
               }
             } catch (err) {
               console.error(err)
-              alert('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ')
+              console.error('❌ เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ')
             } finally {
               if (fileInputRef.current) fileInputRef.current.value = ''
             }
@@ -4118,7 +4390,7 @@ export default function ApplicationForm() {
                       onClick={() => {
                         setProfileImage(null)
                         setFormData(prev => ({ ...prev, profileImage: undefined }))
-                        alert('ลบรูปภาพเรียบร้อยแล้ว')
+                        console.log('✅ ลบรูปภาพเรียบร้อยแล้ว')
                       }}
                       className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 shadow-md transition-colors duration-200 flex items-center gap-2 hover:shadow-lg"
                     >
@@ -4526,6 +4798,24 @@ export default function ApplicationForm() {
                          <p className="text-red-500 text-xs mt-1">{getErrorMessage('religion')}</p>
                        )}
                      </div>
+                {/* เบอร์โทรศัพท์ */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">เบอร์โทรศัพท์<span className="text-red-500">*</span></label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    data-error-key="phone"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    placeholder="กรอกเบอร์โทรศัพท์ เช่น 0812345678"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                      hasError('phone') ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+                    }`}
+                  />
+                  {hasError('phone') && (
+                    <p className="text-red-500 text-xs mt-1">{getErrorMessage('phone')}</p>
+                  )}
+                </div>
                 {/* อีเมล */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">อีเมล<span className="text-red-500">*</span></label>
@@ -5663,7 +5953,7 @@ export default function ApplicationForm() {
                           }
                         }));
                         setUploadedDocuments([]);
-                        alert('ลบเอกสารทั้งหมดเรียบร้อยแล้ว');
+                        console.log('✅ ลบเอกสารทั้งหมดเรียบร้อยแล้ว');
                       }
                     }}
                   >
@@ -6161,7 +6451,7 @@ export default function ApplicationForm() {
                               if (formData.documents!.militaryCertificate instanceof File) {
                                 handlePreviewFile(formData.documents!.militaryCertificate, 'ใบรับรองทหาร');
                               } else {
-                                alert('ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
+                                console.log('ℹ️ ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
                               }
                             }}
                         >
@@ -6257,7 +6547,7 @@ export default function ApplicationForm() {
                               if (formData.documents!.medicalCertificate instanceof File) {
                                 handlePreviewFile(formData.documents!.medicalCertificate, 'ใบรับรองแพทย์');
                             } else {
-                                alert('ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
+                                console.log('ℹ️ ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
                               }
                             }}
                         >
@@ -6349,7 +6639,7 @@ export default function ApplicationForm() {
                               if (formData.documents!.drivingLicense instanceof File) {
                                 handlePreviewFile(formData.documents!.drivingLicense, 'ใบขับขี่');
                               } else {
-                                alert('ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
+                                console.log('ℹ️ ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
                               }
                             }}
                         >
@@ -6425,7 +6715,7 @@ export default function ApplicationForm() {
                                 } else if (typeof file === 'object' && 'file' in file && file.file) {
                                   handlePreviewFile(file.file, `เอกสารอื่นๆ ${index + 1}`);
                           } else {
-                                  alert('ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
+                                  console.log('ℹ️ ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
                                 }
                               }}
                             >
