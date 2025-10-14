@@ -157,7 +157,7 @@ export default function Dashboard() {
 
   // ตรวจสอบสถานะการเข้าสู่ระบบ
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if ( status !== 'loading' && status === 'unauthenticated') {
       router.push('/auth/signin')
     }
   }, [status, router])
@@ -215,7 +215,7 @@ export default function Dashboard() {
         params.set('admin', 'true');
       }
       // const url = `/api/resume-deposit?${params.toString()}`;
-      const url = new URL(`/api/resume-deposit/${session?.user?.id}`);
+      const url = new URL(`/api/resume-deposit/${session!.user!.id}`);
       console.log('🔎 Fetching resume deposits with URL:', url);
       const response = await fetch(url);
       if (response.ok) {
