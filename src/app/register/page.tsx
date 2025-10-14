@@ -272,6 +272,7 @@ export default function ApplicationForm() {
           }
           if (data?.profileImageUrl) {
             const imagePath = `/api/image?file=${data.profileImageUrl}`;
+            console.log('🔍 loadByExplicitIdentity - Setting profile image after refresh:', imagePath);
             setProfileImage(imagePath);
           }
           console.log('✅ โหลด explicit resume เข้าฟอร์มสำเร็จ');
@@ -627,6 +628,8 @@ export default function ApplicationForm() {
       phone: resume.phone ?? prev.phone,
       email: resume.email ?? prev.email,
       emergencyContact: resume.emergencyContact ?? prev.emergencyContact,
+      emergencyContactFirstName: resume.emergencyContactFirstName ?? prev.emergencyContactFirstName,
+      emergencyContactLastName: resume.emergencyContactLastName ?? prev.emergencyContactLastName,
       emergencyPhone: resume.emergencyPhone ?? prev.emergencyPhone,
       emergencyRelationship: resume.emergencyRelationship ?? prev.emergencyRelationship,
       emergencyWorkplace: {
@@ -704,6 +707,7 @@ export default function ApplicationForm() {
     console.log('🔍 applyResumeToFormInputs - ProfileImageUrl:', resume.profileImageUrl);
     console.log('🔍 applyResumeToFormInputs - Resume ID:', resume.id);
     console.log('🔍 applyResumeToFormInputs - Current profileImage state:', profileImage);
+    console.log('🔍 applyResumeToFormInputs - Will try to load profile image');
     
     if (resume.profileImageUrl) {
       console.log('✅ applyResumeToFormInputs - Using profileImageUrl:', resume.profileImageUrl);
@@ -720,41 +724,111 @@ export default function ApplicationForm() {
       
       console.log('✅ applyResumeToFormInputs - Profile image state updated');
     } else if (resume.id) {
-      // Try to find image by ID - ลองหา .jpg ก่อน เพราะมีมากกว่า .png
+      // Try to find image by ID - ลองหาไฟล์หลายรูปแบบ
       const checkImage = async () => {
         try {
-          const jpgPath = `/api/image?file=profile_${resume.id}.jpg`;
-          console.log('🔍 applyResumeToFormInputs - Trying JPG path:', jpgPath);
-          const jpgResponse = await fetch(jpgPath);
-          if (jpgResponse.ok) {
-            console.log('✅ applyResumeToFormInputs - Found JPG image:', jpgPath);
-            setProfileImage(jpgPath);
+          // ลองหาไฟล์ที่มีอยู่จริงในโฟลเดอร์
+          const possibleNames = [
+            `profile_${resume.id}.jpg`,
+            `profile_${resume.id}.jpeg`, 
+            `profile_${resume.id}.png`,
+            `profile_temp_${resume.id}.jpg`,
+            `profile_temp_${resume.id}.jpeg`,
+            `profile_temp_${resume.id}.png`
+          ];
+          
+          // เพิ่มการหาไฟล์ด้วย timestamp (สำหรับไฟล์ที่บันทึกด้วย timestamp)
+          if (resume.id && resume.id.length > 10) {
+            // ลองหาไฟล์ที่มี timestamp ใกล้เคียง
+            const timestamp = Date.now();
+            const possibleTimestamps = [
+              timestamp,
+              timestamp - 1000, // 1 วินาทีก่อน
+              timestamp - 5000, // 5 วินาทีก่อน
+              timestamp - 10000, // 10 วินาทีก่อน
+              timestamp - 30000, // 30 วินาทีก่อน
+              timestamp - 60000, // 1 นาทีก่อน
+            ];
+            
+            for (const ts of possibleTimestamps) {
+              possibleNames.push(`profile_temp_${ts}.jpg`);
+              possibleNames.push(`profile_temp_${ts}.jpeg`);
+              possibleNames.push(`profile_temp_${ts}.png`);
+            }
+            
+            // ลองหาไฟล์ที่มี timestamp ใกล้เคียงกับ resume.id
+            if (resume.id.match(/^\d+$/)) {
+              const resumeTimestamp = parseInt(resume.id);
+              const possibleResumeTimestamps = [
+                resumeTimestamp,
+                resumeTimestamp - 1000,
+                resumeTimestamp - 5000,
+                resumeTimestamp - 10000,
+                resumeTimestamp - 30000,
+                resumeTimestamp - 60000,
+              ];
+              
+              for (const ts of possibleResumeTimestamps) {
+                possibleNames.push(`profile_temp_${ts}.jpg`);
+                possibleNames.push(`profile_temp_${ts}.jpeg`);
+                possibleNames.push(`profile_temp_${ts}.png`);
+              }
+            }
+            
+            // ลองหาไฟล์ที่มี timestamp ใกล้เคียงกับ timestamp ปัจจุบัน
+            const currentTimestamp = Date.now();
+            const possibleCurrentTimestamps = [
+              currentTimestamp,
+              currentTimestamp - 1000,
+              currentTimestamp - 5000,
+              currentTimestamp - 10000,
+              currentTimestamp - 30000,
+              currentTimestamp - 60000,
+            ];
+            
+            for (const ts of possibleCurrentTimestamps) {
+              possibleNames.push(`profile_temp_${ts}.jpg`);
+              possibleNames.push(`profile_temp_${ts}.jpeg`);
+              possibleNames.push(`profile_temp_${ts}.png`);
+            }
+          }
+          
+          let foundImage = false;
+          for (const fileName of possibleNames) {
+            const imagePath = `/api/image?file=${fileName}`;
+            console.log('🔍 applyResumeToFormInputs - Trying path:', imagePath);
+            const response = await fetch(imagePath);
+            if (response.ok) {
+              console.log('✅ applyResumeToFormInputs - Found image:', imagePath);
+              setProfileImage(imagePath);
             // อัปเดต formData.profileImage ด้วย
             setFormData(prev => ({
               ...prev,
-              profileImage: new File([], `profile_${resume.id}.jpg`, { type: 'image/jpeg' })
-            }));
-          } else {
-            const pngPath = `/api/image?file=profile_${resume.id}.png`;
-            console.log('🔍 applyResumeToFormInputs - Trying PNG path:', pngPath);
-            const pngResponse = await fetch(pngPath);
-            if (pngResponse.ok) {
-              console.log('✅ applyResumeToFormInputs - Found PNG image:', pngPath);
-              setProfileImage(pngPath);
-              // อัปเดต formData.profileImage ด้วย
-              setFormData(prev => ({
-                ...prev,
-                profileImage: new File([], `profile_${resume.id}.png`, { type: 'image/png' })
+                profileImage: new File([], fileName, { type: fileName.endsWith('.png') ? 'image/png' : 'image/jpeg' })
               }));
-            } else {
-              console.log('❌ applyResumeToFormInputs - No image found for ID:', resume.id);
+              foundImage = true;
+              break;
             }
+          }
+          
+          if (!foundImage) {
+            console.log('❌ applyResumeToFormInputs - No image found for ID:', resume.id);
+            console.log('🔍 Tried these names:', possibleNames);
+            console.log('ℹ️ No profile image found - user can upload a new one');
           }
         } catch (error) {
           console.log('❌ applyResumeToFormInputs - Error finding image:', error);
         }
       };
       checkImage();
+    }
+    
+    // เพิ่มการโหลดรูปใหม่หลังจากบันทึกสำเร็จ
+    if (resume.profileImageUrl) {
+      const imagePath = `/api/image?file=${resume.profileImageUrl}`;
+      console.log('🔍 applyResumeToFormInputs - Setting profile image from profileImageUrl:', imagePath);
+      console.log('🔍 applyResumeToFormInputs - Setting profile image after refresh:', imagePath);
+      setProfileImage(imagePath);
     }
   };
 
@@ -794,7 +868,9 @@ export default function ApplicationForm() {
       });
       
       if (tabErrors.length > 0) {
-        console.error(`❌ ข้อมูลในแท็บ ${activeTab} ไม่ครบถ้วน\n\nมีข้อผิดพลาด ${tabErrors.length} รายการ:\n\n${tabErrors.map(key => `• ${validationErrors[key]}`).join('\n')}`);
+        // แสดงข้อความแจ้งเตือนให้ผู้ใช้ทราบ
+        const errorMessages = tabErrors.map(key => validationErrors[key]).join(', ');
+        alert(`ข้อมูลในแท็บ ${activeTab} ไม่ครบถ้วน: ${errorMessages}`);
         return;
       }
     }
@@ -850,6 +926,8 @@ export default function ApplicationForm() {
           phone: formData.phone,
           email: formData.email,
           emergencyContact: formData.emergencyContact || `${formData.emergencyContactFirstName || ''} ${formData.emergencyContactLastName || ''}`.trim(),
+          emergencyContactFirstName: formData.emergencyContactFirstName || null,
+          emergencyContactLastName: formData.emergencyContactLastName || null,
           emergencyPhone: formData.emergencyPhone || null,
           emergencyRelationship: formData.emergencyRelationship || null,
           emergency_address_house_number: formData.emergencyAddress?.houseNumber || null,
@@ -989,6 +1067,13 @@ export default function ApplicationForm() {
         } else {
           setSavedResume(json.data || json);
           applyResumeToFormInputs(json.data || json);
+          
+          // โหลดรูปโปรไฟล์ใหม่หลังจากบันทึกสำเร็จ
+          if (json.data?.profileImageUrl) {
+            const imagePath = `/api/image?file=${json.data.profileImageUrl}`;
+            console.log('🔍 Reloading profile image after save:', imagePath);
+            setProfileImage(imagePath);
+          }
         }
             } else {
         // POST เริ่มเรคคอร์ดใหม่ (ส่งเฉพาะ personal ที่จำเป็น)
@@ -1024,6 +1109,13 @@ export default function ApplicationForm() {
         }
         setSavedResume(json.data || json);
         applyResumeToFormInputs(json.data || json);
+        
+        // โหลดรูปโปรไฟล์ใหม่หลังจากบันทึกสำเร็จ
+        if (json.data?.profileImageUrl) {
+          const imagePath = `/api/image?file=${json.data.profileImageUrl}`;
+          console.log('🔍 Reloading profile image after save (PATCH):', imagePath);
+          setProfileImage(imagePath);
+        }
       }
 
       // ไปแท็บถัดไปอัตโนมัติหลังบันทึกสำเร็จ หรือ redirect ไปหน้า dashboard
@@ -1404,7 +1496,7 @@ export default function ApplicationForm() {
             }
           });
         }
-  }, []);
+  }, [activeTab]); // เพิ่ม activeTab ใน dependency array
   // ตั้งค่า flatpickr สำหรับวันที่เริ่มงานและสิ้นสุดงาน
   useEffect(() => {
     formData.workExperience.forEach((_, index) => {
@@ -1518,8 +1610,8 @@ export default function ApplicationForm() {
             phone: user.phone || '',
             email: user.email || '',
             emergencyContact: user.emergencyContact || '',
-            emergencyContactFirstName: user.emergencyContact || '',
-            emergencyContactLastName: '',
+            emergencyContactFirstName: user.emergencyContactFirstName || '',
+            emergencyContactLastName: user.emergencyContactLastName || '',
             emergencyPhone: user.emergencyPhone || '',
             emergencyRelationship: user.emergencyRelationship || '',
               emergencyAddress: {
@@ -1620,12 +1712,14 @@ export default function ApplicationForm() {
           console.log('🔍 fetchProfileData - Resume data:', user);
           console.log('🔍 fetchProfileData - Resume profileImageUrl:', user.profileImageUrl);
           console.log('🔍 fetchProfileData - Resume ID:', user.id);
+          console.log('🔍 fetchProfileData - Current profileImage state:', profileImage);
           
           if (user.profileImageUrl) {
             console.log('✅ fetchProfileData - Using profileImageUrl:', user.profileImageUrl);
             // ใช้ path แบบเดียวกับ profile page
             const imagePath = `/api/image?file=${user.profileImageUrl}`;
             console.log('✅ Using API path for profile image:', imagePath);
+            console.log('🔍 fetchProfileData - Setting profile image after refresh:', imagePath);
             setProfileImage(imagePath);
             
             // อัปเดต formData.profileImage ด้วย
@@ -1735,6 +1829,7 @@ export default function ApplicationForm() {
           if (resumeData.profileImageUrl) {
             console.log('🔍 โหลดรูปภาพโปรไฟล์:', resumeData.profileImageUrl);
             const imagePath = `/api/image?file=${resumeData.profileImageUrl}`;
+            console.log('🔍 loadResumeByDepartment - Setting profile image after refresh:', imagePath);
             setProfileImage(imagePath);
             console.log('✅ โหลดรูปภาพโปรไฟล์สำเร็จ');
           }
@@ -2437,6 +2532,13 @@ export default function ApplicationForm() {
     const numberOnly = value.replace(/[^0-9]/g, '');
     // จำกัดความยาวไม่เกิน 4 หลัก
     const limitedValue = numberOnly.slice(0, 4);
+    
+    // ถ้าปีที่กรอกน้อยกว่า 2500 (ปี พ.ศ.) ให้บวก 543
+    if (limitedValue && parseInt(limitedValue) < 2500 && parseInt(limitedValue) > 1900) {
+      const thaiYear = parseInt(limitedValue) + 543;
+      return thaiYear.toString();
+    }
+    
     return limitedValue;
   };
 
@@ -2970,12 +3072,8 @@ export default function ApplicationForm() {
     
     // ข้อมูลการสมัคร (จำเป็น)
     if (!formData.appliedPosition) errors.appliedPosition = 'กรุณากรอกตำแหน่งที่สมัคร';
-    if (!formData.expectedSalary) errors.expectedSalary = 'กรุณากรอกเงินเดือนที่คาดหวัง';
     if (!formData.availableDate) errors.availableDate = 'กรุณากรอกวันที่พร้อมเริ่มงาน';
-    // ตรวจสอบ department เฉพาะเมื่อไม่มี department จาก URL parameter
-    if (!searchParams.get('department') && !formData.department) {
-      errors.department = 'กรุณาเลือกแผนกจากหน้า Dashboard หรือกรอกฝ่าย/กลุ่มงาน';
-    }
+    // expectedSalary และ department ไม่จำเป็น - ลบ validation ออก
     
     // เอกสารแนบ (จำเป็น) - มี *
     const hasIdCard = formData.documents?.idCard || uploadedDocuments.some(doc => doc.documentType === 'idCard');
@@ -3104,12 +3202,8 @@ export default function ApplicationForm() {
     // ข้อมูลการสมัคร (จำเป็น) - ตรวจสอบในแท็บ position
     if (activeTab === 'position') {
       if (!formData.appliedPosition) errors.appliedPosition = 'กรุณากรอกตำแหน่งที่สมัคร';
-      if (!formData.expectedSalary) errors.expectedSalary = 'กรุณากรอกเงินเดือนที่คาดหวัง';
       if (!formData.availableDate) errors.availableDate = 'กรุณากรอกวันที่พร้อมเริ่มงาน';
-      // ตรวจสอบ department เฉพาะเมื่อไม่มี department จาก URL parameter
-      if (!searchParams.get('department') && !formData.department) {
-        errors.department = 'กรุณาเลือกแผนกจากหน้า Dashboard หรือกรอกฝ่าย/กลุ่มงาน';
-      }
+      // expectedSalary และ department ไม่จำเป็น - ลบ validation ออก
     }
     
     // ข้อมูลคู่สมรส (จำเป็นถ้าเลือกสมรส) - มี *
@@ -4055,7 +4149,7 @@ export default function ApplicationForm() {
           </div>
         </div>
       </div> */}
-
+      
       <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8">
         {/* ปุ่มทดสอบ validation และกรอกข้อมูลตัวอย่าง */}
          {/*<div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -4349,6 +4443,22 @@ export default function ApplicationForm() {
                 console.log('🔍 profileData state:', profileData);
                 console.log('🔍 savedResume state:', savedResume);
                 console.log('🔍 formData.profileImage state:', formData.profileImage);
+                console.log('🔍 savedResume.profileImageUrl:', savedResume?.profileImageUrl);
+                console.log('🔍 profileData.profileImageUrl:', profileData?.profileImageUrl);
+                
+                // ตรวจสอบว่าควรแสดงรูปภาพหรือไม่
+                if (!profileImage && savedResume?.profileImageUrl) {
+                  console.log('🔍 ควรแสดงรูปภาพจาก savedResume.profileImageUrl:', savedResume.profileImageUrl);
+                  const imagePath = `/api/image?file=${savedResume.profileImageUrl}`;
+                  console.log('🔍 กำลังตั้งค่า profileImage state:', imagePath);
+                  setProfileImage(imagePath);
+                } else if (!profileImage && profileData?.profileImageUrl) {
+                  console.log('🔍 ควรแสดงรูปภาพจาก profileData.profileImageUrl:', profileData.profileImageUrl);
+                  const imagePath = `/api/image?file=${profileData.profileImageUrl}`;
+                  console.log('🔍 กำลังตั้งค่า profileImage state:', imagePath);
+                  setProfileImage(imagePath);
+                }
+                
                 return null;
               })()}
               {profileImage ? (

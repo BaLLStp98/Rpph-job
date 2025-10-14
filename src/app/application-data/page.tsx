@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   Card,
   CardBody,
@@ -2579,6 +2580,7 @@ const ApplicationFormView = ({
 };
 
 export default function ApplicationData() {
+  const { data: session } = useSession();
   const [applications, setApplications] = useState<ApplicationData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2637,9 +2639,9 @@ export default function ApplicationData() {
     try {
       setLoading(true);
       
-      // 🔒 Security: ดึงข้อมูล userId จาก session หรือ localStorage
-      const userId = localStorage.getItem('userId') || sessionStorage.getItem('userId');
-      const userEmail = localStorage.getItem('userEmail') || sessionStorage.getItem('userEmail');
+      // 🔒 Security: ดึงข้อมูล userId จาก session
+      const userId = (session?.user as any)?.id || '';
+      const userEmail = (session?.user as any)?.email || '';
       
       // สร้าง URL พร้อม parameters สำหรับความปลอดภัย
       const url = new URL('/api/resume-deposit', window.location.origin);
@@ -2652,6 +2654,11 @@ export default function ApplicationData() {
         setApplications([]);
         setLoading(false);
         return;
+      }
+      
+      // เพิ่ม department parameter ถ้ามี
+      if (departmentName) {
+        url.searchParams.set('department', departmentName);
       }
       
       const response = await fetch(url.toString());
@@ -3395,9 +3402,9 @@ export default function ApplicationData() {
     try {
       console.log('🔍 Checking for new applications...');
       
-      // 🔒 Security: ดึงข้อมูล userId จาก session หรือ localStorage
-      const userId = localStorage.getItem('userId') || sessionStorage.getItem('userId');
-      const userEmail = localStorage.getItem('userEmail') || sessionStorage.getItem('userEmail');
+      // 🔒 Security: ดึงข้อมูล userId จาก session
+      const userId = (session?.user as any)?.id || '';
+      const userEmail = (session?.user as any)?.email || '';
       
       if (!userId && !userEmail) {
         console.warn('⚠️ ไม่พบ userId หรือ userEmail - ข้ามการตรวจสอบใบสมัครงานใหม่');

@@ -236,24 +236,28 @@ model ApplicationDocument {
 }
 
 model HospitalDepartment {
-  id          Int      @id @default(autoincrement())
-  name        String   @db.VarChar(200)
-  description String?  @db.Text
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id            Int          @id @default(autoincrement())
+  name          String       @db.VarChar(200)
+  description   String?      @db.Text
+  isActive      Boolean      @default(true) @map("is_active")
+  missionGroupId String?     @map("mission_group_id") @db.VarChar(50)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  
+  missionGroup  MissionGroup? @relation(fields: [missionGroupId], references: [id])
 
   @@map("hospital_departments")
 }
 
 model MissionGroup {
-  id          String       @id @default(cuid())
-  name        String       @db.VarChar(200)
-  description String?      @db.Text
-  status      String       @default("ACTIVE") @db.VarChar(20)
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  departments Department[]
+  id                String               @id @default(cuid())
+  name              String               @db.VarChar(200)
+  description       String?              @db.Text
+  status            String               @default("ACTIVE") @db.VarChar(20)
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  departments       Department[]
+  hospitalDepartments HospitalDepartment[]
 
   @@map("mission_groups")
 }

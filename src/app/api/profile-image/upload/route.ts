@@ -60,22 +60,39 @@ export async function POST(request: NextRequest) {
 
 		// อัปเดตฟิลด์ profileImage ในตาราง ApplicationForm หรือ ResumeDeposit
 		try {
-			// ลองอัปเดต ApplicationForm ก่อน
-			await prisma.applicationForm.update({
-				where: { id: applicationId },
-				data: { profileImage: fileName }
+			// ตรวจสอบว่า record มีอยู่จริงหรือไม่ก่อนอัปเดต
+			const applicationForm = await prisma.applicationForm.findUnique({
+				where: { id: applicationId }
 			})
-		} catch (e) {
-			// ถ้าไม่สำเร็จ ลองอัปเดต ResumeDeposit
-			try {
-				await prisma.resumeDeposit.update({
+			
+			if (applicationForm) {
+				// อัปเดต ApplicationForm
+				await prisma.applicationForm.update({
 					where: { id: applicationId },
-					data: { profileImageUrl: fileName }
+					data: { profileImage: fileName }
 				})
-			} catch (e2) {
-				console.error('Failed to update profileImage in both ApplicationForm and ResumeDeposit:', e2)
-				// ไม่ fail การอัปโหลดรูป แม้จะอัปเดต DB ไม่สำเร็จ
+				console.log('✅ Updated profileImage in ApplicationForm:', fileName)
+			} else {
+				// ตรวจสอบ ResumeDeposit
+				const resumeDeposit = await prisma.resumeDeposit.findUnique({
+					where: { id: applicationId }
+				})
+				
+				if (resumeDeposit) {
+					// อัปเดต ResumeDeposit
+					await prisma.resumeDeposit.update({
+						where: { id: applicationId },
+						data: { profileImageUrl: fileName }
+					})
+					console.log('✅ Updated profileImageUrl in ResumeDeposit:', fileName)
+				} else {
+					console.log('⚠️ No record found for applicationId:', applicationId)
+					console.log('⚠️ Profile image uploaded but not saved to database')
+				}
 			}
+		} catch (e) {
+			console.error('Failed to update profileImage:', e)
+			// ไม่ fail การอัปโหลดรูป แม้จะอัปเดต DB ไม่สำเร็จ
 		}
 
 		return NextResponse.json({ success: true, profileImage: fileName })

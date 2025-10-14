@@ -465,6 +465,12 @@ export default function Departments() {
   const [editMissionGroupId, setEditMissionGroupId] = useState<string>(''); // store group name as key
   const [departmentsByGroup, setDepartmentsByGroup] = useState<Record<string, Array<{ id: string; name: string; code: string }>>>({});
   const [loadingMissionGroups, setLoadingMissionGroups] = useState(false);
+  
+  // Hospital departments (ดึงข้อมูลจากฐานข้อมูล)
+  const [hospitalDepartments, setHospitalDepartments] = useState<Array<{ id: number; name: string; missionGroupId: string | null }>>([]);
+  const [selectedMissionGroupId, setSelectedMissionGroupId] = useState<string>('');
+  const [selectedHospitalDepartmentId, setSelectedHospitalDepartmentId] = useState<string>('');
+  const [loadingHospitalDepartments, setLoadingHospitalDepartments] = useState(false);
 
   // ดึงข้อมูลกลุ่มงานจากฐานข้อมูล
   const fetchMissionGroups = async () => {
@@ -495,6 +501,36 @@ export default function Departments() {
     }
   };
 
+  // ดึงข้อมูลฝ่ายจากฐานข้อมูล
+  const fetchHospitalDepartments = async (missionGroupId?: string) => {
+    try {
+      console.log('🔍 fetchHospitalDepartments called with missionGroupId:', missionGroupId);
+      setLoadingHospitalDepartments(true);
+      const url = missionGroupId 
+        ? `/api/hospital-departments?missionGroupId=${missionGroupId}`
+        : '/api/hospital-departments';
+      console.log('🔍 Fetching URL:', url);
+      
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data) {
+          setHospitalDepartments(data.data);
+          console.log('✅ Hospital Departments loaded:', data.data.length, 'items');
+          console.log('🔍 First item:', data.data[0]);
+        } else {
+          console.error('❌ Failed to load hospital departments:', data);
+        }
+      } else {
+        console.error('❌ API Error loading hospital departments:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching hospital departments:', error);
+    } finally {
+      setLoadingHospitalDepartments(false);
+    }
+  };
+
   // Fallback: สร้างกลุ่มงานจาก departments (เดิม)
   const rebuildMissionGroupsFromDepartments = () => {
     const groupMap: Record<string, Array<{ id: string; name: string; code: string }>> = {};
@@ -513,7 +549,33 @@ export default function Departments() {
   // ดึงข้อมูลกลุ่มงานเมื่อ component mount
   useEffect(() => {
     fetchMissionGroups();
+    fetchHospitalDepartments();
   }, []);
+
+  // ดึงข้อมูลฝ่ายเมื่อเลือกกลุ่มงาน
+  useEffect(() => {
+    if (selectedMissionGroupId) {
+      fetchHospitalDepartments(selectedMissionGroupId);
+    } else {
+      fetchHospitalDepartments();
+    }
+  }, [selectedMissionGroupId]);
+
+  // เมื่อเลือกฝ่าย ให้ตั้งค่ากลุ่มงานที่เกี่ยวข้อง
+  useEffect(() => {
+    console.log('🔍 useEffect triggered - selectedHospitalDepartmentId:', selectedHospitalDepartmentId);
+    console.log('🔍 hospitalDepartments.length:', hospitalDepartments.length);
+    
+    if (selectedHospitalDepartmentId && hospitalDepartments.length > 0) {
+      const selectedDept = hospitalDepartments.find(d => d.id.toString() === selectedHospitalDepartmentId);
+      console.log('🔍 Found selected department:', selectedDept);
+      
+      if (selectedDept && selectedDept.missionGroupId && selectedDept.missionGroupId !== selectedMissionGroupId) {
+        console.log('🔍 Setting mission group to:', selectedDept.missionGroupId);
+        setSelectedMissionGroupId(selectedDept.missionGroupId);
+      }
+    }
+  }, [selectedHospitalDepartmentId, hospitalDepartments, selectedMissionGroupId]);
 
   // Rebuild mission groups and mapping from loaded departments (fallback)
   useEffect(() => {
@@ -940,7 +1002,10 @@ export default function Departments() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ ...newDepartment }),
+          body: JSON.stringify({ 
+            ...newDepartment,
+            missionGroupId: newMissionGroupId
+          }),
         });
         
         if (response.ok) {
@@ -1023,20 +1088,32 @@ export default function Departments() {
     return sortedDepartments.slice(start, end);
   }, [page, departments, rowsPerPage]);
 
-  // ตัวกรองกลุ่มงาน/ฝ่าย เหนือ table
-  const [filterMissionGroupId, setFilterMissionGroupId] = useState<string>('');
-  const [filterDepartmentName, setFilterDepartmentName] = useState<string>('');
+  // ตัวกรองกลุ่มงาน/ฝ่าย เหนือ table (ใช้ตัวแปรใหม่แล้ว)
 
   const filteredDepartments = useMemo(() => {
+    console.log('🔍 filteredDepartments useMemo triggered');
+    console.log('🔍 selectedMissionGroupId:', selectedMissionGroupId);
+    console.log('🔍 selectedHospitalDepartmentId:', selectedHospitalDepartmentId);
+    console.log('🔍 departments.length:', departments.length);
+    console.log('🔍 hospitalDepartments.length:', hospitalDepartments.length);
+    
     let data = departments;
-    if (filterMissionGroupId) {
-      data = data.filter(d => (d as any).missionGroupId === filterMissionGroupId);
+    if (selectedMissionGroupId) {
+      data = data.filter(d => (d as any).missionGroupId === selectedMissionGroupId);
+      console.log('🔍 After mission group filter:', data.length);
     }
-    if (filterDepartmentName) {
-      data = data.filter(d => d.name === filterDepartmentName);
+    if (selectedHospitalDepartmentId) {
+      // กรองตาม hospital department ที่เลือก
+      const selectedDept = hospitalDepartments.find(d => d.id.toString() === selectedHospitalDepartmentId);
+      console.log('🔍 Selected department for filtering:', selectedDept);
+      if (selectedDept) {
+        data = data.filter(d => d.name === selectedDept.name);
+        console.log('🔍 After hospital department filter:', data.length);
+      }
     }
+    console.log('🔍 Final filtered data length:', data.length);
     return data;
-  }, [departments, filterMissionGroupId, filterDepartmentName]);
+  }, [departments, selectedMissionGroupId, selectedHospitalDepartmentId, hospitalDepartments]);
 
   const filteredPages = Math.ceil(filteredDepartments.length / rowsPerPage);
   const filteredItems = useMemo(() => {
@@ -1358,7 +1435,21 @@ export default function Departments() {
             <div className="flex items-center justify-between">
               <div>
                   <h2 className="text-xl font-semibold text-gray-800">รายการฝ่ายทั้งหมด</h2>
-                  <p className="text-sm text-gray-600">แสดงข้อมูลฝ่ายทั้งหมดในระบบ</p>
+                  <p className="text-sm text-gray-600">
+                    {selectedMissionGroupId && selectedHospitalDepartmentId 
+                      ? `แสดงฝ่ายที่เลือกจากกลุ่มงานที่เลือก` 
+                      : selectedMissionGroupId 
+                        ? `แสดงฝ่ายจากกลุ่มงานที่เลือก` 
+                        : selectedHospitalDepartmentId
+                          ? `แสดงฝ่ายที่เลือก`
+                          : `แสดงข้อมูลฝ่ายทั้งหมดในระบบ`
+                    }
+                    {(selectedMissionGroupId || selectedHospitalDepartmentId) && (
+                      <span className="ml-2 text-blue-600 font-medium">
+                        ({filteredDepartments.length} รายการ)
+                      </span>
+                    )}
+                  </p>
                 </div>
               </div>
               {/* Filters */}
@@ -1366,19 +1457,10 @@ export default function Departments() {
                 <div className="space-y-1">
                   <label className="text-sm text-gray-700">กลุ่มงาน</label>
                   <select
-                    value={filterMissionGroupId}
-                    onChange={async (e) => {
-                      const val = e.target.value;
-                      setFilterMissionGroupId(val);
-                      setFilterDepartmentName('');
-                      if (val && !departmentsByGroup[val]) {
-                        try {
-                          const departments = await fetchDepartmentsByGroup(val);
-                          setDepartmentsByGroup(prev => ({ ...prev, [val]: departments }));
-                        } catch (err) {
-                          console.error('❌ Error fetching departments by group:', err);
-                        }
-                      }
+                    value={selectedMissionGroupId}
+                    onChange={(e) => {
+                      setSelectedMissionGroupId(e.target.value);
+                      setSelectedHospitalDepartmentId(''); // รีเซ็ตฝ่ายเมื่อเปลี่ยนกลุ่มงาน
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                     disabled={loadingMissionGroups}
@@ -1396,19 +1478,31 @@ export default function Departments() {
                 <div className="space-y-1">
                   <label className="text-sm text-gray-700">ฝ่าย</label>
                   <select
-                    value={filterDepartmentName}
-                    onChange={(e) => setFilterDepartmentName(e.target.value)}
+                    value={selectedHospitalDepartmentId}
+                    onChange={(e) => {
+                      console.log('🔍 Selecting hospital department:', e.target.value);
+                      setSelectedHospitalDepartmentId(e.target.value);
+                      // ไม่ต้องรีเซ็ตกลุ่มงาน เพราะ useEffect จะจัดการให้
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    disabled={loadingHospitalDepartments}
                   >
                     <option value="">ทั้งหมด</option>
-                    {departments.map(dep => (
-                      <option key={dep.id} value={dep.name}>{dep.name}</option>
-                    ))}
+                    {loadingHospitalDepartments ? (
+                      <option value="" disabled>กำลังโหลด...</option>
+                    ) : (
+                      hospitalDepartments.map(dept => (
+                        <option key={dept.id} value={dept.id}>{dept.name}</option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <div className="flex items-end">
                   <button
-                    onClick={() => { setFilterMissionGroupId(''); setFilterDepartmentName(''); }}
+                    onClick={() => { 
+                      setSelectedMissionGroupId(''); 
+                      setSelectedHospitalDepartmentId(''); 
+                    }}
                     className="px-4 py-2 border rounded-md text-sm text-gray-700 hover:bg-gray-50"
                   >
                     รีเซ็ตตัวกรอง
@@ -1830,12 +1924,11 @@ export default function Departments() {
                             setEditMissionGroupId(val);
                             // reset department name when group changes
                             setEditingDepartment(prev => prev ? { ...prev, name: '' } : prev);
-                            if (val && !departmentsByGroup[val]) {
+                            if (val) {
                               try {
-                                const departments = await fetchDepartmentsByGroup(val);
-                                setDepartmentsByGroup(prev => ({ ...prev, [val]: departments }));
+                                await fetchHospitalDepartments(val);
                               } catch (err) {
-                                console.error('❌ Error fetching departments by group:', err);
+                                console.error('❌ Error fetching hospital departments by group:', err);
                               }
                             }
                           }}
@@ -1859,13 +1952,19 @@ export default function Departments() {
                           value={editingDepartment.name}
                           onChange={(e) => setEditingDepartment(prev => prev ? { ...prev, name: e.target.value } : null)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                          disabled={!editMissionGroupId}
+                          disabled={!editMissionGroupId || loadingHospitalDepartments}
                         >
                           <option value="">เลือกฝ่าย</option>
                           {editMissionGroupId ? (
-                            (departmentsByGroup[editMissionGroupId] || []).map(dep => (
-                              <option key={dep.id} value={dep.name}>{dep.name}</option>
-                            ))
+                            loadingHospitalDepartments ? (
+                              <option value="" disabled>กำลังโหลด...</option>
+                            ) : (
+                              hospitalDepartments
+                                .filter(dept => dept.missionGroupId === editMissionGroupId)
+                                .map(dept => (
+                                  <option key={dept.id} value={dept.name}>{dept.name}</option>
+                                ))
+                            )
                           ) : (
                             <option value="" disabled>เลือกกลุ่มงานก่อน</option>
                           )}
@@ -2390,12 +2489,11 @@ export default function Departments() {
                             setNewMissionGroupId(val);
                             // reset department name when group changes
                             setNewDepartment(prev => ({ ...prev, name: '' }));
-                            if (val && !departmentsByGroup[val]) {
+                            if (val) {
                               try {
-                                const departments = await fetchDepartmentsByGroup(val);
-                                setDepartmentsByGroup(prev => ({ ...prev, [val]: departments }));
+                                await fetchHospitalDepartments(val);
                               } catch (err) {
-                                console.error('❌ Error fetching departments by group:', err);
+                                console.error('❌ Error fetching hospital departments by group:', err);
                               }
                             }
                           }}
@@ -2420,22 +2518,28 @@ export default function Departments() {
                           value={newDepartment.name || ''}
                           onChange={(e) => {
                             const value = e.target.value;
-                            const list = departmentsByGroup[newMissionGroupId] || [];
+                            const list = hospitalDepartments.filter(dept => dept.missionGroupId === newMissionGroupId);
                             const selected = list.find(d => d.name === value);
                             setNewDepartment(prev => ({
                               ...prev,
                               name: value,
-                              code: selected?.code || prev.code || ''
+                              code: selected?.name || prev.code || ''
                             }));
                           }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                          disabled={!newMissionGroupId}
+                          disabled={!newMissionGroupId || loadingHospitalDepartments}
                         >
                           <option value="">เลือกฝ่าย</option>
                           {newMissionGroupId ? (
-                            (departmentsByGroup[newMissionGroupId] || []).map(dep => (
-                              <option key={dep.id} value={dep.name}>{dep.name}</option>
-                            ))
+                            loadingHospitalDepartments ? (
+                              <option value="" disabled>กำลังโหลด...</option>
+                            ) : (
+                              hospitalDepartments
+                                .filter(dept => dept.missionGroupId === newMissionGroupId)
+                                .map(dept => (
+                                  <option key={dept.id} value={dept.name}>{dept.name}</option>
+                                ))
+                            )
                           ) : (
                             <option value="" disabled>เลือกกลุ่มงานก่อน</option>
                           )}
