@@ -214,7 +214,8 @@ export default function Dashboard() {
       if (isAdmin) {
         params.set('admin', 'true');
       }
-      const url = `/api/resume-deposit?${params.toString()}`;
+      // const url = `/api/resume-deposit?${params.toString()}`;
+      const url = new URL(`/api/resume-deposit/${session?.user?.id}`);
       console.log('🔎 Fetching resume deposits with URL:', url);
       const response = await fetch(url);
       if (response.ok) {
