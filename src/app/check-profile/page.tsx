@@ -32,47 +32,39 @@ export default function CheckProfilePage() {
         setLoading(true)
         
         try {
-          // ใช้ Line ID จาก session เพื่อตรวจสอบข้อมูลฝากประวัติ
-          const lineId = (session.user as any)?.lineId || session.user?.id;
-          console.log('Check Profile - Line ID from session:', lineId);
-
-          if (!lineId) {
-            console.log('Check Profile - No Line ID in session');
-            setLoading(false);
-            setStep('login-required');
-            return;
-          }
-
-          // ตรวจสอบข้อมูลฝากประวัติ โดยอิง userId/email จาก session (API ไม่รองรับ lineId โดยตรง)
+          // เตรียมตัวระบุผู้ใช้จาก session
           const userId = (session.user as any)?.id || '';
+          const userLineId = (session.user as any)?.lineId || (session.user as any)?.sub || (session as any)?.profile?.userId || '';
           const email = (session.user as any)?.email || '';
+          
           const params = new URLSearchParams();
           if (userId) params.set('userId', String(userId));
-          if (email) params.set('email', String(email));
+          if (userLineId) {
+            params.set('lineId', String(userLineId));
+          } else if (email) {
+            params.set('email', String(email));
+          }
           const url = `/api/resume-deposit?${params.toString()}`;
-          console.log('Check Profile - Fetch URL:', url);
           const response = await fetch(url);
-          console.log('Check Profile - API response status:', response.status);
 
           if (response.ok) {
             const data = await response.json();
-            console.log('Check Profile - API response data:', data);
+            let resumeData = data.data || [];
 
             // ตรวจสอบว่ามีข้อมูลฝากประวัติจริงๆ หรือไม่
-            if (data.success && data.data && Array.isArray(data.data) && data.data.length > 0) {
+            if (data.success && Array.isArray(resumeData) && resumeData.length > 0) {
               // ตรวจสอบว่าข้อมูลฝากประวัติสมบูรณ์หรือไม่ (ไม่ใช่ draft)
-              const hasCompleteResume = data.data.some((resume: any) => 
+              const hasCompleteResume = resumeData.some((resume: any) => 
                 resume.status && resume.status !== 'DRAFT'
               );
               
               if (hasCompleteResume) {
-                console.log('Check Profile - Found complete resume data, redirect to dashboard');
                 setHasApplicationData(true);
                 setStep('redirecting');
+                setLoading(false);
                 router.replace('/dashboard');
                 return;
               } else {
-                console.log('Check Profile - Found draft resume data, redirect to register');
                 setHasApplicationData(false);
                 setStep('redirecting');
                 setLoading(false);
@@ -80,12 +72,74 @@ export default function CheckProfilePage() {
                 return;
               }
             } else {
-              console.log('Check Profile - No resume data found in response:', data);
+              
+              // Fallback: ลองค้นหาทั้งหมด
+              try {
+                const fallbackResponse = await fetch('/api/resume-deposit?admin=true&limit=10');
+                if (fallbackResponse.ok) {
+                  const fallbackData = await fallbackResponse.json();
+                  const allData = fallbackData.data || [];
+                  
+                  // ลองหาด้วย fuzzy matching
+                  const filtered = allData.filter((r: any) => {
+                    // ตรวจสอบ userId
+                    if (r?.userId && r.userId === userId) {
+                      return true;
+                    }
+                    
+                    // ตรวจสอบ lineId
+                    if (r?.lineId && r.lineId === userLineId) {
+                      return true;
+                    }
+                    
+                    // ตรวจสอบ email (fuzzy matching)
+                    if (r?.email && email) {
+                      const dbEmail = r.email.toLowerCase();
+                      const sessionEmail = email.toLowerCase();
+                      
+                      if (dbEmail === sessionEmail) {
+                        return true;
+                      }
+                      
+                      if (dbEmail.includes(sessionEmail.split('@')[0]) || sessionEmail.includes(dbEmail.split('@')[0])) {
+                        return true;
+                      }
+                    }
+                    
+                    return false;
+                  });
+                  
+                  if (filtered.length > 0) {
+                    resumeData = filtered;
+                    
+                    // ตรวจสอบว่าข้อมูลฝากประวัติสมบูรณ์หรือไม่
+                    const hasCompleteResume = resumeData.some((resume: any) => 
+                      resume.status && resume.status !== 'DRAFT'
+                    );
+                    
+                    if (hasCompleteResume) {
+                      setHasApplicationData(true);
+                      setStep('redirecting');
+                      setLoading(false);
+                      router.replace('/dashboard');
+                      return;
+                    } else {
+                      setHasApplicationData(false);
+                      setStep('redirecting');
+                      setLoading(false);
+                      router.replace('/register');
+                      return;
+                    }
+                  }
+                }
+              } catch (fallbackError) {
+                // silent
+              }
             }
           } else if (response.status === 404) {
-            console.log('Check Profile - No resume data (404)');
+            // no data
           } else {
-            console.log('Check Profile - API response not ok:', response.status);
+            // not ok
           }
 
           // ไม่มีข้อมูลฝากประวัติ ให้ไป register
@@ -94,7 +148,6 @@ export default function CheckProfilePage() {
           setLoading(false);
           router.replace('/register');
         } catch (error) {
-          console.error('Error checking application data:', error);
           setLoading(false);
           setStep('redirecting');
           router.replace('/register');

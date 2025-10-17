@@ -147,10 +147,9 @@ export default function Dashboard() {
       } else {
         alert(result.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล')
       }
-    } catch (error) {
-      console.error('Error submitting renewal:', error)
-      alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล')
-    } finally {
+      } catch (error) {
+        alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล')
+      } finally {
       setIsSubmitting(false)
     }
   }
@@ -190,7 +189,7 @@ export default function Dashboard() {
           loginWithUser(matched);
         }
       } catch (e) {
-        console.error('Auto-login by LineID failed:', e);
+        // Auto-login failed silently
       }
     };
     tryAutoLogin();
@@ -206,27 +205,85 @@ export default function Dashboard() {
       params.set('limit', '100');
       try {
         const userId = (session as any)?.user?.id || '';
+        const lineIdCandidate = (session as any)?.user?.lineId || (session as any)?.user?.sub || (session as any)?.profile?.userId || '';
         const email = (session as any)?.user?.email || '';
+
+        // ส่งตัวบ่งชี้ผู้ใช้ให้มากที่สุดเพื่อให้ API จับคู่ได้แน่นอน
         if (userId) params.set('userId', String(userId));
-        if (email) params.set('email', String(email));
+        if (lineIdCandidate) {
+          params.set('lineId', String(lineIdCandidate));
+        } else if (email) {
+          params.set('email', String(email));
+        }
       } catch {}
       // หากเป็นผู้ดูแล ให้สามารถดึงทั้งหมดได้เมื่อจำเป็น
       if (isAdmin) {
         params.set('admin', 'true');
       }
-      // const url = `/api/resume-deposit?${params.toString()}`;
-      const url = new URL(`/api/resume-deposit/${session!.user!.id}`);
-      console.log('🔎 Fetching resume deposits with URL:', url);
+      const url = `/api/resume-deposit?${params.toString()}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        setResumeDepositData(data.data || []);
-        console.log('🔍 Fetched resume deposit data:', data.data?.length || 0, 'records');
+        let resumeData = data.data || [];
+        
+        // หากไม่พบข้อมูล ให้ลอง fallback
+        if (resumeData.length === 0) {
+          try {
+            const fallbackResponse = await fetch('/api/resume-deposit?admin=true&limit=10');
+            if (fallbackResponse.ok) {
+              const fallbackData = await fallbackResponse.json();
+              const allData = fallbackData.data || [];
+              
+              // ลองหาด้วย fuzzy matching
+              const userId = (session as any)?.user?.id || '';
+              const userLineId = (session as any)?.user?.lineId || (session as any)?.user?.sub || (session as any)?.profile?.userId || '';
+              const email = (session as any)?.user?.email || '';
+              
+              const filtered = allData.filter((r: any) => {
+                // ตรวจสอบ userId
+                if (r?.userId && r.userId === userId) {
+                  return true;
+                }
+                
+                // ตรวจสอบ lineId
+                if (r?.lineId && r.lineId === userLineId) {
+                  return true;
+                }
+                
+                // ตรวจสอบ email (fuzzy matching)
+                if (r?.email && email) {
+                  const dbEmail = r.email.toLowerCase();
+                  const sessionEmail = email.toLowerCase();
+                  
+                  // Exact match
+                  if (dbEmail === sessionEmail) {
+                    return true;
+                  }
+                  
+                  // Partial match (contains)
+                  if (dbEmail.includes(sessionEmail.split('@')[0]) || sessionEmail.includes(dbEmail.split('@')[0])) {
+                    return true;
+                  }
+                }
+                
+                return false;
+              });
+              
+              if (filtered.length > 0) {
+                resumeData = filtered;
+              }
+            }
+          } catch (fallbackError) {
+            // Fallback error handled silently
+          }
+        }
+        
+        setResumeDepositData(resumeData);
       } else {
-        console.error('Failed to fetch resume deposit data');
+        // Failed to fetch resume deposit data
       }
     } catch (error) {
-      console.error('Error fetching resume deposit data:', error);
+      // Error fetching resume deposit data
     } finally {
       setResumeDepositLoading(false);
     }
@@ -246,10 +303,10 @@ export default function Dashboard() {
           }));
           setDepartmentsData(list);
         } else {
-          console.error('Failed to fetch departments');
+          // Failed to fetch departments
         }
       } catch (error) {
-        console.error('Error fetching departments:', error);
+        // Error fetching departments
       } finally {
         setDepartmentsLoading(false);
       }
@@ -269,15 +326,6 @@ export default function Dashboard() {
     // มีเรคคอร์ดฝากประวัติอย่างน้อย 1 รายการถือว่าเพียงพอสำหรับการสมัคร
     const hasResume = Array.isArray(resumeDepositData) && resumeDepositData.length > 0
 
-    console.log('🔍 Checking userHasResume from resume deposit data:', {
-      resumeDepositDataLength: resumeDepositData.length,
-      hasResume,
-      sessionUser: session?.user
-    });
-    
-    // Debug: แสดงข้อมูล resume deposit ทั้งหมด
-    console.log('🔍 All resume deposit data:', resumeDepositData);
-
     setUserHasResume(hasResume)
   }, [resumeDepositData, session?.user])
 
@@ -291,13 +339,11 @@ export default function Dashboard() {
   // รีเฟรชข้อมูลเมื่อผู้ใช้กลับมาจากหน้า resume-deposit
   useEffect(() => {
     const handleFocus = () => {
-      console.log('🔍 Window focused, refreshing resume deposit data');
       fetchResumeDepositData();
     };
 
     // รีเฟรชข้อมูลเมื่อโหลดหน้าใหม่
     const handleLoad = () => {
-      console.log('🔍 Page loaded, refreshing resume deposit data');
       fetchResumeDepositData();
     };
 
@@ -430,15 +476,17 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Mobile Header with Toggle Button */}
       <div className="lg:hidden bg-white shadow-sm border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
-        <Button
-          isIconOnly
-          variant="ghost"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="text-gray-600 hover:text-gray-900"
-        >
-          {isSidebarOpen ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
-        </Button>
+        <div className="flex items-center space-x-3">
+          <Button
+            isIconOnly
+            variant="ghost"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="text-gray-600 hover:text-gray-900"
+          >
+            {isSidebarOpen ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
+          </Button>
+          <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row">
@@ -866,7 +914,7 @@ export default function Dashboard() {
                         <span className="text-gray-600 truncate">เพิ่มเมื่อ: {dept.createdAt ? new Date(dept.createdAt).toLocaleDateString('th-TH') : 'ไม่ระบุ'}</span>
                       </div>
 
-                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 pt-2">
+                      <div className="flex flex-row space-x-2 pt-2">
                     <Button
                       color="primary"
                       variant="solid"
@@ -876,7 +924,7 @@ export default function Dashboard() {
                           onClick={() => {
                             setApplyingDeptId(String(dept.id))
                             if (!userHasResume) {
-                              alert('ไม่พบข้อมูลฝากประวัติ กรุณาฝากประวัติก่อนทำการสมัครงาน')
+                              alert('กรุณาฝากประวัติก่อนทำการสมัครงาน')
                               try {
                                 const userId = (session as any)?.user?.id || ''
                                 const email = (session as any)?.user?.email || ''
@@ -911,7 +959,7 @@ export default function Dashboard() {
                       color="secondary"
                       variant="solid"
                           size="sm"
-                          className="bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs sm:text-sm border-0 rounded-xl"
+                          className="flex-1 bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs sm:text-sm border-0 rounded-xl"
                                 onClick={() => openDetail(dept)}
                         >
                           รายละเอียด

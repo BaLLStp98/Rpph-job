@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../auth/[...nextauth]/route';
 import { PrismaClient } from '@prisma/client';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
@@ -59,11 +61,60 @@ export async function POST(request: NextRequest) {
     console.log('🔍 API - Received previous government service data:', data.previousGovernmentService);
     console.log('🔍 API - Received previous government service data length:', data.previousGovernmentService?.length || 0);
     
+    // Hydrate userId from session/lineId if missing
+    let resolvedUserId: string | null = data.userId || null;
+    let resolvedLineId: string | null = data.lineId || null;
+    try {
+      if (!resolvedUserId) {
+        const session = await getServerSession(authOptions as any);
+        resolvedUserId = (session?.user as any)?.id || null;
+        resolvedLineId = (session?.user as any)?.lineId || null;
+        console.log('🔍 Session data:', { 
+          userId: resolvedUserId, 
+          lineId: resolvedLineId,
+          user: session?.user 
+        });
+      }
+      if (!resolvedUserId && data.email) {
+        const existingUser = await prisma.user.findUnique({
+          where: { email: data.email },
+          select: { id: true, lineId: true }
+        });
+        resolvedUserId = existingUser?.id || null;
+        resolvedLineId = existingUser?.lineId || null;
+        console.log('🔍 User from email lookup:', { 
+          userId: resolvedUserId, 
+          lineId: resolvedLineId 
+        });
+      }
+      
+      // Fallback: ถ้ายังไม่มี lineId ให้ลองค้นหาจาก userId
+      if (!resolvedLineId && resolvedUserId) {
+        const userWithLineId = await prisma.user.findUnique({
+          where: { id: resolvedUserId },
+          select: { lineId: true }
+        });
+        resolvedLineId = userWithLineId?.lineId || null;
+        console.log('🔍 LineId from userId lookup:', { 
+          userId: resolvedUserId, 
+          lineId: resolvedLineId 
+        });
+      }
+    } catch (e) {
+      console.warn('resume-deposit POST: cannot resolve userId from session/lineId', e);
+    }
+
     // Create resume deposit record
+    console.log('🔍 Creating resume deposit with:', { 
+      userId: resolvedUserId, 
+      lineId: resolvedLineId 
+    });
+    
     const resumeDeposit = await prisma.resumeDeposit.create({
       data: {
-        // 🔒 Security: บันทึก userId เพื่อความปลอดภัย
-        userId: data.userId || null,
+        // 🔒 Security: บันทึก userId และ lineId เพื่อความปลอดภัย
+        userId: resolvedUserId,
+        lineId: resolvedLineId,
         prefix: data.prefix || '',
         firstName: isDraft ? (data.firstName || 'Draft') : data.firstName,
         lastName: isDraft ? (data.lastName || 'User') : data.lastName,
@@ -265,6 +316,8 @@ export async function POST(request: NextRequest) {
     
     // ตรวจสอบข้อมูลที่ถูกสร้างขึ้นจริง
     console.log('✅ ResumeDeposit created with ID:', resumeDeposit.id);
+    console.log('✅ ResumeDeposit userId:', resumeDeposit.userId);
+    console.log('✅ ResumeDeposit lineId:', resumeDeposit.lineId);
     console.log('✅ Education records created:', resumeDeposit.education?.length || 0);
     console.log('✅ Work experience records created:', resumeDeposit.workExperience?.length || 0);
     console.log('✅ Previous government service records created:', resumeDeposit.previousGovernmentService?.length || 0);
@@ -299,39 +352,51 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const email = searchParams.get('email');
     const userId = searchParams.get('userId');
+    const lineId = searchParams.get('lineId');
     const isAdmin = searchParams.get('admin') === 'true';
+    const department = searchParams.get('department') || '';
     
     const skip = (page - 1) * limit;
     
     // Build where clause
     const where: any = {};
     
-    // 🔒 Security: กรองข้อมูลตาม userId หรือ email เพื่อความปลอดภัย
+    // 🔒 Security: กรองข้อมูลตาม userId และ lineId อย่างเข้มงวด
     if (isAdmin) {
-      // Admin สามารถดูข้อมูลทั้งหมดได้
-      console.log('🔒 Admin mode: แสดงข้อมูลทั้งหมด');
-    } else if (userId && email) {
-      // รองรับเรคคอร์ดเก่าที่มีเฉพาะ email และเรคคอร์ดใหม่ที่มี userId
-      where.OR = [
-        { userId },
-        { email }
-      ];
-    } else if (userId) {
-      where.userId = userId;
-    } else if (email) {
-      where.email = email;
+      // ผู้ดูแลสามารถดูทั้งหมดได้ (ยังสามารถกรองเพิ่มด้วย department/status/search ได้ด้านล่าง)
     } else {
-      // ถ้าไม่มี userId หรือ email ให้ส่งกลับข้อมูลว่าง
-      return NextResponse.json({
-        success: true,
-        data: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          pages: 0
-        }
-      });
+      // สำหรับผู้ใช้ทั่วไป: ต้องมีทั้ง userId และ lineId ที่ตรงกัน
+      const hasUserId = userId && userId.trim() !== '';
+      const hasLineId = lineId && lineId.trim() !== '';
+      
+      if (hasUserId && hasLineId) {
+        // ใช้ AND condition: ต้องตรงทั้ง userId และ lineId
+        where.AND = [
+          { userId: userId.trim() },
+          { lineId: lineId.trim() }
+        ];
+      } else if (hasLineId) {
+        // ถ้ามีแค่ lineId ให้ใช้ lineId เท่านั้น
+        where.lineId = lineId.trim();
+      } else if (hasUserId) {
+        // ถ้ามีแค่ userId ให้ใช้ userId เท่านั้น
+        where.userId = userId.trim();
+      } else if (department) {
+        // Fallback: หากไม่มีตัวระบุผู้ใช้ ให้กรองตามฝ่ายเพื่อการแสดงผลเฉพาะมุมมองฝ่าย
+        where.department = department;
+      } else {
+        // ไม่มีเงื่อนไขระบุตัวตนและไม่ระบุฝ่าย → คืนลิสต์ว่างเพื่อความปลอดภัย
+        return NextResponse.json({
+          success: true,
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            pages: 0
+          }
+        });
+      }
     }
     
     if (status) {
@@ -346,6 +411,11 @@ export async function GET(request: NextRequest) {
         { phone: { contains: search } },
         { expectedPosition: { contains: search } }
       ];
+    }
+
+    // กรองตามฝ่าย หากมีการส่ง department มา
+    if (department) {
+      where.department = department;
     }
     
     const [resumeDeposits, total] = await Promise.all([

@@ -64,20 +64,41 @@ const handler = NextAuth({
         token.provider = account.provider
       }
       if (profile) {
-        token.id = profile.sub
-        token.lineId = profile.sub
-        token.name = profile.name
-        token.picture = profile.picture
+        token.id = (profile as any).sub
+        token.lineId = (profile as any).sub
+        token.name = (profile as any).name
+        token.picture = (profile as any).picture
+        token.email = (profile as any).email
       }
+
+      // เติมข้อมูลจากฐาน เพื่อให้มี userId/email ที่แน่นอน (รองรับกรณี LINE ไม่ส่งอีเมล)
+      try {
+        if (!token.userId || !token.email) {
+          const lineId = (token.lineId as string | undefined) ?? undefined
+          const existing = await prisma.user.findFirst({
+            where: lineId ? { lineId } : (token.email ? { email: token.email as string } : undefined),
+            select: { id: true, email: true }
+          })
+          if (existing) {
+            token.userId = existing.id
+            token.email = existing.email
+          }
+        }
+      } catch (e) {
+        console.warn('jwt user hydrate warn:', e)
+      }
+
       return token
     },
     async session({ session, token }) {
       if (token) {
         session.accessToken = token.accessToken as string | undefined
         if (session.user) {
-          session.user.id = token.id as string
-          session.user.lineId = token.lineId as string
-          session.user.image = token.picture as string
+          // ใช้ userId จากฐานข้อมูลเป็นหลัก ถ้าไม่มีให้ fallback เป็น line sub
+          session.user.id = (token.userId as string) || (token.id as string)
+          session.user.lineId = token.lineId as string | undefined
+          session.user.image = token.picture as string | undefined
+          session.user.email = (token.email as string) || session.user.email
         }
       }
       return session

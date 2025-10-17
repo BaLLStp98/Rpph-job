@@ -604,6 +604,7 @@ export default function AdminPage() {
     const statusMap: { [key: string]: string } = {
       'pending': 'รอพิจารณา',
       'approved': 'อนุมัติ',
+      'hired': 'อนุมัติ',
     };
     return statusMap[lowerCaseStatus] || status;
   };
@@ -613,6 +614,7 @@ export default function AdminPage() {
     const colorMap: { [key: string]: string } = {
       'pending': 'warning',
       'approved': 'success',
+      'hired': 'success',
     };
     return colorMap[lowerCaseStatus] || 'default';
   };

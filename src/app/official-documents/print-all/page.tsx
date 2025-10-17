@@ -384,7 +384,14 @@ export default function PrintAllDocuments() {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch application data');
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+        console.error('❌ Print-All API Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          message: errorMessage
+        });
+        throw new Error(`Failed to fetch application data: ${errorMessage}`);
       }
       
       const responseData = await response.json();
@@ -641,8 +648,20 @@ export default function PrintAllDocuments() {
         console.log('⚠️ No application ID found, skipping document fetch');
       }
     } catch (err) {
-      console.error('Error fetching application data:', err);
-      setError(err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+      console.error('❌ Error fetching application data:', err);
+      
+      // แสดงข้อมูล error ที่ละเอียดขึ้น
+      if (err instanceof Error) {
+        console.error('❌ Error details:', {
+          name: err.name,
+          message: err.message,
+          stack: err.stack
+        });
+        setError(`เกิดข้อผิดพลาดในการโหลดข้อมูล: ${err.message}`);
+      } else {
+        console.error('❌ Unknown error:', err);
+        setError('เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุในการโหลดข้อมูล');
+      }
     } finally {
       setLoading(false);
     }
@@ -866,13 +885,22 @@ export default function PrintAllDocuments() {
             
             <div class="attachment-content">
               <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background-color: #f9fafb;">
-                <iframe 
-                  src="${getAttachmentUrl(doc.filePath)}" 
-                  className="attachment-preview"
-                  style="width: 100%; height: 100%; border: none; object-fit: contain; object-position: center; display: block; margin: 0 auto;"
-                  title="${doc.mimeType === 'application/pdf' ? 'PDF' : 'Image'} Preview"
-                  onError="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                ></iframe>
+                ${doc.mimeType && doc.mimeType.startsWith('image/') ? `
+                  <img 
+                    src="${getAttachmentUrl(doc.filePath)}" 
+                    alt="${doc.fileName} - รูปภาพ"
+                    style="width: 100%; height: 100%; object-fit: contain; object-position: center; display: block; margin: 0 auto;"
+                    onError="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                  />
+                ` : `
+                  <iframe 
+                    src="${getAttachmentUrl(doc.filePath)}" 
+                    className="attachment-preview"
+                    style="width: 100%; height: 100%; border: none; object-fit: contain; object-position: center; display: block; margin: 0 auto;"
+                    title="${doc.mimeType === 'application/pdf' ? 'PDF' : 'Document'} Preview"
+                    onError="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                  ></iframe>
+                `}
               </div>
                 <div style="display: none; text-align: center; color: #6b7280;">
                 <p>ไม่สามารถแสดงไฟล์ได้</p>
@@ -2363,30 +2391,56 @@ export default function PrintAllDocuments() {
                         
                         return (
                           <div className="w-full h-full flex items-center justify-center bg-gray-50" style={{ width: '210mm', height: '297mm' }}>
-                          <iframe
-                            src={fileUrl}
-                            className="w-full h-full border-0"
-                              title={`${doc.mimeType === 'application/pdf' ? 'PDF' : 'Image'} Preview - ${doc.fileName}`}
-                              style={{ 
-                                width: '100%', 
-                                height: '100%',
-                                objectFit: 'contain',
-                                objectPosition: 'center',
-                                display: 'block',
-                                margin: '0 auto'
-                              }}
-                              onLoad={() => {
-                                console.log(`✅ ${doc.mimeType === 'application/pdf' ? 'PDF' : 'Image'} loaded successfully via iframe:`, doc.fileName);
-                              }}
-                              onError={(e) => {
-                                console.error(`❌ Error loading ${doc.mimeType === 'application/pdf' ? 'PDF' : 'image'} via iframe:`, doc.fileName);
-                                console.error('❌ File URL:', fileUrl);
-                                console.error('❌ Original Path:', doc.filePath);
-                                e.currentTarget.style.display = 'none';
-                                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                if (fallback) fallback.style.display = 'flex';
-                              }}
-                            />
+                            {/* สำหรับรูปภาพ - ใช้ img tag */}
+                            {doc.mimeType && doc.mimeType.startsWith('image/') ? (
+                              <img
+                                src={fileUrl}
+                                alt={`${doc.fileName} - รูปภาพ`}
+                                className="w-full h-full object-contain"
+                                style={{ 
+                                  maxWidth: '100%',
+                                  maxHeight: '100%',
+                                  objectFit: 'contain',
+                                  objectPosition: 'center'
+                                }}
+                                onLoad={() => {
+                                  console.log(`✅ Image loaded successfully:`, doc.fileName);
+                                }}
+                                onError={(e) => {
+                                  console.error(`❌ Error loading image:`, doc.fileName);
+                                  console.error('❌ File URL:', fileUrl);
+                                  e.currentTarget.style.display = 'none';
+                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                  if (fallback) fallback.style.display = 'flex';
+                                }}
+                              />
+                            ) : (
+                              /* สำหรับ PDF และไฟล์อื่นๆ - ใช้ iframe */
+                              <iframe
+                                src={fileUrl}
+                                className="w-full h-full border-0"
+                                title={`${doc.mimeType === 'application/pdf' ? 'PDF' : 'Document'} Preview - ${doc.fileName}`}
+                                style={{ 
+                                  width: '100%', 
+                                  height: '100%',
+                                  objectFit: 'contain',
+                                  objectPosition: 'center',
+                                  display: 'block',
+                                  margin: '0 auto'
+                                }}
+                                onLoad={() => {
+                                  console.log(`✅ ${doc.mimeType === 'application/pdf' ? 'PDF' : 'Document'} loaded successfully via iframe:`, doc.fileName);
+                                }}
+                                onError={(e) => {
+                                  console.error(`❌ Error loading ${doc.mimeType === 'application/pdf' ? 'PDF' : 'document'} via iframe:`, doc.fileName);
+                                  console.error('❌ File URL:', fileUrl);
+                                  console.error('❌ Original Path:', doc.filePath);
+                                  e.currentTarget.style.display = 'none';
+                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                  if (fallback) fallback.style.display = 'flex';
+                                }}
+                              />
+                            )}
                           </div>
                         );
                       })()}
@@ -2397,8 +2451,14 @@ export default function PrintAllDocuments() {
                         style={{ minHeight: '297mm' }}
                       >
                         <div className="text-center p-8">
-                          <DocumentTextIcon className="w-20 h-20 mx-auto mb-6 text-gray-400" />
-                          <h3 className="text-xl font-semibold text-gray-600 mb-2">ไม่สามารถแสดงตัวอย่างไฟล์ได้</h3>
+                          {doc.mimeType && doc.mimeType.startsWith('image/') ? (
+                            <DocumentIcon className="w-20 h-20 mx-auto mb-6 text-gray-400" />
+                          ) : (
+                            <DocumentTextIcon className="w-20 h-20 mx-auto mb-6 text-gray-400" />
+                          )}
+                          <h3 className="text-xl font-semibold text-gray-600 mb-2">
+                            ไม่สามารถแสดง{doc.mimeType && doc.mimeType.startsWith('image/') ? 'รูปภาพ' : 'ไฟล์'}ได้
+                          </h3>
                           <p className="text-sm text-gray-500 mb-4">{doc.fileName}</p>
                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
                             <p className="text-sm text-yellow-700">
@@ -2408,15 +2468,31 @@ export default function PrintAllDocuments() {
                               <li>• ไฟล์ไม่พบในระบบ</li>
                               <li>• ไฟล์เสียหายหรือไม่สมบูรณ์</li>
                               <li>• ไม่มีสิทธิ์เข้าถึงไฟล์</li>
+                              {doc.mimeType && doc.mimeType.startsWith('image/') && (
+                                <li>• รูปภาพอาจมีขนาดใหญ่เกินไป</li>
+                              )}
                             </ul>
                           </div>
-                          <div className="mt-4">
+                          <div className="mt-4 flex gap-2 justify-center">
                             <button
                               onClick={() => window.open(getAttachmentUrl(doc.filePath), '_blank')}
                               className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
                             >
                               เปิดในแท็บใหม่
                             </button>
+                            {doc.mimeType && doc.mimeType.startsWith('image/') && (
+                              <button
+                                onClick={() => {
+                                  const link = document.createElement('a');
+                                  link.href = getAttachmentUrl(doc.filePath);
+                                  link.download = doc.fileName;
+                                  link.click();
+                                }}
+                                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                              >
+                                ดาวน์โหลดรูปภาพ
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

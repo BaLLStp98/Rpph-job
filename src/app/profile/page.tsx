@@ -106,12 +106,82 @@ export default function ProfilePage() {
     if (status !== 'authenticated') return
       
       try {
-        const email = session?.user?.email || ''
-        const response = await fetch(`/api/resume-deposit?search=${encodeURIComponent(email)}`)
+        const userId = (session?.user as any)?.id || '';
+        const userLineId = (session?.user as any)?.lineId || '';
+        const email = session?.user?.email || '';
+        console.log('Profile - Session data:', { userId, userLineId, email });
+        
+        // ใช้ lineId อย่างเดียวเหมือนกับ Register, Dashboard และ Check-Profile
+        const params = new URLSearchParams();
+        if (userLineId) {
+          params.set('lineId', String(userLineId));
+        } else if (email) {
+          params.set('email', String(email));
+        }
+        const url = `/api/resume-deposit?${params.toString()}`;
+        console.log('Profile - Fetch URL:', url);
+        const response = await fetch(url);
         
         if (response.ok) {
-          const result = await response.json()
-          const list = result?.data || []
+          const result = await response.json();
+          let list = result?.data || [];
+          console.log('Profile - API response data:', list.length, 'records');
+          
+          // หากไม่พบข้อมูล ให้ลอง fallback
+          if (list.length === 0) {
+            console.log('Profile - No data found, trying fallback...');
+            try {
+              const fallbackResponse = await fetch('/api/resume-deposit?admin=true&limit=10');
+              if (fallbackResponse.ok) {
+                const fallbackData = await fallbackResponse.json();
+                const allData = fallbackData.data || [];
+                console.log('Profile - Fallback data:', allData.length, 'records');
+                
+                // ลองหาด้วย fuzzy matching
+                const filtered = allData.filter((r: any) => {
+                  // ตรวจสอบ userId
+                  if (r?.userId && r.userId === userId) {
+                    console.log('Profile fallback: Found by userId:', r.id);
+                    return true;
+                  }
+                  
+                  // ตรวจสอบ lineId
+                  if (r?.lineId && r.lineId === userLineId) {
+                    console.log('Profile fallback: Found by lineId:', r.id);
+                    return true;
+                  }
+                  
+                  // ตรวจสอบ email (fuzzy matching)
+                  if (r?.email && email) {
+                    const dbEmail = r.email.toLowerCase();
+                    const sessionEmail = email.toLowerCase();
+                    
+                    // Exact match
+                    if (dbEmail === sessionEmail) {
+                      console.log('Profile fallback: Found by exact email match:', r.id);
+                      return true;
+                    }
+                    
+                    // Partial match (contains)
+                    if (dbEmail.includes(sessionEmail.split('@')[0]) || sessionEmail.includes(dbEmail.split('@')[0])) {
+                      console.log('Profile fallback: Found by partial email match:', r.id);
+                      return true;
+                    }
+                  }
+                  
+                  return false;
+                });
+                
+                if (filtered.length > 0) {
+                  list = filtered;
+                  console.log('Profile - Fallback found:', filtered.length, 'matching records');
+                }
+              }
+            } catch (fallbackError) {
+              console.error('Profile fallback error:', fallbackError);
+            }
+          }
+          
           if (Array.isArray(list) && list.length > 0) {
           const resume = list[0] // ใช้ข้อมูลล่าสุด
           
