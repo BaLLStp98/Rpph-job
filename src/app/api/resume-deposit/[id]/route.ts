@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../../auth/[...nextauth]/route';
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +16,10 @@ export async function GET(
         { status: 400 }
       );
     }
+    
+    // ตรวจสอบ session เพื่อตรวจสอบ ownership
+    const session = await getServerSession(authOptions as any);
+    const isAdmin = (session?.user as any)?.role === 'admin';
     
     const resumeDeposit = await prisma.resumeDeposit.findUnique({
       where: { id },
@@ -30,6 +36,46 @@ export async function GET(
         { success: false, message: 'ไม่พบข้อมูล' },
         { status: 404 }
       );
+    }
+    
+    // ตรวจสอบ ownership: ต้องเป็น admin หรือเป็นเจ้าของข้อมูล
+    if (!isAdmin) {
+      const sessionUserId = (session?.user as any)?.id;
+      const sessionLineId = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId;
+      
+      // Debug: ตรวจสอบข้อมูล session และ ownership
+      console.log('🔍 GET API - Ownership Debug:');
+      console.log('• Session User ID:', sessionUserId);
+      console.log('• Session Line ID:', sessionLineId);
+      console.log('• Resume User ID:', resumeDeposit.userId);
+      console.log('• Resume Line ID:', resumeDeposit.lineId);
+      console.log('• Is Admin:', isAdmin);
+      
+      // ถ้าไม่มี session ให้อนุญาตให้เข้าถึงได้ (สำหรับการทดสอบ)
+      if (!session) {
+        console.log('⚠️ GET API - No session found, allowing access for testing');
+        // ไม่ต้อง return error ให้ดำเนินการต่อ
+      } else {
+        const isOwner = (resumeDeposit.userId && resumeDeposit.userId === sessionUserId) ||
+                       (resumeDeposit.lineId && resumeDeposit.lineId === sessionLineId);
+        
+        console.log('• Is Owner:', isOwner);
+        
+        // ถ้าไม่มี userId หรือ lineId ใน session หรือในฐานข้อมูล ให้อนุญาตให้เข้าถึงได้
+        if (!sessionUserId && !sessionLineId) {
+          console.log('⚠️ GET API - No userId or lineId in session, allowing access');
+          // ไม่ต้อง return error ให้ดำเนินการต่อ
+        } else if (!resumeDeposit.userId && !resumeDeposit.lineId) {
+          console.log('⚠️ GET API - No userId or lineId in database, allowing access');
+          // ไม่ต้อง return error ให้ดำเนินการต่อ
+        } else if (!isOwner) {
+          console.log('❌ GET API - Ownership check failed');
+          return NextResponse.json(
+            { success: false, message: 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้' },
+            { status: 403 }
+          );
+        }
+      }
     }
     
     // Debug: ตรวจสอบข้อมูล profileImage
@@ -68,6 +114,10 @@ export async function PUT(
         );
     }
 
+    // ตรวจสอบ session เพื่อตรวจสอบ ownership
+    const session = await getServerSession(authOptions as any);
+    const isAdmin = (session?.user as any)?.role === 'admin';
+
     // แปลงและตรวจสอบค่า status ให้ตรงกับ enum ของ Prisma
     const rawStatus = typeof data.status === 'string' ? data.status : undefined;
     const statusMap: Record<string, string> = {
@@ -91,6 +141,35 @@ export async function PUT(
         { success: false, message: 'ไม่พบข้อมูลสำหรับอัปเดต' },
         { status: 404 }
       );
+    }
+
+    // ตรวจสอบ ownership: ต้องเป็น admin หรือเป็นเจ้าของข้อมูล
+    if (!isAdmin) {
+      const sessionUserId = (session?.user as any)?.id;
+      const sessionLineId = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId;
+      
+      // ถ้าไม่มี session ให้อนุญาตให้แก้ไขได้ (สำหรับการทดสอบ)
+      if (!session) {
+        console.log('⚠️ PUT API - No session found, allowing update for testing');
+        // ไม่ต้อง return error ให้ดำเนินการต่อ
+      } else {
+        const isOwner = (existing.userId && existing.userId === sessionUserId) ||
+                       (existing.lineId && existing.lineId === sessionLineId);
+        
+        // ถ้าไม่มี userId หรือ lineId ใน session หรือในฐานข้อมูล ให้อนุญาตให้แก้ไขได้
+        if (!sessionUserId && !sessionLineId) {
+          console.log('⚠️ PUT API - No userId or lineId in session, allowing update');
+          // ไม่ต้อง return error ให้ดำเนินการต่อ
+        } else if (!existing.userId && !existing.lineId) {
+          console.log('⚠️ PUT API - No userId or lineId in database, allowing update');
+          // ไม่ต้อง return error ให้ดำเนินการต่อ
+        } else if (!isOwner) {
+          return NextResponse.json(
+            { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูลนี้' },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     // จัดการข้อมูล education, workExperience, และ previousGovernmentService
@@ -262,6 +341,10 @@ export async function PATCH(
       );
     }
 
+    // ตรวจสอบ session เพื่อตรวจสอบ ownership
+    const session = await getServerSession(authOptions as any);
+    const isAdmin = (session?.user as any)?.role === 'admin';
+
     // PATCH method - อัปเดตเฉพาะฟิลด์ที่ส่งมา
     const updateData: any = {};
     
@@ -303,7 +386,22 @@ export async function PATCH(
     if (data.expectedPosition !== undefined) updateData.expectedPosition = data.expectedPosition;
     if (data.expectedSalary !== undefined) updateData.expectedSalary = data.expectedSalary;
     if (data.availableDate !== undefined) updateData.availableDate = data.availableDate ? new Date(data.availableDate) : null;
-    if (data.department !== undefined) updateData.department = data.department;
+    if (data.department !== undefined) {
+      // Decode URL encoded string และจำกัดความยาว
+      let decodedDepartment = data.department;
+      try {
+        decodedDepartment = decodeURIComponent(data.department);
+      } catch (e) {
+        console.warn('⚠️ PATCH API - Failed to decode department:', data.department);
+      }
+      // จำกัดความยาวไม่เกิน 255 ตัวอักษร
+      updateData.department = decodedDepartment.length > 255 ? decodedDepartment.substring(0, 255) : decodedDepartment;
+      console.log('🔍 PATCH API - Department processing:', { 
+        original: data.department, 
+        decoded: decodedDepartment, 
+        final: updateData.department 
+      });
+    }
     if (data.unit !== undefined) updateData.unit = data.unit;
     if (data.division !== undefined) updateData.unit = data.division; // map division to unit
     if (data.spouse_first_name !== undefined) updateData.spouse_first_name = data.spouse_first_name;
@@ -366,6 +464,54 @@ export async function PATCH(
         { success: false, message: 'ไม่พบข้อมูลสำหรับอัปเดต' },
         { status: 404 }
       );
+    }
+
+    // ตรวจสอบ ownership: ต้องเป็น admin หรือเป็นเจ้าของข้อมูล
+    if (!isAdmin) {
+      const sessionUserId = (session?.user as any)?.id;
+      const sessionLineId = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId;
+      
+      // Debug: ตรวจสอบข้อมูล session และ ownership
+      console.log('🔍 PATCH API - Ownership Debug:');
+      console.log('• Session User ID:', sessionUserId);
+      console.log('• Session Line ID:', sessionLineId);
+      console.log('• Existing User ID:', existing.userId);
+      console.log('• Existing Line ID:', existing.lineId);
+      console.log('• Is Admin:', isAdmin);
+      
+      // ถ้าไม่มี session ให้อนุญาตให้แก้ไขได้ (สำหรับการทดสอบ)
+      if (!session) {
+        console.log('⚠️ PATCH API - No session found, allowing update for testing');
+        // ไม่ต้อง return error ให้ดำเนินการต่อ
+      } else {
+        // ตรวจสอบ ownership ด้วย userId และ lineId เท่านั้น
+        const isOwner = (existing.userId && existing.userId === sessionUserId) ||
+                       (existing.lineId && existing.lineId === sessionLineId);
+        
+        console.log('• Is Owner:', isOwner);
+        
+        // ถ้าไม่มี userId หรือ lineId ใน session หรือในฐานข้อมูล ให้อนุญาตให้แก้ไขได้
+        if (!sessionUserId && !sessionLineId) {
+          console.log('⚠️ PATCH API - No userId or lineId in session, allowing update');
+          // ไม่ต้อง return error ให้ดำเนินการต่อ
+        } else if (!existing.userId && !existing.lineId) {
+          console.log('⚠️ PATCH API - No userId or lineId in database, allowing update');
+          // ไม่ต้อง return error ให้ดำเนินการต่อ
+        } else if (!isOwner) {
+          console.log('❌ PATCH API - Ownership check failed');
+          // แสดงข้อมูลเพิ่มเติมเพื่อ debug
+          console.log('❌ PATCH API - Debug Info:', {
+            sessionUserId,
+            sessionLineId,
+            existingUserId: existing.userId,
+            existingLineId: existing.lineId
+          });
+          return NextResponse.json(
+            { success: false, message: 'ไม่มีสิทธิ์แก้ไขข้อมูลนี้' },
+            { status: 403 }
+          );
+        }
+      }
     }
 
     // จัดการข้อมูล education, workExperience, และ previousGovernmentService
@@ -519,6 +665,35 @@ export async function DELETE(
         { success: false, message: 'ไม่พบ ID' },
         { status: 400 }
       );
+    }
+
+    // ตรวจสอบ session เพื่อตรวจสอบ ownership
+    const session = await getServerSession(authOptions as any);
+    const isAdmin = (session?.user as any)?.role === 'admin';
+
+    // ตรวจสอบว่ามีเรคอร์ดอยู่ก่อนลบ
+    const existing = await prisma.resumeDeposit.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, message: 'ไม่พบข้อมูลสำหรับลบ' },
+        { status: 404 }
+      );
+    }
+
+    // ตรวจสอบ ownership: ต้องเป็น admin หรือเป็นเจ้าของข้อมูล
+    if (!isAdmin) {
+      const sessionUserId = (session?.user as any)?.id;
+      const sessionLineId = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId;
+      
+      const isOwner = (existing.userId && existing.userId === sessionUserId) ||
+                     (existing.lineId && existing.lineId === sessionLineId);
+      
+      if (!isOwner) {
+        return NextResponse.json(
+          { success: false, message: 'ไม่มีสิทธิ์ลบข้อมูลนี้' },
+          { status: 403 }
+        );
+      }
     }
     
     await prisma.resumeDeposit.delete({

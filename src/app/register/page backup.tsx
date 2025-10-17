@@ -170,11 +170,8 @@ export default function ApplicationForm() {
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
   const [copyFromRegisteredAddress, setCopyFromRegisteredAddress] = useState(false);
   
-  // รับข้อมูล department และ resumeId จาก URL parameters (decode เผื่อมีการ encode มาก่อนหน้า)
-  const departmentName = (() => {
-    const raw = searchParams.get('department') || '';
-    try { return raw ? decodeURIComponent(raw) : ''; } catch { return raw; }
-  })();
+  // รับข้อมูล department และ resumeId จาก URL parameters
+  const departmentName = searchParams.get('department') || '';
   const departmentId = searchParams.get('departmentId') || '';
   const resumeId = searchParams.get('resumeId') || '';
   // flag ให้โหลดจากฐานโดยตรง
@@ -218,9 +215,73 @@ export default function ApplicationForm() {
     }
   }, [resumeId, status]);
 
-  // ปิดการโหลดด้วย resumeEmail/resumeUserId เพื่อบังคับใช้ lineId เท่านั้น
+  // ดึงข้อมูลฝากประวัติเมื่อมี resumeEmail / resumeUserId ใน URL
   useEffect(() => {
-    // intentionally disabled
+    const loadByExplicitIdentity = async () => {
+      if (status !== 'authenticated') return;
+      if (!queryResumeEmail && !queryResumeUserId) return;
+      console.log('🔍 พบตัวระบุฝากประวัติใน URL:', { queryResumeEmail, queryResumeUserId });
+      try {
+        // 1) ลองด้วย userId ก่อน ถ้ามี
+        const primaryQ = queryResumeUserId
+          ? `?userId=${encodeURIComponent(queryResumeUserId)}`
+          : (queryResumeEmail ? `?email=${encodeURIComponent(queryResumeEmail)}` : '');
+        console.log('🔍 เรียก API (explicit identity primary):', `/api/resume-deposit${primaryQ}`);
+        let res = await fetch(`/api/resume-deposit${primaryQ}`);
+        let list: any[] = [];
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
+          list = (json?.data || json || []) as any[];
+        } else {
+          console.log('❌ API explicit identity primary response ไม่สำเร็จ:', res.status);
+        }
+
+        // 2) ถ้าไม่พบ และมีอีเมลให้ fallback (จาก URL หรือ session)
+        if ((!Array.isArray(list) || list.length === 0)) {
+          const fallbackEmail = queryResumeEmail || ((session?.user as any)?.email || '');
+          if (fallbackEmail) {
+            const fallbackQ = `?email=${encodeURIComponent(fallbackEmail)}`;
+            console.log('🔄 ไม่พบด้วย userId ลอง fallback ด้วยอีเมล:', fallbackEmail);
+            console.log('🔍 เรียก API (explicit identity fallback):', `/api/resume-deposit${fallbackQ}`);
+            res = await fetch(`/api/resume-deposit${fallbackQ}`);
+            if (res.ok) {
+              const json2 = await res.json().catch(() => ({}));
+              list = (json2?.data || json2 || []) as any[];
+            } else {
+              console.log('❌ API explicit identity fallback response ไม่สำเร็จ:', res.status);
+            }
+          }
+        }
+
+        if (!Array.isArray(list) || list.length === 0) {
+          console.log('❌ ไม่พบข้อมูลฝากประวัติจาก explicit identity และ fallback');
+          return;
+        }
+        // เลือกล่าสุด
+        list.sort((a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime());
+        const found = list[0];
+        console.log('✅ พบข้อมูลฝากประวัติ (explicit):', found.id);
+        // ดึงรายละเอียด
+        const detail = await fetch(`/api/resume-deposit/${found.id}`);
+        if (detail.ok) {
+          const dj = await detail.json().catch(() => ({}));
+          const data = dj?.data || dj || found;
+          setSavedResume(data);
+          if (typeof applyResumeToFormInputs === 'function') {
+            applyResumeToFormInputs(data);
+          }
+          if (data?.profileImageUrl) {
+            const imagePath = `/api/image?file=${data.profileImageUrl}`;
+            console.log('🔍 loadByExplicitIdentity - Setting profile image after refresh:', imagePath);
+            setProfileImage(imagePath);
+          }
+          console.log('✅ โหลด explicit resume เข้าฟอร์มสำเร็จ');
+        }
+      } catch (err) {
+        console.error('❌ ผิดพลาดในการโหลด explicit resume:', err);
+      }
+    };
+    loadByExplicitIdentity();
   }, [status, queryResumeEmail, queryResumeUserId]);
 
   // ดึงข้อมูลฝากประวัติเมื่อมี department ใน URL (ค้นหาตามหลายวิธี)
@@ -349,6 +410,7 @@ export default function ApplicationForm() {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+
   // โหลดข้อมูลฝากประวัติของผู้ใช้ปัจจุบัน (ถ้ามี) มาแสดงบนหน้าและเติมลงฟอร์ม
   useEffect(() => {
     const loadMyResume = async () => {
@@ -364,43 +426,35 @@ export default function ApplicationForm() {
       setIsLoading(true);
       
       try {
-        // ใช้เฉพาะ userId และ lineId เท่านั้น ไม่ใช้ email fallback
+        // พยายามค้นจาก userId ก่อน แล้วค่อย fallback เป็นอีเมล
         const userId = (session?.user as any)?.id || '';
-        const userLineId = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || '';
-        
-        if (!userLineId) {
-          console.log('❌ ไม่มี lineId ใน session - ไม่สามารถดึงข้อมูลได้');
-          setIsLoading(false);
-          return;
-        }
-        
-        console.log('🔍 ค้นหาข้อมูลฝากประวัติด้วย userId/lineId:', { userId, userLineId });
+        const userEmail = (session?.user as any)?.email || '';
+        console.log('🔍 ค้นหาข้อมูลฝากประวัติด้วย userId/email:', { userId, userEmail });
         
         let found: any = null;
         
-        // 1. ค้นหาจาก resume-deposit API (ใช้ lineId และ userId)
+        // 1. ค้นหาจาก resume-deposit API (ลอง userId ก่อน)
         try {
-          const params = new URLSearchParams();
-          if (userId) params.set('userId', String(userId));
-          if (userLineId) params.set('lineId', String(userLineId));
+          let q = '';
+          if (userId) q = `?userId=${encodeURIComponent(userId)}`;
+          else if (userEmail) q = `?email=${encodeURIComponent(userEmail)}`;
+          console.log('🔍 เรียก API:', `/api/resume-deposit${q}`);
           
-          const url = `/api/resume-deposit?${params.toString()}`;
-          console.log('🔍 เรียก API:', url);
-          
-          const res = await fetch(url);
-          console.log('🔍 API Response status:', res.status);
-          
+          const res = await fetch(`/api/resume-deposit${q}`);
         if (res.ok) {
           const json = await res.json().catch(() => ({}));
             const list = (json?.data || json || []) as any[];
             console.log('🔍 ข้อมูลที่ได้รับ:', list.length, 'รายการ');
             
-            // กรองด้วย lineId เท่านั้น
             const filtered = Array.isArray(list)
-              ? list.filter((r) => (r?.lineId || '') === userLineId)
+              ? (
+                  userId
+                    ? list.filter((r) => (r?.userId || '') === userId)
+                    : userEmail
+                      ? list.filter((r) => (r?.email || '').toLowerCase() === userEmail.toLowerCase())
+                      : list
+                )
               : [];
-              
-            console.log('🔍 Filtered results:', filtered.length, 'รายการ');
               
             if (filtered.length > 0) {
               // เรียงลำดับตามวันที่อัปเดตล่าสุด
@@ -408,7 +462,7 @@ export default function ApplicationForm() {
               found = filtered[0];
               console.log('✅ พบข้อมูลฝากประวัติ:', found.id);
         } else {
-              console.log('❌ ไม่พบข้อมูลฝากประวัติสำหรับ lineId นี้');
+              console.log('❌ ไม่พบข้อมูลฝากประวัติสำหรับอีเมลนี้');
             }
           } else {
             console.log('❌ API response ไม่สำเร็จ:', res.status);
@@ -452,44 +506,11 @@ export default function ApplicationForm() {
           
           // ตรวจสอบว่าข้อมูลสมบูรณ์หรือไม่ (ไม่ใช่ draft)
           if (found.status && found.status !== 'DRAFT') {
-            console.log('✅ พบข้อมูลฝากประวัติที่สมบูรณ์แล้ว - โหลดลงฟอร์มเพื่อแก้ไข');
-            // ไม่ redirect ไปหน้า Dashboard - ให้ผู้ใช้แก้ไขข้อมูลได้
-            console.log('ℹ️ คุณมีข้อมูลฝากประวัติแล้ว สามารถแก้ไขได้ในหน้านี้');
-            setSavedResume(found);
-            applyResumeToFormInputs(found);
-            
-            // โหลดรูปภาพโปรไฟล์ที่บันทึกไว้แล้ว
-            if (found.profileImageUrl) {
-              console.log('🔍 โหลดรูปภาพโปรไฟล์:', found.profileImageUrl);
-              const imagePath = `/api/image?file=${found.profileImageUrl}`;
-              console.log('🔍 กำลังตั้งค่า profileImage state:', imagePath);
-              setProfileImage(imagePath);
-              console.log('✅ โหลดรูปภาพโปรไฟล์สำเร็จ');
-              
-              // อัปเดต formData.profileImage ด้วย
-              setFormData(prev => ({
-                ...prev,
-                profileImage: new File([], found.profileImageUrl, { type: 'image/jpeg' })
-              }));
-              console.log('✅ อัปเดต formData.profileImage สำเร็จ');
-            } else {
-              console.log('❌ ไม่พบ profileImageUrl ในข้อมูลฝากประวัติ');
-              console.log('🔍 ข้อมูลที่ได้รับ:', Object.keys(found));
-            }
-            
-            // โหลดข้อมูลเอกสารที่อัปโหลดแล้ว
-            if (found.id) {
-              console.log('🔍 โหลดข้อมูลเอกสารแนบ...');
-              try {
-                const documents = await fetchUploadedDocuments(found.id);
-                setUploadedDocuments(documents);
-                console.log('✅ โหลดข้อมูลเอกสารแนบสำเร็จ:', documents.length, 'ไฟล์');
-              } catch (error) {
-                console.error('❌ เกิดข้อผิดพลาดในการโหลดเอกสารแนบ:', error);
-              }
-            }
-            
-            console.log('✅ โหลดข้อมูลฝากประวัติสำเร็จ - ข้อมูลถูกเติมลงในฟอร์มแล้ว');
+            console.log('✅ พบข้อมูลฝากประวัติที่สมบูรณ์แล้ว - ข้ามไปหน้า Dashboard');
+            // แสดงข้อความแจ้งเตือน
+            console.log('ℹ️ คุณมีข้อมูลฝากประวัติแล้ว กำลังนำทางไปหน้า Dashboard');
+            // ข้ามไปหน้า Dashboard
+            router.push('/dashboard');
             return;
           } else {
             console.log('🔍 พบข้อมูลฝากประวัติที่เป็น draft - กำลังโหลดลงฟอร์ม...');
@@ -544,6 +565,8 @@ export default function ApplicationForm() {
     
     loadMyResume();
   }, [status, resumeId, departmentName]);
+
+
   // นำข้อมูลที่บันทึกแล้วมากรอกกลับในฟอร์ม
   const applyResumeToFormInputs = (resume: any) => {
     if (!resume) return;
@@ -851,6 +874,7 @@ export default function ApplicationForm() {
         return;
       }
     }
+    
     try {
       setIsSaving(true);
 
@@ -1000,7 +1024,7 @@ export default function ApplicationForm() {
         return;
       }
 
-      // เรียก API: ถ้ามี id ใช้ PATCH, ถ้าไม่มีก็ POST
+      // เรียก API: ถ้ามี id ใช้ PATCH, ถ้าไม่มีก็ POST (multipart แบบเดิม)
       if (savedResume?.id) {
         let res: Response;
         let json: any = {};
@@ -1014,11 +1038,32 @@ export default function ApplicationForm() {
         });
         json = await res.json().catch(() => ({}));
         if (!res.ok || json?.success === false) {
-          // ใช้ json ที่ได้จาก response หรือ fallback message
-          const statusCode = res?.status || 'Unknown';
-          const errorMessage = json?.message || `บันทึกข้อมูลไม่สำเร็จ (HTTP ${statusCode})`;
-          console.error('❌ PATCH request failed:', errorMessage);
-          throw new Error(errorMessage);
+          // ถ้าไม่พบข้อมูลสำหรับอัปเดต ให้สร้างใหม่แทน
+          if (json?.message === 'ไม่พบข้อมูลสำหรับอัปเดต') {
+            console.log('🔍 ข้อมูลไม่พบในฐานข้อมูล - สร้างใหม่แทน');
+            // เปลี่ยนเป็น POST แทน
+            const newResumePayload = {
+              firstName: formData.firstName,
+              lastName: formData.lastName,
+              phone: formData.phone,
+              email: formData.email,
+              ...partial
+            };
+            
+            const newRes = await fetch('/api/resume-deposit', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newResumePayload)
+            });
+            const newJson = await newRes.json().catch(() => ({}));
+            if (!newRes.ok || newJson?.success === false) {
+              throw new Error(newJson?.message || 'สร้างข้อมูลใหม่ไม่สำเร็จ');
+            }
+            setSavedResume(newJson.data || newJson);
+            applyResumeToFormInputs(newJson.data || newJson);
+          } else {
+            throw new Error(json?.message || 'บันทึกข้อมูลไม่สำเร็จ');
+          }
         } else {
           setSavedResume(json.data || json);
           applyResumeToFormInputs(json.data || json);
@@ -1030,22 +1075,33 @@ export default function ApplicationForm() {
             setProfileImage(imagePath);
           }
         }
-      } else {
+            } else {
         // POST เริ่มเรคคอร์ดใหม่ (ส่งเฉพาะ personal ที่จำเป็น)
-        const userId = (session?.user as any)?.id || null;
-        const lineIdCandidate = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || null;
+        const fd = new FormData();
+        const baseCreate = {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          email: formData.email,
+          ...partial
+        };
+        fd.append('formData', JSON.stringify(baseCreate));
+        if (formData.profileImage) fd.append('profileImage', formData.profileImage);
+        
+        // เพิ่มเอกสารแนบ - ไม่ส่งข้อมูล documents ที่นี่เพราะจะจัดการแยกใน API
+        // if (tab === 'documents' && formData.documents) {
+        //   for (const [docType, file] of Object.entries(formData.documents)) {
+        //     if (file && file instanceof File) {
+        //       fd.append(`document_${docType}`, file);
+        //       console.log(`🔍 handleSubmit POST - Appending document ${docType}:`, file.name);
+        //     }
+        //   }
+        // }
+        
         const res = await fetch('/api/resume-deposit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            lineId: lineIdCandidate,
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            phone: formData.phone,
-            email: formData.email,
-            ...partial,
-          })
+          body: JSON.stringify(partial)
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || json?.success === false) {
@@ -1057,7 +1113,7 @@ export default function ApplicationForm() {
         // โหลดรูปโปรไฟล์ใหม่หลังจากบันทึกสำเร็จ
         if (json.data?.profileImageUrl) {
           const imagePath = `/api/image?file=${json.data.profileImageUrl}`;
-          console.log('🔍 Reloading profile image after save (POST):', imagePath);
+          console.log('🔍 Reloading profile image after save (PATCH):', imagePath);
           setProfileImage(imagePath);
         }
       }
@@ -1080,9 +1136,8 @@ export default function ApplicationForm() {
         console.log('✅ บันทึกสำเร็จ');
       }
     } catch (err: any) {
-      console.error('❌ เกิดข้อผิดพลาดในการบันทึก:', err);
-      alert(`เกิดข้อผิดพลาดในการบันทึก: ${err.message || 'ไม่ทราบสาเหตุ'}`);
-    } finally {
+      console.error('❌ เกิดข้อผิดพลาดในการบันทึก:', err?.message || 'Unknown error');
+        } finally {
       setIsSaving(false);
     }
   };
@@ -1150,6 +1205,7 @@ export default function ApplicationForm() {
     const randomSalary = Math.floor(Math.random() * 50000) + 20000; // เงินเดือน 20,000-70,000
     const randomStartYear = new Date().getFullYear() - Math.floor(Math.random() * 5);
     const randomEndYear = randomStartYear + Math.floor(Math.random() * 3) + 1;
+    
     // สร้างข้อมูลความสามารถ
     const randomSkills = skills.slice(0, Math.floor(Math.random() * 4) + 2).join(', ');
     const randomLanguages = languages.slice(0, Math.floor(Math.random() * 3) + 1).join(', ');
@@ -1332,10 +1388,7 @@ export default function ApplicationForm() {
 
   // รับข้อมูลแผนกจาก URL parameters
   useEffect(() => {
-    const departmentRaw = searchParams.get('department');
-    const department = (() => {
-      try { return departmentRaw ? decodeURIComponent(departmentRaw) : departmentRaw; } catch { return departmentRaw; }
-    })();
+    const department = searchParams.get('department');
     const departmentId = searchParams.get('departmentId');
     
     if (department) {
@@ -1443,137 +1496,51 @@ export default function ApplicationForm() {
             }
           });
         }
-
-    // ตั้งค่า flatpickr สำหรับวันที่เริ่มงานและสิ้นสุดงานเมื่อ activeTab เป็น workExperience
-    if (activeTab === 'workExperience') {
-      console.log('🔍 Setting up flatpickr for work experience dates...');
-      setTimeout(() => {
-        formData.workExperience.forEach((_, index) => {
-          console.log(`🔍 Setting up flatpickr for work experience ${index}`);
-          
-          // วันที่เริ่มงาน
-          if (workStartRefs.current && workStartRefs.current[index]) {
-            console.log(`🔍 Setting up flatpickr for start date ${index}`);
-            const inst = (workStartRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-            if (inst) inst.destroy();
-            flatpickr(workStartRefs.current[index], {
-              locale: Thai,
-              dateFormat: 'd/m/Y',
-              allowInput: true,
-              clickOpens: true,
-              disableMobile: true,
-              appendTo: typeof document !== 'undefined' ? document.body : undefined,
-              onOpen: function() {
-                try {
-                  const c = (this as any).calendarContainer as HTMLElement;
-                  if (c) c.style.zIndex = '9999';
-                } catch {}
-              },
-              defaultDate: formData.workExperience[index]?.startDate ? new Date(formData.workExperience[index].startDate) : undefined,
-              onChange: (dates) => {
-                if (dates.length > 0) {
-                  const d = dates[0];
-                  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  console.log(`🔍 Start date changed: ${iso}`);
-                  handleWorkExperienceChange(index, 'startDate', iso);
-                }
-              }
-            });
-          }
-
-          // วันที่สิ้นสุดงาน
-          if (workEndRefs.current && workEndRefs.current[index]) {
-            console.log(`🔍 Setting up flatpickr for end date ${index}`);
-            const inst = (workEndRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-            if (inst) inst.destroy();
-            flatpickr(workEndRefs.current[index], {
-              locale: Thai,
-              dateFormat: 'd/m/Y',
-              allowInput: true,
-              clickOpens: true,
-              disableMobile: true,
-              appendTo: typeof document !== 'undefined' ? document.body : undefined,
-              onOpen: function() {
-                try {
-                  const c = (this as any).calendarContainer as HTMLElement;
-                  if (c) c.style.zIndex = '9999';
-                } catch {}
-              },
-              defaultDate: formData.workExperience[index]?.endDate ? new Date(formData.workExperience[index].endDate) : undefined,
-              onChange: (dates) => {
-                if (dates.length > 0) {
-                  const d = dates[0];
-                  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  console.log(`🔍 End date changed: ${iso}`);
-                  handleWorkExperienceChange(index, 'endDate', iso);
-                }
-              }
-            });
-          }
-        });
-      }, 500);
-    }
   }, [activeTab]); // เพิ่ม activeTab ใน dependency array
-
-  // ตั้งค่า flatpickr สำหรับวันที่เริ่มงานและสิ้นสุดงานเมื่อมีการเพิ่มหรือลบ work experience
+  // ตั้งค่า flatpickr สำหรับวันที่เริ่มงานและสิ้นสุดงาน
   useEffect(() => {
-    if (activeTab === 'workExperience') {
-      console.log('🔍 Setting up flatpickr for work experience dates (useEffect 2)...');
-      const timer = setTimeout(() => {
-        formData.workExperience.forEach((_, index) => {
-          console.log(`🔍 Setting up flatpickr for work experience ${index} (useEffect 2)`);
-          
-          // วันที่เริ่มงาน
-          if (workStartRefs.current && workStartRefs.current[index]) {
-            console.log(`🔍 Setting up flatpickr for start date ${index} (useEffect 2)`);
-            const inst = (workStartRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-            if (inst) inst.destroy();
-            flatpickr(workStartRefs.current[index], {
-              locale: Thai,
-              dateFormat: 'd/m/Y',
-              allowInput: true,
-              clickOpens: true,
-              disableMobile: true,
-              defaultDate: formData.workExperience[index]?.startDate ? new Date(formData.workExperience[index].startDate) : undefined,
-              onChange: (dates) => {
-                if (dates.length > 0) {
-                  const d = dates[0];
-                  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  console.log(`🔍 Start date changed (useEffect 2): ${iso}`);
-                  handleWorkExperienceChange(index, 'startDate', iso);
-                }
+    formData.workExperience.forEach((_, index) => {
+      // วันที่เริ่มงาน
+      if (workStartRefs.current[index]) {
+        const inst = (workStartRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+        if (inst) inst.destroy();
+        flatpickr(workStartRefs.current[index], {
+            locale: Thai,
+            dateFormat: 'd/m/Y',
+            allowInput: true,
+            clickOpens: true,
+          defaultDate: formData.workExperience[index]?.startDate ? new Date(formData.workExperience[index].startDate) : undefined,
+          onChange: (dates) => {
+            if (dates.length > 0) {
+              const d = dates[0];
+              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              handleWorkExperienceChange(index, 'startDate', iso);
               }
-            });
-          }
+            }
+          });
+      }
 
-          // วันที่สิ้นสุดงาน
-          if (workEndRefs.current && workEndRefs.current[index]) {
-            console.log(`🔍 Setting up flatpickr for end date ${index} (useEffect 2)`);
-            const inst = (workEndRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-            if (inst) inst.destroy();
-            flatpickr(workEndRefs.current[index], {
-              locale: Thai,
-              dateFormat: 'd/m/Y',
-              allowInput: true,
-              clickOpens: true,
-              disableMobile: true,
-              defaultDate: formData.workExperience[index]?.endDate ? new Date(formData.workExperience[index].endDate) : undefined,
-              onChange: (dates) => {
-                if (dates.length > 0) {
-                  const d = dates[0];
-                  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  console.log(`🔍 End date changed (useEffect 2): ${iso}`);
-                  handleWorkExperienceChange(index, 'endDate', iso);
-                }
-              }
-            });
+      // วันที่สิ้นสุดงาน
+      if (workEndRefs.current[index]) {
+        const inst = (workEndRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+        if (inst) inst.destroy();
+        flatpickr(workEndRefs.current[index], {
+            locale: Thai,
+            dateFormat: 'd/m/Y',
+            allowInput: true,
+            clickOpens: true,
+          defaultDate: formData.workExperience[index]?.endDate ? new Date(formData.workExperience[index].endDate) : undefined,
+          onChange: (dates) => {
+            if (dates.length > 0) {
+              const d = dates[0];
+              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              handleWorkExperienceChange(index, 'endDate', iso);
           }
-        });
-      }, 500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [formData.workExperience.length, activeTab]);
+        }
+      });
+        }
+      });
+  }, [formData.workExperience.length]);
 
   // ฟังก์ชันดึงข้อมูลจาก ResumeDeposit
   const fetchProfileData = async () => {
@@ -1587,17 +1554,11 @@ export default function ApplicationForm() {
       // ดึงข้อมูลจาก ResumeDeposit API
       const userEmail = (session?.user as any)?.email || '';
       const userId = (session?.user as any)?.id || '';
-      const userLineId = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || '';
-      console.log('🔍 fetchProfileData - UserEmail/UserId/LineId:', { userEmail, userId, userLineId });
+      console.log('🔍 fetchProfileData - UserEmail:', userEmail);
+      console.log('🔍 fetchProfileData - UserId:', userId);
       const params = new URLSearchParams();
       if (userId) params.set('userId', String(userId));
-      if (userLineId) {
-        params.set('lineId', String(userLineId));
-      } else {
-        // ไม่มี lineId ไม่ดึงข้อมูล เพื่อความปลอดภัยตามข้อกำหนด
-        setIsLoading(false);
-        return;
-      }
+      if (userEmail) params.set('email', String(userEmail));
       const url = `/api/resume-deposit?${params.toString()}`;
       console.log('🔍 fetchProfileData - API URL:', url);
       const response = await fetch(url);
@@ -1610,7 +1571,7 @@ export default function ApplicationForm() {
         
         const list = (result?.data || result || []) as any[];
         const filtered = Array.isArray(list)
-                ? list.filter((r) => (r?.lineId || '') === userLineId)
+          ? (userEmail ? list.filter((r) => (r?.email || '').toLowerCase() === userEmail.toLowerCase()) : list)
           : [];
         
         if (filtered.length > 0) {
@@ -1903,7 +1864,8 @@ export default function ApplicationForm() {
       setIsLoading(false);
     }
   };
-  // ฟังก์ชันโหลดข้อมูลฝากประวัติตาม department (ใช้เฉพาะ lineId)
+
+  // ฟังก์ชันโหลดข้อมูลฝากประวัติตาม department (ค้นหาตามหลายวิธี)
   const loadResumeByDepartment = async () => {
     console.log('🔄 loadResumeByDepartment เริ่มทำงาน');
     console.log('🔍 status:', status);
@@ -1916,35 +1878,42 @@ export default function ApplicationForm() {
     }
     
     console.log('🔄 ดึงข้อมูลฝากประวัติสำหรับ department:', departmentName);
+    console.log('🔍 โหมด: ค้นหาตามหลายวิธี - ID, ชื่อ, นามสกุล, อีเมล, เบอร์โทร');
     setIsLoading(true);
     
     try {
       // ดึงข้อมูลผู้ใช้จาก session
       const user = session?.user as any;
-      const userId = user?.id || '';
-      const userLineId = user?.lineId || user?.sub || (session as any)?.profile?.userId || '';
+      const userEmail = user?.email || '';
+      const userName = user?.name || '';
       
       console.log('🔍 ข้อมูลผู้ใช้:', {
-        userId: userId,
-        lineId: userLineId,
+        email: userEmail,
+        name: userName,
         departmentName: departmentName,
         departmentId: departmentId
       });
       
-      if (!userLineId) {
-        console.log('❌ ไม่มี lineId ใน session - ไม่สามารถดึงข้อมูลได้');
-        setIsLoading(false);
+      if (!userEmail && !userName) {
+        console.log('❌ ไม่พบข้อมูลผู้ใช้ใน session');
+        console.error('❌ ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
         return;
       }
       
-      // ดึงข้อมูลฝากประวัติตาม session (ใช้ lineId และ userId เท่านั้น)
+      // แยกชื่อและนามสกุลจาก name
+      let firstName = '';
+      let lastName = '';
+      if (userName) {
+        const nameParts = userName.trim().split(' ');
+        firstName = nameParts[0] || '';
+        lastName = nameParts.slice(1).join(' ') || '';
+      }
+      
+      console.log('🔍 ชื่อที่แยกแล้ว:', { firstName, lastName });
+      
+      // ดึงข้อมูลฝากประวัติทั้งหมด
       console.log('🔍 เรียก API: /api/resume-deposit');
-      const params = new URLSearchParams();
-      if (userId) params.set('userId', String(userId));
-      if (userLineId) params.set('lineId', String(userLineId));
-      const url = `/api/resume-deposit?${params.toString()}`;
-      console.log('🔍 API URL:', url);
-      const res = await fetch(url);
+      const res = await fetch('/api/resume-deposit');
       console.log('🔍 API Response status:', res.status);
       
       if (res.ok) {
@@ -1981,28 +1950,7 @@ export default function ApplicationForm() {
           }
         }
         
-        // วิธีที่ 3: ค้นหาตาม userId
-        if (!found && userId) {
-          const userIdMatch = list.find(r => r?.userId === userId);
-          if (userIdMatch) {
-            found = userIdMatch;
-            console.log('✅ พบข้อมูลตาม userId:', found.id);
-          }
-        }
-        
-        // วิธีที่ 4: ค้นหาตาม lineId (จำเป็นต้องตรงเท่านั้น)
-        if (!found && userLineId) {
-          const lineIdMatch = list.find(r => (r?.lineId || '') === userLineId);
-          if (lineIdMatch) {
-            found = lineIdMatch;
-            console.log('✅ พบข้อมูลตาม lineId:', found.id);
-          } else {
-            // หาก lineId ไม่ตรง ให้ถือว่าไม่พบข้อมูล
-            console.log('❌ lineId ไม่ตรงกับผู้ใช้ที่ล็อกอิน');
-          }
-        }
-        
-        // วิธีที่ 5: ค้นหาตามอีเมล
+        // วิธีที่ 3: ค้นหาตามอีเมล
         if (!found && userEmail) {
           const emailMatch = list.find(r => 
             (r?.email || '').toLowerCase() === userEmail.toLowerCase()
@@ -2013,7 +1961,7 @@ export default function ApplicationForm() {
           }
         }
         
-        // วิธีที่ 6: ค้นหาตามชื่อและนามสกุล
+        // วิธีที่ 4: ค้นหาตามชื่อและนามสกุล
         if (!found && firstName && lastName) {
           const nameMatch = list.find(r => {
             const rFirstName = (r?.firstName || '').trim();
@@ -2027,7 +1975,7 @@ export default function ApplicationForm() {
           }
         }
         
-        // วิธีที่ 7: ค้นหาตามชื่อเท่านั้น
+        // วิธีที่ 5: ค้นหาตามชื่อเท่านั้น
         if (!found && firstName) {
           const firstNameMatch = list.find(r => {
             const rFirstName = (r?.firstName || '').trim();
@@ -2039,7 +1987,7 @@ export default function ApplicationForm() {
           }
         }
         
-        // วิธีที่ 8: ค้นหาตาม department ในข้อมูล (ปรับปรุงให้ค้นหาได้ดีขึ้น)
+        // วิธีที่ 6: ค้นหาตาม department ในข้อมูล (ปรับปรุงให้ค้นหาได้ดีขึ้น)
         if (!found && departmentName) {
           const deptMatch = list.find(r => {
             const rDept = (r?.department || '').toLowerCase().trim();
@@ -2059,7 +2007,7 @@ export default function ApplicationForm() {
           }
         }
         
-        // วิธีที่ 9: ค้นหาตามเบอร์โทร (ถ้ามี)
+        // วิธีที่ 7: ค้นหาตามเบอร์โทร (ถ้ามี)
         if (!found && userEmail) {
           // ลองดึงเบอร์โทรจากอีเมล (ถ้าเป็นรูปแบบ phone@domain.com)
           const phoneFromEmail = userEmail.split('@')[0];
@@ -2160,25 +2108,25 @@ export default function ApplicationForm() {
       setIsLoading(false);
     }
   };
+
   // ฟังก์ชันรีเฟรชข้อมูลฝากประวัติ
   const refreshResumeData = async () => {
     console.log('🔄 รีเฟรชข้อมูลฝากประวัติ...');
     setIsLoading(true);
     
     try {
+      const userEmail = (session?.user as any)?.email || '';
       const userId = (session?.user as any)?.id || '';
-      const userLineId = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || '';
-      
-      if (!userLineId) {
-        console.log('❌ ไม่มี lineId ใน session - ไม่สามารถดึงข้อมูลได้');
-        setIsLoading(false);
+      if (!userEmail) {
+        console.log('❌ ไม่พบอีเมลผู้ใช้');
+        console.error('❌ ไม่พบอีเมลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
         return;
       }
 
-      // ค้นหาข้อมูลฝากประวัติล่าสุด (ใช้ lineId และ userId เท่านั้น)
+      // ค้นหาข้อมูลฝากประวัติล่าสุด
       const params = new URLSearchParams();
       if (userId) params.set('userId', String(userId));
-      if (userLineId) params.set('lineId', String(userLineId));
+      if (userEmail) params.set('email', String(userEmail));
       const url = `/api/resume-deposit?${params.toString()}`;
       console.log('🔎 refreshResumeData - URL:', url);
       const res = await fetch(url);
@@ -2186,7 +2134,7 @@ export default function ApplicationForm() {
         const json = await res.json().catch(() => ({}));
         const list = (json?.data || json || []) as any[];
         const filtered = Array.isArray(list)
-          ? list.filter((r) => (r?.lineId || '') === userLineId)
+          ? list.filter((r) => (r?.email || '').toLowerCase() === userEmail.toLowerCase())
           : [];
           
         if (filtered.length > 0) {
@@ -2390,7 +2338,7 @@ export default function ApplicationForm() {
             }
           }
           
-          // ถ้าไม่เจอ ให้ค้นหา error message
+          // ถ้าไม่เจอ ให้ค้นหาด้วย error message
           if (!errorField) {
             const errorMessages = document.querySelectorAll('.text-red-500');
             for (const errorMsg of errorMessages) {
@@ -2500,6 +2448,7 @@ export default function ApplicationForm() {
         });
       }
     }
+    
     // ล้าง error สำหรับ documents fields
     if (key.startsWith('documents.')) {
       const docType = key.split('.')[1];
@@ -2840,6 +2789,7 @@ export default function ApplicationForm() {
       workExperience: prev.workExperience.filter((_, i) => i !== index)
     }));
   };
+
   const addPreviousGovernmentService = () => {
     setFormData(prev => ({
       ...prev,
@@ -2895,8 +2845,7 @@ export default function ApplicationForm() {
     if (!dateString) return '';
     try {
       const date = new Date(dateString);
-      // ใช้ toLocaleDateString แบบไม่ระบุ locale เพื่อให้แสดงปี ค.ศ. ปกติ
-      return date.toLocaleDateString('en-GB', {
+      return date.toLocaleDateString('th-TH', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric'
@@ -3143,6 +3092,7 @@ export default function ApplicationForm() {
     
     return errors;
   };
+
   const validateForm = () => {
     const errors: { [key: string]: string } = {};
     
@@ -3444,20 +3394,12 @@ export default function ApplicationForm() {
       console.log('🔍 resumeId:', resumeId);
 
       // ถ้ามี resumeId ให้อัปเดตข้อมูลเดิม ถ้าไม่มีให้สร้างใหม่
-      let savedResumeId = resumeId;
       if (resumeId) {
         console.log('🔍 อัปเดตข้อมูล ResumeDeposit ที่มีอยู่แล้ว ID:', resumeId);
         await updateResumeDeposit(resumeId);
       } else {
         console.log('🔍 สร้าง ResumeDeposit ใหม่');
-        const savedResume = await saveToResumeDeposit();
-        savedResumeId = savedResume?.id || savedResumeId;
-      }
-      
-      // สร้างใบสมัครงานในตาราง application_form (ถ้ามี department)
-      if (departmentName && departmentId && savedResumeId) {
-        console.log('🔍 สร้างใบสมัครงานสำหรับฝ่าย:', departmentName);
-        await createApplicationForm(savedResumeId, departmentName, departmentId);
+        await saveToResumeDeposit();
       }
       
       // บันทึกข้อมูลสำเร็จ
@@ -3471,6 +3413,8 @@ export default function ApplicationForm() {
       setIsSaving(false);
     }
   };
+
+
   // ฟังก์ชันอัปเดตข้อมูล ResumeDeposit ที่มีอยู่แล้ว
   const updateResumeDeposit = async (id: string) => {
     try {
@@ -3731,9 +3675,6 @@ export default function ApplicationForm() {
       
       // สร้าง ResumeDeposit payload
       const resumePayload = {
-        // 🔒 Security: บันทึก userId และ lineId จาก session เพื่อความปลอดภัย (รองรับหลายกรณี)
-        userId: (session?.user as any)?.id || null,
-        lineId: (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || null,
         // บุคคล
         prefix: formData.prefix || null,
         firstName: formData.firstName,
@@ -3809,6 +3750,7 @@ export default function ApplicationForm() {
         staff_position: formData.staffInfo?.position || null,
         staff_department: formData.staffInfo?.department || null,
         staff_start_work: formData.staffInfo?.startWork || null,
+        
         // ที่อยู่ทะเบียนบ้าน (รายละเอียด)
         house_registration_house_number: formData.registeredAddress?.houseNumber || null,
         house_registration_village_number: formData.registeredAddress?.villageNumber || null,
@@ -3876,15 +3818,6 @@ export default function ApplicationForm() {
 
       // ส่งเป็น JSON เท่านั้น (รูปภาพจะจัดการแยกผ่าน profile-image/upload API)
       console.log('🔍 handleSubmit POST - Sending JSON data only');
-      console.log('🔍 handleSubmit POST - Session data:', { 
-        userId: (session?.user as any)?.id, 
-        lineId: (session?.user as any)?.lineId,
-        email: (session?.user as any)?.email 
-      });
-      console.log('🔍 handleSubmit POST - ResumePayload userId/lineId:', { 
-        userId: resumePayload.userId, 
-        lineId: resumePayload.lineId 
-      });
       console.log('🔍 handleSubmit POST - formData.profileImage:', formData.profileImage);
       console.log('🔍 handleSubmit POST - resumePayload.education:', resumePayload.education);
       console.log('🔍 handleSubmit POST - resumePayload.education.length:', resumePayload.education?.length || 0);
@@ -3970,112 +3903,12 @@ export default function ApplicationForm() {
 
       console.log('✅ ResumeDeposit saved successfully');
       
-      // Return the saved resume data
-      return json.data;
-      
     } catch (error) {
       console.error('❌ Error saving to ResumeDeposit:', error);
       throw error; // Re-throw error to be handled by handleSubmit
     }
   };
 
-  // ฟังก์ชันสร้างใบสมัครงานในตาราง application_form
-  const createApplicationForm = async (resumeId: string, departmentName: string, departmentId: string) => {
-    try {
-      console.log('📝 Creating ApplicationForm...');
-      console.log('🔍 resumeId:', resumeId);
-      console.log('🔍 departmentName:', departmentName);
-      console.log('🔍 departmentId:', departmentId);
-      
-      // สร้าง payload สำหรับ application_form
-      const applicationPayload = {
-        resumeId: resumeId,
-        userId: (session?.user as any)?.id || null,
-        lineId: (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || null,
-        // ข้อมูลส่วนตัว
-        prefix: formData.prefix || null,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        idNumber: formData.idNumber || null,
-        idCardIssuedAt: formData.idCardIssuedAt || null,
-        idCardIssueDate: formData.idCardIssueDate ? new Date(formData.idCardIssueDate) : null,
-        idCardExpiryDate: formData.idCardExpiryDate ? new Date(formData.idCardExpiryDate) : null,
-        birthDate: formData.birthDate ? new Date(formData.birthDate) : null,
-        age: formData.age ? Number(formData.age) : null,
-        race: formData.race || null,
-        placeOfBirth: formData.placeOfBirth || null,
-        placeOfBirthProvince: formData.placeOfBirthProvince || null,
-        gender: formData.gender || 'UNKNOWN',
-        nationality: formData.nationality || null,
-        religion: formData.religion || null,
-        maritalStatus: formData.maritalStatus || 'UNKNOWN',
-        // ที่อยู่
-        addressAccordingToHouseRegistration: formData.addressAccordingToHouseRegistration || null,
-        currentAddress: formData.currentAddress || null,
-        phone: formData.phone || null,
-        email: formData.email || null,
-        // ข้อมูลฉุกเฉิน
-        emergencyContact: formData.emergencyContact || null,
-        emergencyPhone: formData.emergencyPhone || null,
-        emergencyRelationship: formData.emergencyRelationship || null,
-        emergencyAddress: formData.emergencyAddress || null,
-        // ข้อมูลการสมัครงาน
-        appliedPosition: formData.appliedPosition || departmentName,
-        expectedSalary: formData.expectedSalary || null,
-        availableDate: formData.availableDate ? new Date(formData.availableDate) : null,
-        currentWork: formData.currentWork || false,
-        department: departmentName,
-        departmentId: departmentId,
-        // ข้อมูลเพิ่มเติม
-        skills: formData.skills || null,
-        languages: formData.languages || null,
-        computerSkills: formData.computerSkills || null,
-        certificates: formData.certificates || null,
-        references: formData.references || null,
-        applicantSignature: formData.applicantSignature || null,
-        applicationDate: formData.applicationDate ? new Date(formData.applicationDate) : new Date(),
-        status: 'PENDING',
-        // ข้อมูลการศึกษา
-        education: (formData.education || []).map((e) => ({
-          level: e.level,
-          institution: e.institution,
-          major: e.major || null,
-          year: e.year || e.graduationYear || null,
-          gpa: e.gpa ? parseFloat(e.gpa) : null
-        })),
-        // ประสบการณ์ทำงาน
-        workExperience: (formData.workExperience || []).map((work) => ({
-          position: work.position || null,
-          company: work.company || null,
-          startDate: work.startDate ? new Date(work.startDate) : null,
-          endDate: work.endDate ? new Date(work.endDate) : null,
-          salary: work.salary || null,
-          reason: work.reason || null
-        }))
-      };
-
-      console.log('🔍 ApplicationForm payload:', applicationPayload);
-
-      const res = await fetch('/api/prisma/applications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(applicationPayload)
-      });
-
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        console.error('❌ ApplicationForm create failed:', res.status, json);
-        throw new Error(json?.message || 'ไม่สามารถสร้างใบสมัครงานได้');
-      }
-
-      console.log('✅ ApplicationForm created successfully:', json.data?.id);
-      return json.data;
-      
-    } catch (error) {
-      console.error('❌ Error creating ApplicationForm:', error);
-      throw error; // Re-throw error to be handled by handleSubmit
-    }
-  };
 
   // ฟังก์ชันสำหรับสร้างข้อมูล random
   const generateRandomData = () => {
@@ -4274,14 +4107,14 @@ export default function ApplicationForm() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
                     <span className="text-sm font-medium text-green-800">
-                        สมัครงานฝ่าย: <span className="font-bold">{departmentName}</span>
+                        สมัครงานตำแหน่งในแผนก: <span className="font-bold">{departmentName}</span>
                     </span>
           </div>
-                    {/* {departmentId && (
+                    {departmentId && (
                     <div className="text-xs text-green-700">
                         <span className="font-medium">รหัสแผนก:</span> {departmentId}
                     </div>
-                  )} */}
+                  )}
                 </div>
               )}
               </div>
@@ -4586,6 +4419,7 @@ export default function ApplicationForm() {
             }
           }}
         />
+
         {/* Profile Image Section */}
         <Card className="mb-8  bg-white/80 backdrop-blur-sm">
           <CardHeader className="pb-4">
@@ -4935,7 +4769,6 @@ export default function ApplicationForm() {
                          <p className="text-red-500 text-xs mt-1">{getErrorMessage('lastName')}</p>
                   )}
                 </div>
-                
                 <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700">วัน เดือน ปีเกิด<span className="text-red-500">*</span></label>
                   <input
@@ -5571,6 +5404,26 @@ export default function ApplicationForm() {
                       />
                       {hasError('currentAddressVillageNumber') && (
                         <p className="text-red-500 text-xs mt-1">{getErrorMessage('currentAddressVillageNumber')}</p>
+                      )}
+              </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">ตรอก/ซอย<span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={formData.currentAddressDetail?.alley || ''}
+                        onChange={(e) => handleInputChange('currentAddressDetail.alley', e.target.value)}
+                        placeholder="กรอกตรอก/ซอย"
+                        disabled={copyFromRegisteredAddress}
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                          hasError('currentAddressAlley') 
+                            ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                      />
+                      {hasError('currentAddressAlley') && (
+                        <p className="text-red-500 text-xs mt-1">{getErrorMessage('currentAddressAlley')}</p>
                     )}
                   </div>
                     <div className="space-y-2">
@@ -6200,13 +6053,13 @@ export default function ApplicationForm() {
                         setFormData(prev => ({
                           ...prev,
                           documents: {
-                            idCard: undefined,
-                            houseRegistration: undefined,
-                            educationCertificate: undefined,
-                            militaryCertificate: undefined,
-                            medicalCertificate: undefined,
-                            drivingLicense: undefined,
-                            otherDocuments: []
+                            idCard: null,
+                            houseRegistration: null,
+                            educationCertificate: null,
+                            militaryCertificate: null,
+                            medicalCertificate: null,
+                            drivingLicense: null,
+                            otherDocuments: null
                           }
                         }));
                         setUploadedDocuments([]);
@@ -6655,13 +6508,10 @@ export default function ApplicationForm() {
                       id="militaryCertificate"
                       accept=".pdf,.jpg,.jpeg,.png"
                       disabled={formData.gender === 'หญิง'}
-                      onChange={async (e) => {
+                      onChange={(e) => {
                           const file = e.target.files?.[0];
                           if (file) {
                             handleInputChange('documents.militaryCertificate', file);
-                            
-                            // อัปโหลดไฟล์ลงฐานข้อมูล
-                            await handleDocumentUpload(file, 'militaryCertificate');
                           }
                         }}
                       className="hidden"
@@ -6755,13 +6605,10 @@ export default function ApplicationForm() {
                       type="file"
                       id="medicalCertificate"
                       accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={async (e) => {
+                      onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
                           handleInputChange('documents.medicalCertificate', file);
-                          
-                          // อัปโหลดไฟล์ลงฐานข้อมูล
-                          await handleDocumentUpload(file, 'medicalCertificate');
                         }
                       }}
                       className="hidden"
@@ -6836,6 +6683,7 @@ export default function ApplicationForm() {
                       </div>
                     )}
                   </div>
+
                   {/* ใบขับขี่ */}
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
                     <div className="mb-2">
@@ -6849,13 +6697,10 @@ export default function ApplicationForm() {
                       type="file"
                       id="drivingLicense"
                       accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={async (e) => {
+                      onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
                           handleInputChange('documents.drivingLicense', file);
-                          
-                          // อัปโหลดไฟล์ลงฐานข้อมูล
-                          await handleDocumentUpload(file, 'drivingLicense');
                         }
                       }}
                       className="hidden"
@@ -6997,9 +6842,9 @@ export default function ApplicationForm() {
                                     ...prev,
                                     documents: {
                                       ...prev.documents,
-                                      otherDocuments: newFiles || []
+                                      otherDocuments: newFiles
                                     }
-                                  } as FormData));
+                                  }));
                                 }}
                                 disabled={isUploading}
                               >
@@ -7163,6 +7008,7 @@ export default function ApplicationForm() {
             </CardBody>
           </Card>
           )}
+
           {/* ประวัติการทำงาน */}
           {activeTab === 'work' && (
           <Card className="shadow-xl border-0">
@@ -7235,57 +7081,6 @@ export default function ApplicationForm() {
                             }}
                             type="text"
                             value={formatDateForDisplay(work.startDate)}
-                            autoComplete="off"
-                            onFocus={() => {
-                              const el = workStartRefs.current[index] as any;
-                              let inst = el?._flatpickr;
-                              if (!inst && el) {
-                                try {
-                                  inst = flatpickr(el, {
-                                    locale: Thai,
-                                    dateFormat: 'd/m/Y',
-                                    allowInput: true,
-                                    clickOpens: true,
-                                    disableMobile: true,
-                                    appendTo: typeof document !== 'undefined' ? document.body : undefined,
-                                    defaultDate: work.startDate ? new Date(work.startDate) : undefined,
-                                    onChange: (dates: Date[]) => {
-                                      if (dates.length > 0) {
-                                        const d = dates[0];
-                                        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                                        handleWorkExperienceChange(index, 'startDate', iso);
-                                      }
-                                    }
-                                  } as any);
-                                } catch {}
-                              }
-                              if (inst) inst.open();
-                            }}
-                            onClick={() => {
-                              const el = workStartRefs.current[index] as any;
-                              let inst = el?._flatpickr;
-                              if (!inst && el) {
-                                try {
-                                  inst = flatpickr(el, {
-                                    locale: Thai,
-                                    dateFormat: 'd/m/Y',
-                                    allowInput: true,
-                                    clickOpens: true,
-                                    disableMobile: true,
-                                    appendTo: typeof document !== 'undefined' ? document.body : undefined,
-                                    defaultDate: work.startDate ? new Date(work.startDate) : undefined,
-                                    onChange: (dates: Date[]) => {
-                                      if (dates.length > 0) {
-                                        const d = dates[0];
-                                        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                                        handleWorkExperienceChange(index, 'startDate', iso);
-                                      }
-                                    }
-                                  } as any);
-                                } catch {}
-                              }
-                              if (inst) inst.open();
-                            }}
                             onChange={(e) => {
                               const isoDate = parseDateFromThai(e.target.value);
                               handleWorkExperienceChange(index, 'startDate', isoDate);
@@ -7309,57 +7104,6 @@ export default function ApplicationForm() {
                             }}
                             type="text"
                             value={formatDateForDisplay(work.endDate)}
-                            autoComplete="off"
-                            onFocus={() => {
-                              const el = workEndRefs.current[index] as any;
-                              let inst = el?._flatpickr;
-                              if (!inst && el) {
-                                try {
-                                  inst = flatpickr(el, {
-                                    locale: Thai,
-                                    dateFormat: 'd/m/Y',
-                                    allowInput: true,
-                                    clickOpens: true,
-                                    disableMobile: true,
-                                    appendTo: typeof document !== 'undefined' ? document.body : undefined,
-                                    defaultDate: work.endDate ? new Date(work.endDate) : undefined,
-                                    onChange: (dates: Date[]) => {
-                                      if (dates.length > 0) {
-                                        const d = dates[0];
-                                        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                                        handleWorkExperienceChange(index, 'endDate', iso);
-                                      }
-                                    }
-                                  } as any);
-                                } catch {}
-                              }
-                              if (inst) inst.open();
-                            }}
-                            onClick={() => {
-                              const el = workEndRefs.current[index] as any;
-                              let inst = el?._flatpickr;
-                              if (!inst && el) {
-                                try {
-                                  inst = flatpickr(el, {
-                                    locale: Thai,
-                                    dateFormat: 'd/m/Y',
-                                    allowInput: true,
-                                    clickOpens: true,
-                                    disableMobile: true,
-                                    appendTo: typeof document !== 'undefined' ? document.body : undefined,
-                                    defaultDate: work.endDate ? new Date(work.endDate) : undefined,
-                                    onChange: (dates: Date[]) => {
-                                      if (dates.length > 0) {
-                                        const d = dates[0];
-                                        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                                        handleWorkExperienceChange(index, 'endDate', iso);
-                                      }
-                                    }
-                                  } as any);
-                                } catch {}
-                              }
-                              if (inst) inst.open();
-                            }}
                             onChange={(e) => {
                               const isoDate = parseDateFromThai(e.target.value);
                               handleWorkExperienceChange(index, 'endDate', isoDate);
@@ -7427,33 +7171,8 @@ export default function ApplicationForm() {
                 <h3 className="text-lg font-semibold text-gray-700 mb-4">๑.๙ เคยรับราชการเป็นข้าราชการ/ลูกจ้าง</h3>
                 
                 {/* Radio Button เลือกประเภท: ข้าราชการ หรือ ลูกจ้าง */}
-                
-
-                {/* รายการประวัติการรับราชการ */}
-                <div className="space-y-4">
-                  {formData.previousGovernmentService.map((service, index) => (
-                    <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
-                      
-                      <div className="flex justify-between items-center mb-3">
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-700">ประวัติการรับราชการที่ {index + 1}</h5>
-                          {service.type && (
-                            <p className="text-xs text-blue-600 mt-1">
-                              ประเภท: {service.type === 'civilServant' ? 'ข้าราชการ' : 'ลูกจ้าง'}
-                            </p>
-                          )}
-                        </div>
-                        {formData.previousGovernmentService.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removePreviousGovernmentService(index)}
-                            className="text-red-500 hover:text-red-700 text-sm"
-                          >
-                            <TrashIcon className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-4">
+                <div className="mb-6">
+                  <div className="flex items-center space-x-4">
                     <label className="text-sm font-medium text-gray-700">ประเภท:</label>
                     <div className="flex items-center space-x-4">
                       <label className="flex items-center">
@@ -7500,6 +7219,31 @@ export default function ApplicationForm() {
                       </label>
                     </div>
                   </div>
+                </div>
+
+                {/* รายการประวัติการรับราชการ */}
+                <div className="space-y-4">
+                  {formData.previousGovernmentService.map((service, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4 bg-white">
+                      <div className="flex justify-between items-center mb-3">
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700">ประวัติการรับราชการที่ {index + 1}</h5>
+                          {service.type && (
+                            <p className="text-xs text-blue-600 mt-1">
+                              ประเภท: {service.type === 'civilServant' ? 'ข้าราชการ' : 'ลูกจ้าง'}
+                            </p>
+                          )}
+                        </div>
+                        {formData.previousGovernmentService.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removePreviousGovernmentService(index)}
+                            className="text-red-500 hover:text-red-700 text-sm"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-gray-700">ตำแหน่ง<span className="text-red-500">*</span></label>
@@ -7577,6 +7321,7 @@ export default function ApplicationForm() {
             </CardBody>
           </Card>
           )}
+
           {/* ตำแหน่งงานที่สนใจ */}
           {activeTab === 'position' && (
           <Card className="shadow-xl border-0">
@@ -7739,3 +7484,4 @@ export default function ApplicationForm() {
     </div>
   );
 } 
+

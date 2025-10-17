@@ -39,6 +39,7 @@ interface ApplicationData {
   department: string;
   status: string;
   createdAt: string;
+  source?: string; // 'ResumeDeposit' หรือ 'ApplicationForm'
   profileImage?: string;
   profileImageUrl?: string;
   // ข้อมูลส่วนตัว
@@ -230,19 +231,26 @@ const ApplicationFormView = ({
               
               <div className="flex justify-center mb-6">
                 <div className="relative">
-                  {application.profileImage || application.profileImageUrl ? (
+                  {application.profileImageUrl ? (
                     <img
-                      src={(application.profileImageUrl || application.profileImage)!.startsWith('http') ?
-                        (application.profileImageUrl || application.profileImage)! :
-                        `/api/image?file=${encodeURIComponent(application.profileImageUrl || application.profileImage || '')}`}
+                      src={application.profileImageUrl.startsWith('http') ?
+                        application.profileImageUrl :
+                        `/api/image?file=${encodeURIComponent(application.profileImageUrl)}`}
                       alt="รูปโปรไฟล์"
                       className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 shadow-lg"
+                      onError={(e) => {
+                        console.log('❌ Large profile image load error:', application.profileImageUrl);
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
+                      onLoad={() => {
+                        console.log('✅ Large profile image loaded:', application.profileImageUrl);
+                      }}
                     />
-                  ) : (
-                    <div className="w-32 h-32 rounded-full bg-gray-200 border-4 border-gray-300 shadow-lg flex items-center justify-center">
+                  ) : null}
+                  <div className={`w-32 h-32 rounded-full bg-gray-200 border-4 border-gray-300 shadow-lg flex items-center justify-center ${application.profileImageUrl ? 'hidden' : ''}`}>
                       <UserIcon className="w-16 h-16 text-gray-400" />
                     </div>
-                  )}
                   </div>
                   </div>
                 </div>
@@ -1595,7 +1603,7 @@ const ApplicationFormView = ({
                  </div>
                        )}
                      </div>
-             <div className="space-y-2">
+             {/* <div className="space-y-2">
                <label className="text-sm font-medium text-gray-700">เงินเดือนที่คาดหวัง</label>
                    {isEditing ? (
                      <input
@@ -1610,20 +1618,20 @@ const ApplicationFormView = ({
                    {application.expectedSalary || '-'}
                      </div>
                )}
-             </div>
+             </div> */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">วันที่พร้อมเริ่มงาน</label>
               <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                 {formatDate(application.availableDate || '') || '-'}
               </div>
             </div>
-            <div className="space-y-2">
+            {/* <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">ฝ่าย</label>
               <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                 {application.department || '-'}
               </div>
-            </div>
-            <div className="space-y-2">
+            </div> */}
+            {/* <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">หน่วยงาน</label>
               <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                 {application.unit || '-'}
@@ -1634,7 +1642,7 @@ const ApplicationFormView = ({
               <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                 {application.currentWork ? 'ใช่' : 'ไม่'}
               </div>
-            </div>
+            </div> */}
                      </div>
                      
           {/* ทักษะและความสามารถ */}
@@ -1709,7 +1717,7 @@ const ApplicationFormView = ({
                      </div>
                      
           {/* ข้อมูลผู้แนะนำ */}
-          <div className="mt-8 space-y-4">
+          {/* <div className="mt-8 space-y-4">
             <h4 className="text-md font-semibold text-gray-700">ข้อมูลผู้อ้างอิง</h4>
              <div className="space-y-2">
                <label className="text-sm font-medium text-gray-700">ผู้อ้างอิง</label>
@@ -1727,10 +1735,10 @@ const ApplicationFormView = ({
                  </div>
                )}
              </div>
-                   </div>
+                   </div> */}
                   
           {/* ข้อมูลการสมัคร */}
-          <div className="mt-8 space-y-4">
+          {/* <div className="mt-8 space-y-4">
             <h4 className="text-md font-semibold text-gray-700">ข้อมูลการสมัคร</h4>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                <div className="space-y-2">
@@ -1765,7 +1773,7 @@ const ApplicationFormView = ({
                  )}
                </div>
              </div>
-          </div>
+          </div> */}
         </CardBody>
       </Card>
 
@@ -2594,6 +2602,10 @@ export default function ApplicationData() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const departmentName = searchParams.get('department');
+  const resumeUserIdParam = searchParams.get('resumeUserId');
+  const userIdParam = searchParams.get('userId');
+  const adminParam = searchParams.get('admin');
+  const limitParam = searchParams.get('limit');
   
   // Modal states
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -2634,68 +2646,212 @@ export default function ApplicationData() {
     }
   };
 
-  // ฟังก์ชันสำหรับดึงข้อมูลใบสมัครงาน
+  // ฟังก์ชันสำหรับดึงข้อมูลใบสมัครงาน (ดึงจากทั้ง ResumeDeposit และ ApplicationForm)
   const fetchApplications = async () => {
     try {
       setLoading(true);
       
-      // 🔒 Security: ดึงข้อมูล userId จาก session
+      // 🔒 Security: ดึงข้อมูล userId และ lineId จาก session
       const userId = (session?.user as any)?.id || '';
       const userEmail = (session?.user as any)?.email || '';
+      const userLineId = (session?.user as any)?.lineId || '';
       
-      // สร้าง URL พร้อม parameters สำหรับความปลอดภัย
-      const url = new URL('/api/resume-deposit', window.location.origin);
-      if (userId) {
-        url.searchParams.set('userId', userId);
+      console.log('🔍 Fetching applications from both ResumeDeposit and ApplicationForm...');
+      
+      // ดึงข้อมูลจาก ResumeDeposit (ใบสมัครใบแรก)
+      const resumeUrl = new URL('/api/resume-deposit', window.location.origin);
+      if (userIdParam) {
+        resumeUrl.searchParams.set('userId', userIdParam);
+        if (limitParam) resumeUrl.searchParams.set('limit', limitParam);
+        if (adminParam === 'true') resumeUrl.searchParams.set('admin', 'true');
+      } else if (resumeUserIdParam) {
+        resumeUrl.searchParams.set('userId', resumeUserIdParam);
+        resumeUrl.searchParams.set('limit', '100');
+      } else if (userId) {
+        resumeUrl.searchParams.set('userId', userId);
+      } else if (userLineId) {
+        resumeUrl.searchParams.set('lineId', userLineId);
       } else if (userEmail) {
-        url.searchParams.set('email', userEmail);
+        resumeUrl.searchParams.set('email', userEmail);
       } else {
-        console.warn('⚠️ ไม่พบ userId หรือ userEmail - ไม่สามารถดึงข้อมูลได้');
-        setApplications([]);
-        setLoading(false);
-        return;
+        if (departmentName) {
+          resumeUrl.searchParams.set('department', departmentName);
+          resumeUrl.searchParams.set('admin', 'true');
+        } else {
+          resumeUrl.searchParams.set('admin', 'true');
+          resumeUrl.searchParams.set('limit', '100');
+        }
+      }
+      
+      // ดึงข้อมูลจาก ApplicationForm (ใบสมัครถัดไป)
+      const applicationUrl = new URL('/api/prisma/applications', window.location.origin);
+      if (userIdParam) {
+        applicationUrl.searchParams.set('userId', userIdParam);
+        if (limitParam) applicationUrl.searchParams.set('limit', limitParam);
+        if (adminParam === 'true') applicationUrl.searchParams.set('admin', 'true');
+      } else if (resumeUserIdParam) {
+        applicationUrl.searchParams.set('userId', resumeUserIdParam);
+        applicationUrl.searchParams.set('limit', '100');
+      } else if (userId) {
+        applicationUrl.searchParams.set('userId', userId);
+      } else if (userLineId) {
+        applicationUrl.searchParams.set('lineId', userLineId);
+      } else if (userEmail) {
+        applicationUrl.searchParams.set('email', userEmail);
+      } else {
+      if (departmentName) {
+          applicationUrl.searchParams.set('department', departmentName);
+          applicationUrl.searchParams.set('admin', 'true');
+        } else {
+          applicationUrl.searchParams.set('admin', 'true');
+          applicationUrl.searchParams.set('limit', '100');
+        }
       }
       
       // เพิ่ม department parameter ถ้ามี
       if (departmentName) {
-        url.searchParams.set('department', departmentName);
+        applicationUrl.searchParams.set('department', departmentName);
+        applicationUrl.searchParams.set('limit', '100');
+        applicationUrl.searchParams.set('admin', 'true');
+      }
+      // เรียก API ทั้งสองพร้อมกัน
+      console.log('🔍 Fetching from ResumeDeposit:', resumeUrl.toString());
+      console.log('🔍 Fetching from ApplicationForm:', applicationUrl.toString());
+      
+      const [resumeResponse, applicationResponse] = await Promise.all([
+        fetch(resumeUrl.toString()),
+        fetch(applicationUrl.toString())
+      ]);
+      
+      if (!resumeResponse.ok && !applicationResponse.ok) {
+        throw new Error('Failed to fetch applications from both sources');
       }
       
-      const response = await fetch(url.toString());
+      let resumeData = [];
+      let applicationData = [];
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch applications');
+      // ดึงข้อมูลจาก ResumeDeposit
+      if (resumeResponse.ok) {
+        const resumeJson = await resumeResponse.json();
+        if (resumeJson.success && Array.isArray(resumeJson.data)) {
+          resumeData = resumeJson.data;
+          console.log('🔍 ResumeDeposit data:', resumeData.length, 'records');
+        }
       }
       
-      const responseData = await response.json();
-      
-      // ตรวจสอบว่า API ส่งข้อมูลสำเร็จหรือไม่
-      if (!responseData.success) {
-        throw new Error(responseData.message || 'Failed to fetch applications');
+      // ดึงข้อมูลจาก ApplicationForm
+      if (applicationResponse.ok) {
+        const applicationJson = await applicationResponse.json();
+        if (applicationJson.success && Array.isArray(applicationJson.data)) {
+          applicationData = applicationJson.data;
+          console.log('🔍 ApplicationForm data:', applicationData.length, 'records');
+        }
       }
       
-      const data = responseData.data || [];
+      // รวมข้อมูลจากทั้งสองแหล่ง
+      const combinedData = [...resumeData, ...applicationData];
+      console.log('🔍 Combined data:', combinedData.length, 'records');
+      console.log('🔍 Session data:', { userId, userEmail, userLineId });
+      console.log('🔍 URL params:', { userIdParam, resumeUserIdParam, departmentName, adminParam, limitParam });
+
+      // ใช้ข้อมูลที่รวมแล้ว
+      let data = combinedData;
       
-      // แปลงข้อมูลจาก ResumeDeposit เป็น ApplicationData
-      const applicationsData: ApplicationData[] = data.map((app: any) => ({
+      // Final fallback: หากยังไม่พบข้อมูล ให้ลองค้นหาทั้งหมดและใช้ fuzzy matching
+      if (Array.isArray(data) && data.length === 0) {
+        console.log('🔄 Application-data - Final fallback: trying to fetch all data with fuzzy matching');
+        try {
+          const finalUrl = new URL('/api/resume-deposit', window.location.origin);
+          finalUrl.searchParams.set('admin', 'true');
+          finalUrl.searchParams.set('limit', '10');
+          const finalRes = await fetch(finalUrl.toString());
+          if (finalRes.ok) {
+            const finalJson = await finalRes.json();
+            const allData = finalJson.data || [];
+            console.log('🔍 Application-data - Final fallback data:', allData.length, 'records');
+            
+            // ลองหาด้วย fuzzy matching
+            const filtered = allData.filter((r: any) => {
+              // ตรวจสอบ userId
+              if (r?.userId && r.userId === userId) {
+                console.log('🔍 Application-data fallback: Found by userId:', r.id);
+                return true;
+              }
+              
+              // ตรวจสอบ lineId
+              if (r?.lineId && r.lineId === userLineId) {
+                console.log('🔍 Application-data fallback: Found by lineId:', r.id);
+                return true;
+              }
+              
+              // ตรวจสอบ email (fuzzy matching)
+              if (r?.email && userEmail) {
+                const dbEmail = r.email.toLowerCase();
+                const sessionEmail = userEmail.toLowerCase();
+                
+                // Exact match
+                if (dbEmail === sessionEmail) {
+                  console.log('🔍 Application-data fallback: Found by exact email match:', r.id);
+                  return true;
+                }
+                
+                // Partial match (contains)
+                if (dbEmail.includes(sessionEmail.split('@')[0]) || sessionEmail.includes(dbEmail.split('@')[0])) {
+                  console.log('🔍 Application-data fallback: Found by partial email match:', r.id);
+                  return true;
+                }
+              }
+              
+              return false;
+            });
+            
+            if (filtered.length > 0) {
+              data = filtered;
+              console.log('✅ Application-data fallback: Found', filtered.length, 'matching records');
+            } else {
+              console.log('❌ Application-data fallback: No matching records found');
+            }
+          }
+        } catch (finalError) {
+          console.error('❌ Application-data final fallback error:', finalError);
+        }
+      }
+      
+      // แปลงข้อมูลจากทั้ง ResumeDeposit และ ApplicationForm เป็น ApplicationData
+      const applicationsData: ApplicationData[] = data.map((app: any) => {
+        // ตรวจสอบว่าเป็นข้อมูลจาก ResumeDeposit หรือ ApplicationForm
+        const isResumeDeposit = app.expectedPosition !== undefined;
+        const isApplicationForm = app.appliedPosition !== undefined;
+        
+        console.log('🔍 Processing record:', { 
+          id: app.id, 
+          isResumeDeposit, 
+          isApplicationForm,
+          source: isResumeDeposit ? 'ResumeDeposit' : isApplicationForm ? 'ApplicationForm' : 'Unknown',
+          profileImageUrl: app.profileImageUrl,
+          hasProfileImage: !!app.profileImageUrl
+        });
+        
+        return {
           id: app.id,
           firstName: app.firstName || '',
           lastName: app.lastName || '',
-        appliedPosition: app.expectedPosition || 'ไม่ระบุ',
+          // ใช้ appliedPosition สำหรับ ApplicationForm หรือ expectedPosition สำหรับ ResumeDeposit
+          appliedPosition: isApplicationForm ? (app.appliedPosition || 'ไม่ระบุ') : (app.expectedPosition || 'ไม่ระบุ'),
           email: app.email || '',
           phone: app.phone || '',
-        currentAddress: app.address || '',
+          currentAddress: isApplicationForm ? (app.currentAddress || '') : (app.address || ''),
           birthDate: app.birthDate || '',
         gender: app.gender === 'MALE' ? 'ชาย' : app.gender === 'FEMALE' ? 'หญิง' : app.gender || '',
         education: (app.education || []).map((edu: any) => ({
           level: edu.level || '',
-          institution: edu.school || '',
-          school: edu.school || '',
+            institution: isApplicationForm ? (edu.institution || '') : (edu.school || ''),
+            school: isApplicationForm ? (edu.institution || '') : (edu.school || ''),
           major: edu.major || '',
           startYear: edu.startYear || '',
-          endYear: edu.endYear || '',
-          year: edu.endYear || '', // Keep for backward compatibility
-          graduationYear: edu.endYear || '',
+            endYear: isApplicationForm ? (edu.year || '') : (edu.endYear || ''),
+            year: isApplicationForm ? (edu.year || '') : (edu.endYear || ''), // Keep for backward compatibility
+            graduationYear: isApplicationForm ? (edu.year || '') : (edu.endYear || ''),
           gpa: edu.gpa?.toString() || ''
         })),
         workExperience: (app.workExperience || []).map((work: any) => ({
@@ -2704,9 +2860,10 @@ export default function ApplicationData() {
           startDate: work.startDate || '',
           endDate: work.endDate || '',
           salary: work.salary || '',
-          reason: work.description || ''
+            reason: isApplicationForm ? (work.reason || '') : (work.description || '')
         })),
         profileImage: app.profileImageUrl ? `/api/image?file=${encodeURIComponent(app.profileImageUrl)}` : '',
+          profileImageUrl: app.profileImageUrl || '',
         documents: (app.documents || []).reduce((acc: any, doc: any) => {
           acc[doc.documentType] = doc.filePath;
           return acc;
@@ -2816,8 +2973,12 @@ export default function ApplicationData() {
           console.log('🔍 Status conversion:', { raw: rawStatus, normalized: normalizedStatus });
           return normalizedStatus;
         })(),
-        createdAt: app.createdAt || new Date().toISOString()
-      }));
+        department: app.department || '',
+        createdAt: app.createdAt || new Date().toISOString(),
+        // เพิ่มข้อมูลแหล่งที่มา
+        source: isResumeDeposit ? 'ResumeDeposit' : isApplicationForm ? 'ApplicationForm' : 'Unknown'
+        };
+      });
         
         setApplications(applicationsData);
     } catch (err) {
@@ -3164,9 +3325,8 @@ export default function ApplicationData() {
     try {
       setIsSaving(true);
 
-      const res = await fetch(`/api/resume-deposit/${applicationId}`, {
-        method: 'DELETE'
-      });
+      // ใช้ API ลบจาก resume-deposit โดยตรง (เพราะข้อมูลมาจาก resume-deposit)
+      const res = await fetch(`/api/resume-deposit/${applicationId}`, { method: 'DELETE' });
 
       if (!res.ok) {
         let message = `HTTP ${res.status}`;
@@ -3178,16 +3338,15 @@ export default function ApplicationData() {
         return;
       }
 
-      // เอารายการที่ลบออกจาก state
+      // เอารายการที่ลบออกจาก state และปิด modal
       setApplications(prev => prev.filter(app => app.id !== applicationId));
-      // ปิด modal ถ้ากำลังดู/แก้ไขรายการนั้นอยู่
       if (selectedApplication?.id === applicationId) {
         setSelectedApplication(null);
         setIsEditing(false);
         setEditingApplication(null);
         onClose();
       }
-      window.alert('ลบข้อมูลเรียบร้อยแล้ว');
+      window.alert('ลบข้อมูลใบสมัครเรียบร้อยแล้ว');
     } catch (e) {
       console.error('❌ Error deleting application:', e);
       window.alert('เกิดข้อผิดพลาดในการลบข้อมูล');
@@ -3378,7 +3537,8 @@ export default function ApplicationData() {
 
   useEffect(() => {
     fetchApplications();
-  }, []);
+    // รีเฟรชเมื่อ session พร้อม หรือเมื่อมีการเปลี่ยนพารามิเตอร์ใน URL
+  }, [session, departmentName, resumeUserIdParam]);
 
   // เปิดฟังก์ชัน addNewApplication ให้เรียกใช้จากภายนอก
   useEffect(() => {
@@ -3402,12 +3562,13 @@ export default function ApplicationData() {
     try {
       console.log('🔍 Checking for new applications...');
       
-      // 🔒 Security: ดึงข้อมูล userId จาก session
+      // 🔒 Security: ดึงข้อมูล userId และ lineId จาก session
       const userId = (session?.user as any)?.id || '';
       const userEmail = (session?.user as any)?.email || '';
+      const userLineId = (session?.user as any)?.lineId || '';
       
-      if (!userId && !userEmail) {
-        console.warn('⚠️ ไม่พบ userId หรือ userEmail - ข้ามการตรวจสอบใบสมัครงานใหม่');
+      if (!userId && !userLineId && !userEmail) {
+        console.warn('⚠️ ไม่พบ userId, lineId หรือ userEmail - ข้ามการตรวจสอบใบสมัครงานใหม่');
         return;
       }
       
@@ -3415,6 +3576,8 @@ export default function ApplicationData() {
       const url = new URL('/api/resume-deposit', window.location.origin);
       if (userId) {
         url.searchParams.set('userId', userId);
+      } else if (userLineId) {
+        url.searchParams.set('lineId', userLineId);
       } else if (userEmail) {
         url.searchParams.set('email', userEmail);
       }
@@ -3501,7 +3664,38 @@ export default function ApplicationData() {
     // ตรวจสอบการเปลี่ยนแปลงสถานะทุก 30 วินาที
     const interval = setInterval(async () => {
       try {
-        const response = await fetch('/api/resume-deposit');
+        // สร้าง URL สำหรับตรวจสอบสถานะให้สอดคล้องกับหลักการกรองเดียวกับ fetchApplications
+        const url = new URL('/api/resume-deposit', window.location.origin);
+        const userId = (session?.user as any)?.id || '';
+        const userEmail = (session?.user as any)?.email || '';
+        const userLineId = (session?.user as any)?.lineId || '';
+
+        if (userIdParam) {
+          url.searchParams.set('userId', userIdParam);
+          if (limitParam) url.searchParams.set('limit', limitParam);
+          if (adminParam === 'true') url.searchParams.set('admin', 'true');
+        } else if (resumeUserIdParam) {
+          url.searchParams.set('userId', resumeUserIdParam);
+        } else if (userId) {
+          url.searchParams.set('userId', userId);
+        } else if (userLineId) {
+          url.searchParams.set('lineId', userLineId);
+        } else if (userEmail) {
+          url.searchParams.set('email', userEmail);
+        } else if (departmentName) {
+          url.searchParams.set('department', departmentName);
+          url.searchParams.set('admin', 'true');
+        } else {
+          // โหมดผู้ดูแลแบบจำกัดจำนวนเมื่อไม่มี session และไม่มี department
+          url.searchParams.set('admin', 'true');
+          url.searchParams.set('limit', '100');
+        }
+
+        // Override ที่มากับ query string ของหน้า
+        if (adminParam === 'true') url.searchParams.set('admin', 'true');
+        if (limitParam) url.searchParams.set('limit', limitParam);
+
+        const response = await fetch(url.toString());
         if (response.ok) {
           const responseData = await response.json();
           if (responseData.success && responseData.data) {
@@ -3573,7 +3767,7 @@ export default function ApplicationData() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className={`container mx-auto px-4 py-8 ${isOpen ? 'backdrop-blur-sm' : ''}`}>
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -3625,9 +3819,13 @@ export default function ApplicationData() {
           <div className="text-gray-500">
             <DocumentTextIcon className="w-16 h-16 mx-auto mb-4" />
             <p className="text-lg">ไม่พบข้อมูลใบสมัครงาน</p>
-                    </div>
-          </Card>
-        ) : (
+            <div className="mt-4 text-sm text-gray-400">
+              <p>Session: {JSON.stringify({ userId, userEmail, userLineId })}</p>
+              <p>URL Params: {JSON.stringify({ userIdParam, resumeUserIdParam, departmentName, adminParam, limitParam })}</p>
+            </div>
+          </div>
+        </Card>
+      ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {applications.map((application) => (
             <Card key={application.id} className="shadow-lg hover:shadow-xl transition-shadow relative">
@@ -3685,6 +3883,14 @@ export default function ApplicationData() {
                     <span className="text-sm font-medium">{application.phone}</span>
                     </div>
                   <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">แหล่งข้อมูล:</span>
+                    <span className="text-sm font-medium">
+                      {application.source === 'ResumeDeposit' ? 'ใบสมัครใบแรก' : 
+                       application.source === 'ApplicationForm' ? 'ใบสมัครเพิ่มเติม' : 
+                       'ไม่ระบุ'}
+                    </span>
+                    </div>
+                  <div className="flex justify-between">
                     <span className="text-sm text-gray-600">วันที่สมัคร:</span>
                     <span className="text-sm font-medium">
                       {new Date(application.createdAt).toLocaleDateString('th-TH')}
@@ -3726,127 +3932,22 @@ export default function ApplicationData() {
           onClose={handleCloseDetails} 
           size="5xl"
           scrollBehavior="inside"
+          backdrop="blur"
           classNames={{
-            base: "max-h-[90vh] bg-white",
-            body: "overflow-y-auto max-h-[calc(90vh-120px)] bg-white",
-            header: "bg-white",
-            footer: "bg-white"
+            base: "max-h-[90vh] bg-white/95 backdrop-blur-md",
+            body: "overflow-y-auto max-h-[calc(90vh-120px)] bg-white/95 backdrop-blur-md",
+            header: "bg-white/95 backdrop-blur-md",
+            footer: "bg-white/95 backdrop-blur-md",
+            backdrop: "backdrop-blur-md bg-black/20"
           }}
         >
         <ModalContent>
           <ModalHeader className="flex items-center gap-4">
-            <div className="relative w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
-              {selectedApplication?.profileImage || selectedApplication?.profileImageUrl ? (
-                <img
-                  src={(selectedApplication.profileImageUrl || selectedApplication.profileImage)!.startsWith('http') ? 
-                    (selectedApplication.profileImageUrl || selectedApplication.profileImage)! : 
-                    `/api/image?file=${encodeURIComponent(selectedApplication.profileImageUrl || selectedApplication.profileImage || '')}`}
-                  alt={`${selectedApplication?.firstName} ${selectedApplication?.lastName}`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
-              ) : null}
-              <div className={`w-full h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold ${(selectedApplication?.profileImage || selectedApplication?.profileImageUrl) ? 'hidden' : ''}`}>
-                {selectedApplication?.firstName?.charAt(0)}{selectedApplication?.lastName?.charAt(0)}
-              </div>
-              
-              {/* ปุ่มจัดการรูปภาพโปรไฟล์ */}
-              <div className="absolute -bottom-1 -right-1 flex gap-1">
-                {/* ปุ่มอัพโหลดรูปภาพใหม่ */}
-                <label className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-1.5 cursor-pointer transition-colors shadow-lg">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file && selectedApplication) {
-                        try {
-                          const formData = new FormData();
-                          formData.append('profileImage', file);
-                          formData.append('resumeId', selectedApplication.id);
-
-                          const response = await fetch('/api/profile-image/upload', {
-                            method: 'POST',
-                            body: formData
-                          });
-
-                          if (response.ok) {
-                            const result = await response.json();
-                            // อัพเดตข้อมูลใน state
-                            setApplications(prev => 
-                              prev.map(app => 
-                                app.id === selectedApplication.id 
-                                  ? { ...app, profileImageUrl: result.profileImage }
-                                  : app
-                              )
-                            );
-                            setSelectedApplication(prev => 
-                              prev ? { ...prev, profileImageUrl: result.profileImage } : null
-                            );
-                            alert('อัพโหลดรูปภาพเรียบร้อยแล้ว');
-                          } else {
-                            alert('เกิดข้อผิดพลาดในการอัพโหลดรูปภาพ');
-                          }
-                        } catch (error) {
-                          console.error('Error uploading image:', error);
-                          alert('เกิดข้อผิดพลาดในการอัพโหลดรูปภาพ');
-                        }
-                      }
-                    }}
-                  />
-                </label>
-                
-                {/* ปุ่มลบรูปภาพ (แสดงเฉพาะเมื่อมีรูปภาพ) */}
-                {(selectedApplication?.profileImage || selectedApplication?.profileImageUrl) && (
-                  <button
-                    onClick={async () => {
-                      if (selectedApplication && confirm('คุณต้องการลบรูปภาพโปรไฟล์หรือไม่?')) {
-                        try {
-                          // TODO: เรียก API ลบรูปภาพ
-                          // const response = await fetch(`/api/profile-image/${selectedApplication.id}`, {
-                          //   method: 'DELETE'
-                          // });
-                          
-                          // อัพเดตข้อมูลใน state
-                          setApplications(prev => 
-                            prev.map(app => 
-                              app.id === selectedApplication.id 
-                                ? { ...app, profileImage: undefined, profileImageUrl: undefined }
-                                : app
-                            )
-                          );
-                          setSelectedApplication(prev => 
-                            prev ? { ...prev, profileImage: undefined, profileImageUrl: undefined } : null
-                          );
-                          alert('ลบรูปภาพเรียบร้อยแล้ว');
-                        } catch (error) {
-                          console.error('Error deleting image:', error);
-                          alert('เกิดข้อผิดพลาดในการลบรูปภาพ');
-                        }
-                      }
-                    }}
-                    className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 transition-colors shadow-lg"
-                    title="ลบรูปภาพ"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
+            {/* รูปภาพโปรไฟล์ขนาดใหญ่ */}
+            
             <div className="flex flex-col gap-1">
               <h2 className="text-xl font-semibold">รายละเอียดใบสมัครงาน</h2>
-              <p className="text-sm text-gray-600">
-                {selectedApplication?.prefix} {selectedApplication?.firstName} {selectedApplication?.lastName}
-              </p>
+              
             </div>
           </ModalHeader>
            <ModalBody>
