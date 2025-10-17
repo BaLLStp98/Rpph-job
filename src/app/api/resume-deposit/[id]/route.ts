@@ -81,9 +81,9 @@ export async function GET(
     // Debug: ตรวจสอบข้อมูล profileImage
     console.log('🔍 API Resume Deposit Debug:');
     console.log('• ID:', id);
-    console.log('• ProfileImageUrl:', resumeDeposit.profileImageUrl);
-    console.log('• ProfileImageUrl Type:', typeof resumeDeposit.profileImageUrl);
-    console.log('• ProfileImageUrl Length:', resumeDeposit.profileImageUrl?.length);
+    console.log('• ProfileImageUrl:', resumeDeposit[0].profileImageUrl);
+    console.log('• ProfileImageUrl Type:', typeof resumeDeposit[0].profileImageUrl);
+    console.log('• ProfileImageUrl Length:', resumeDeposit[0].profileImageUrl?.length);
     
     return NextResponse.json({
       success: true,

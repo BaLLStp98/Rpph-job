@@ -156,7 +156,7 @@ export default function Dashboard() {
 
   // ตรวจสอบสถานะการเข้าสู่ระบบ
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if ( status !== 'loading' && status === 'unauthenticated') {
       router.push('/auth/signin')
     }
   }, [status, router])
