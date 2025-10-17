@@ -10,7 +10,11 @@ export async function GET(
   try {
     const { id } = await params;
     
+    console.log('🔍 API GET Request - ID:', id);
+    console.log('🔍 API GET Request - URL:', request.url);
+    
     if (!id) {
+      console.error('❌ API GET - No ID provided');
       return NextResponse.json(
         { success: false, message: 'ไม่พบ ID' },
         { status: 400 }
@@ -21,6 +25,10 @@ export async function GET(
     const session = await getServerSession(authOptions as any);
     const isAdmin = (session?.user as any)?.role === 'admin';
     
+    console.log('🔍 API GET - Session:', !!session);
+    console.log('🔍 API GET - Is Admin:', isAdmin);
+    
+    console.log('🔍 API GET - Querying database for ID:', id);
     const resumeDeposit = await prisma.resumeDeposit.findUnique({
       where: { id },
       include: {
@@ -30,6 +38,8 @@ export async function GET(
         documents: true
       }
     });
+    
+    console.log('🔍 API GET - Database result:', !!resumeDeposit);
     
     if (!resumeDeposit) {
       return NextResponse.json(
@@ -81,9 +91,12 @@ export async function GET(
     // Debug: ตรวจสอบข้อมูล profileImage
     console.log('🔍 API Resume Deposit Debug:');
     console.log('• ID:', id);
-    console.log('• ProfileImageUrl:', resumeDeposit[0].profileImageUrl);
-    console.log('• ProfileImageUrl Type:', typeof resumeDeposit[0].profileImageUrl);
-    console.log('• ProfileImageUrl Length:', resumeDeposit[0].profileImageUrl?.length);
+    console.log('• ProfileImageUrl:', resumeDeposit.profileImageUrl);
+    console.log('• ProfileImageUrl Type:', typeof resumeDeposit.profileImageUrl);
+    console.log('• ProfileImageUrl Length:', resumeDeposit.profileImageUrl?.length);
+    
+    console.log('✅ API GET - Returning data successfully');
+    console.log('🔍 API GET - Data keys:', Object.keys(resumeDeposit));
     
     return NextResponse.json({
       success: true,

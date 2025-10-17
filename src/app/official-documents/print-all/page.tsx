@@ -203,6 +203,7 @@ export default function PrintAllDocuments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
+  const [allApplications, setAllApplications] = useState<any[]>([]);
   const searchParams = useSearchParams();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -215,11 +216,31 @@ export default function PrintAllDocuments() {
 
   // helper: แก้ปัญหา _next/image ซ้อน /api/image?file=...
   const resolveProfileImage = (raw?: string): string => {
-    if (!raw) return '';
-    if (raw.startsWith('/api/image?')) return raw; // อย่าห่อซ้ำ
-    if (raw.startsWith('http')) return raw;
-    if (raw.startsWith('/')) return raw;
-    return `/api/image?file=${encodeURIComponent(raw)}`;
+    console.log('🔍 resolveProfileImage - Input:', raw);
+    
+    if (!raw) {
+      console.log('🔍 resolveProfileImage - No raw input, returning empty string');
+      return '';
+    }
+    
+    if (raw.startsWith('/api/image?')) {
+      console.log('🔍 resolveProfileImage - Already has /api/image?, returning as is');
+      return raw; // อย่าห่อซ้ำ
+    }
+    
+    if (raw.startsWith('http')) {
+      console.log('🔍 resolveProfileImage - HTTP URL, returning as is');
+      return raw;
+    }
+    
+    if (raw.startsWith('/')) {
+      console.log('🔍 resolveProfileImage - Absolute path, returning as is');
+      return raw;
+    }
+    
+    const result = `/api/image?file=${encodeURIComponent(raw)}`;
+    console.log('🔍 resolveProfileImage - Result:', result);
+    return result;
   };
 
   // ฟังก์ชันสำหรับแปลงวันที่เป็นรูปแบบไทย
@@ -373,34 +394,236 @@ export default function PrintAllDocuments() {
     return encodeURI(publicPath);
   };
 
+  // ฟังก์ชันสำหรับดึงข้อมูลทั้งหมด
+  const fetchAllApplications = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔍 Fetching all applications...');
+      
+      const response = await fetch('/api/resume-deposit?admin=true&limit=100', {
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
+      
+      console.log('🔍 All Applications API Response:', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (jsonError) {
+          console.log('🔍 Could not parse error JSON:', jsonError);
+        }
+        
+        console.error('❌ All Applications API Error:', {
+          status: response.status,
+          message: errorMessage
+        });
+        
+        throw new Error(`เกิดข้อผิดพลาดในการดึงข้อมูล: ${errorMessage}`);
+      }
+      
+      const responseData = await response.json();
+      console.log('🔍 All Applications Response data received:', !!responseData);
+      console.log('🔍 All Applications Response success:', responseData.success);
+      
+      if (!responseData.success) {
+        const errorMsg = responseData.message || 'Failed to fetch applications';
+        console.error('❌ All Applications API returned success: false:', errorMsg);
+        throw new Error(`เกิดข้อผิดพลาดในการดึงข้อมูล: ${errorMsg}`);
+      }
+      
+      const applications = responseData.data;
+      
+      if (!applications || !Array.isArray(applications)) {
+        console.error('❌ No applications data in response');
+        throw new Error('ไม่พบข้อมูลใบสมัครงาน');
+      }
+      
+      console.log('✅ All Applications received successfully:', {
+        count: applications.length,
+        firstApp: applications[0] ? {
+          id: applications[0].id,
+          name: `${applications[0].firstName} ${applications[0].lastName}`,
+          position: applications[0].expectedPosition,
+          hasProfileImage: !!applications[0].profileImageUrl,
+          profileImageUrl: applications[0].profileImageUrl
+        } : null
+      });
+      
+      // แสดงรายการใบสมัครงานทั้งหมด
+      setApplicationData({
+        id: 'all',
+        firstName: 'รายการใบสมัครงานทั้งหมด',
+        lastName: '',
+        expectedPosition: 'ทั้งหมด',
+        department: 'ทั้งหมด',
+        profileImage: null,
+        profileImageUrl: null,
+        // เพิ่มข้อมูลอื่นๆ ตามต้องการ
+      } as any);
+      
+      // เก็บรายการทั้งหมดไว้ใน state
+      setAllApplications(applications);
+      
+    } catch (err) {
+      console.error('❌ Error fetching all applications:', err);
+      
+      let userFriendlyMessage = 'เกิดข้อผิดพลาดในการโหลดข้อมูล';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('ไม่พบข้อมูล')) {
+          userFriendlyMessage = 'ไม่พบข้อมูลใบสมัครงาน';
+        } else if (err.message.includes('ไม่มีสิทธิ์')) {
+          userFriendlyMessage = 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้';
+        } else if (err.message.includes('ระบบ')) {
+          userFriendlyMessage = 'เกิดข้อผิดพลาดในระบบ';
+        } else {
+          userFriendlyMessage = err.message;
+        }
+      }
+      
+      console.error('❌ Final error message:', userFriendlyMessage);
+      setError(userFriendlyMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ฟังก์ชันสำหรับดึงข้อมูลจาก API
   const fetchApplicationData = async (applicationId: string) => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`/api/resume-deposit/${applicationId}`, {
-        cache: 'no-store'
+      // ตรวจสอบว่า applicationId มีค่าหรือไม่
+      if (!applicationId || applicationId.trim() === '') {
+        console.error('❌ Invalid application ID:', applicationId);
+        throw new Error('ไม่พบ ID ของใบสมัครงาน');
+      }
+      
+      console.log('🔍 Fetching application data for ID:', applicationId);
+      
+      // ดึงข้อมูลจาก ResumeDeposit เท่านั้น
+      const apiUrl = `/api/resume-deposit/${applicationId}`;
+      console.log('🔍 Frontend - Fetching from API:', apiUrl);
+      console.log('🔍 Frontend - Application ID:', applicationId);
+      console.log('🔍 Frontend - Current URL:', window.location.href);
+      
+      // ตรวจสอบว่า URL ถูกต้องหรือไม่
+      if (!apiUrl.includes(applicationId)) {
+        console.error('❌ Invalid API URL construction');
+        throw new Error('ไม่สามารถสร้าง URL สำหรับ API ได้');
+      }
+      
+      const response = await fetch(apiUrl, {
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
       });
       
+      console.log('🔍 Frontend - API Response:', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText,
+        url: response.url,
+        type: response.type,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      
+      // ตรวจสอบว่า response เป็น valid หรือไม่
+      if (!response) {
+        console.error('❌ No response received from API');
+        throw new Error('ไม่ได้รับ response จาก API');
+      }
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.message || `HTTP ${response.status}: ${response.statusText}`;
-        console.error('❌ Print-All API Error:', {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (jsonError) {
+          console.log('🔍 Could not parse error JSON:', jsonError);
+        }
+        
+        console.error('❌ API Error:', {
           status: response.status,
-          statusText: response.statusText,
-          message: errorMessage
+          message: errorMessage,
+          applicationId: applicationId,
+          url: `/api/resume-deposit/${applicationId}`
         });
-        throw new Error(`Failed to fetch application data: ${errorMessage}`);
+        
+        // แสดงข้อความ error ที่เป็นมิตรกับผู้ใช้
+        if (response.status === 404) {
+          throw new Error('ไม่พบข้อมูลใบสมัครงานที่ต้องการ');
+        } else if (response.status === 403) {
+          throw new Error('ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
+        } else if (response.status === 500) {
+          throw new Error('เกิดข้อผิดพลาดในระบบ');
+        } else {
+          throw new Error(`เกิดข้อผิดพลาด: ${errorMessage}`);
+        }
+      }
+      
+      // ตรวจสอบว่า response มี content หรือไม่
+      const contentType = response.headers.get('content-type');
+      console.log('🔍 Response content type:', contentType);
+      
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('❌ Response is not JSON:', contentType);
+        throw new Error('API ไม่ส่งข้อมูลในรูปแบบ JSON');
       }
       
       const responseData = await response.json();
+      console.log('🔍 Frontend - Response data received:', !!responseData);
+      console.log('🔍 Frontend - Response data type:', typeof responseData);
+      console.log('🔍 Frontend - Response data keys:', Object.keys(responseData));
+      console.log('🔍 Frontend - Response success:', responseData.success);
       
       if (!responseData.success) {
-        throw new Error(responseData.message || 'Failed to fetch application data');
+        const errorMsg = responseData.message || 'Failed to fetch application data';
+        console.error('❌ API returned success: false:', errorMsg);
+        throw new Error(`เกิดข้อผิดพลาดในการดึงข้อมูล: ${errorMsg}`);
       }
       
       const data = responseData.data;
+      
+      if (!data) {
+        console.error('❌ No data in response');
+        console.error('❌ ResponseData structure:', Object.keys(responseData));
+        throw new Error('ไม่พบข้อมูลในระบบ');
+      }
+      
+      // ตรวจสอบว่า data มีโครงสร้างที่ถูกต้องหรือไม่
+      if (typeof data !== 'object') {
+        console.error('❌ Data is not an object:', typeof data);
+        throw new Error('ข้อมูลที่ได้รับไม่ถูกต้อง');
+      }
+      
+      console.log('✅ Frontend - Data received successfully:', {
+        id: data.id,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        expectedPosition: data.expectedPosition,
+        hasProfileImage: !!data.profileImageUrl,
+        profileImageUrl: data.profileImageUrl,
+        profileImage: data.profileImage,
+        dataKeys: Object.keys(data)
+      });
       
       // Debug: แสดงข้อมูลที่ได้รับจาก API
       console.log('🔍 Print-All API Response Data:', data);
@@ -427,10 +650,18 @@ export default function PrintAllDocuments() {
         addressAccordingToHouseRegistration: data.addressAccordingToHouseRegistration
       });
       
+      // ข้อมูลจาก ResumeDeposit เท่านั้น
+      console.log('🔍 Data source: ResumeDeposit');
+      console.log('🔍 ResumeDeposit fields:', { 
+        hasExpectedPosition: !!data.expectedPosition,
+        hasSchool: !!data.education?.[0]?.school,
+        hasDescription: !!data.workExperience?.[0]?.description
+      });
+      
       // แปลงข้อมูลจาก ResumeDeposit เป็น ApplicationData
       const applicationData: ApplicationData = {
         id: data.id,
-        submittedAt: data.createdAt || data.submittedAt || '',
+        submittedAt: data.createdAt || data.submittedAt || data.applicationDate || '',
         status: data.status || 'PENDING',
         prefix: data.prefix || '',
         firstName: data.firstName || '',
@@ -451,7 +682,7 @@ export default function PrintAllDocuments() {
                       data.maritalStatus === 'MARRIED' ? 'สมรส' : 
                       data.maritalStatus === 'DIVORCED' ? 'หย่าร้าง' : 
                       data.maritalStatus === 'WIDOWED' ? 'หม้าย' : data.maritalStatus || '',
-        addressAccordingToHouseRegistration: data.addressAccordingToHouseRegistration || '',
+        addressAccordingToHouseRegistration: data.addressAccordingToHouseRegistration || data.address || '',
         houseRegistrationAddress: data.houseRegistrationAddress || undefined,
         currentAddress: data.currentAddress || data.address || '',
         currentAddressDetail: data.currentAddressDetail || undefined,
@@ -466,7 +697,8 @@ export default function PrintAllDocuments() {
         emergencyRelationship: data.emergencyRelationship || data.emergencyContactRelationship || '',
         emergencyAddress: data.emergencyAddress || undefined,
         emergencyWorkplace: data.emergencyWorkplace || undefined,
-        appliedPosition: data.expectedPosition || data.appliedPosition || data.position || '',
+        // ใช้ expectedPosition สำหรับ ResumeDeposit
+        appliedPosition: data.expectedPosition || data.position || '',
         expectedSalary: data.expectedSalary || data.salary || '',
         availableDate: data.availableDate || data.availableStartDate || '',
         currentWork: data.currentWork || data.isCurrentlyWorking || false,
@@ -476,11 +708,12 @@ export default function PrintAllDocuments() {
         education: (data.education || []).map((edu: any) => ({
           level: edu.level || '',
           degree: edu.degree || '',
-          institution: edu.institution || edu.school || '',
-          school: edu.school || '',
+          // ใช้ school สำหรับ ResumeDeposit
+          institution: edu.school || edu.institution || '',
+          school: edu.school || edu.institution || '',
           major: edu.major || '',
-          year: edu.year || '',
-          graduationYear: edu.graduationYear || '',
+          year: edu.year || edu.endYear || '',
+          graduationYear: edu.graduationYear || edu.endYear || edu.year || '',
           gpa: edu.gpa || ''
         })),
         workExperience: (data.workExperience || []).map((work: any) => ({
@@ -492,7 +725,8 @@ export default function PrintAllDocuments() {
           endDate: work.endDate || '',
           description: work.description || '',
           salary: work.salary || '',
-          reason: work.reason || '',
+          // ใช้ description สำหรับ ResumeDeposit
+          reason: work.description || work.reason || '',
           phone: work.phone || '',
           reasonForLeaving: work.reasonForLeaving || ''
         })),
@@ -539,7 +773,8 @@ export default function PrintAllDocuments() {
         medicalRights: data.medicalRights || undefined,
         multipleEmployers: data.multipleEmployers || data.otherEmployers || [],
         staffInfo: data.staffInfo || undefined,
-        profileImage: data.profileImage || data.photo || data.avatar || data.profileImageUrl || data.image || data.picture || data.profile_image || data.user_image || '',
+        // จัดการ profile image สำหรับ ResumeDeposit
+        profileImage: data.profileImage || data.photo || data.avatar || data.image || data.picture || data.profile_image || data.user_image || '',
         updatedAt: data.updatedAt || data.modifiedAt || '',
         documents: data.documents || undefined,
         placeOfBirth: data.placeOfBirth || data.birthPlace || '',
@@ -566,7 +801,9 @@ export default function PrintAllDocuments() {
         availableDate: data.availableDate || data.availableStartDate || data.startDate || data.availableFrom || '',
         currentWork: data.currentWork || data.isCurrentlyWorking || data.currentlyWorking || false,
         department: data.department || data.appliedDepartment || data.departmentName || '',
-        division: data.division || data.appliedDivision || data.divisionName || ''
+        division: data.division || data.appliedDivision || data.divisionName || '',
+        // ข้อมูลจาก ResumeDeposit เท่านั้น
+        source: 'ResumeDeposit'
       };
       
       // Debug: แสดงข้อมูลที่แปลงแล้ว
@@ -597,6 +834,16 @@ export default function PrintAllDocuments() {
       
       setApplicationData(applicationData);
       
+      console.log('✅ Application data loaded successfully:', {
+        id: applicationData.id,
+        name: `${applicationData.prefix} ${applicationData.firstName} ${applicationData.lastName}`,
+        position: applicationData.appliedPosition,
+        department: applicationData.department,
+        hasProfileImage: !!applicationData.profileImage,
+        profileImage: applicationData.profileImage,
+        profileImageUrl: applicationData.profileImageUrl
+      });
+      
       // Debug: ตรวจสอบข้อมูล profileImage
       console.log('🔍 Print-All Profile Image Debug:');
       console.log('• Raw data keys:', Object.keys(data));
@@ -616,6 +863,7 @@ export default function PrintAllDocuments() {
           applicationData.profileImage : 
           `/api/image?file=${encodeURIComponent(applicationData.profileImage)}`) : 
         'No image');
+      console.log('• Resolved Profile Image URL:', resolveProfileImage(applicationData.profileImage));
       
       // ดึงข้อมูลเอกสารแนบ
       if (applicationData.id) {
@@ -655,13 +903,63 @@ export default function PrintAllDocuments() {
         console.error('❌ Error details:', {
           name: err.name,
           message: err.message,
-          stack: err.stack
+          stack: err.stack,
+          applicationId: applicationId,
+          timestamp: new Date().toISOString()
         });
-        setError(`เกิดข้อผิดพลาดในการโหลดข้อมูล: ${err.message}`);
       } else {
         console.error('❌ Unknown error:', err);
-        setError('เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุในการโหลดข้อมูล');
       }
+      
+      // ลองใช้ข้อมูลจาก URL parameters เป็น fallback
+      console.log('🔄 Trying URL parameters fallback...');
+      if (searchParams) {
+        try {
+          const data: Partial<ApplicationData> = {};
+          let hasData = false;
+          
+          searchParams.forEach((value, key) => {
+            try {
+              if (value.startsWith('{') || value.startsWith('[')) {
+                (data as any)[key] = JSON.parse(value);
+                hasData = true;
+              } else {
+                (data as any)[key] = value;
+                hasData = true;
+              }
+            } catch (parseError) {
+              console.warn(`⚠️ Failed to parse parameter ${key}:`, parseError);
+            }
+          });
+          
+          if (hasData) {
+            console.log('✅ Using URL parameters fallback data');
+            setApplicationData(data as ApplicationData);
+            setLoading(false);
+            return;
+          }
+        } catch (fallbackError) {
+          console.error('❌ URL parameters fallback failed:', fallbackError);
+        }
+      }
+      
+      // แสดงข้อความ error ที่เป็นมิตรกับผู้ใช้
+      let userFriendlyMessage = 'เกิดข้อผิดพลาดในการโหลดข้อมูล';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('ไม่พบข้อมูล')) {
+          userFriendlyMessage = 'ไม่พบข้อมูลใบสมัครงานที่ต้องการ';
+        } else if (err.message.includes('ไม่มีสิทธิ์')) {
+          userFriendlyMessage = 'ไม่มีสิทธิ์เข้าถึงข้อมูลนี้';
+        } else if (err.message.includes('ระบบ')) {
+          userFriendlyMessage = 'เกิดข้อผิดพลาดในระบบ';
+        } else {
+          userFriendlyMessage = err.message;
+        }
+      }
+      
+      console.error('❌ Final error message:', userFriendlyMessage);
+      setError(userFriendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -699,10 +997,21 @@ export default function PrintAllDocuments() {
   useEffect(() => {
     const applicationId = searchParams?.get('id');
     
+    console.log('🔍 useEffect - Application ID:', applicationId);
+    console.log('🔍 useEffect - Search Params:', searchParams?.toString());
+    console.log('🔍 useEffect - Current URL:', window.location.href);
+    
     if (applicationId) {
+      console.log('🔍 Starting to fetch application data for ID:', applicationId);
       // ดึงข้อมูลจาก API โดยใช้ ID
       fetchApplicationData(applicationId);
-    } else if (searchParams) {
+    } else {
+      console.log('🔍 No specific ID, fetching all applications');
+      // ดึงข้อมูลทั้งหมด
+      fetchAllApplications();
+    }
+    
+    if (searchParams) {
       // Fallback: ใช้ URL parameters แบบเดิม
       const data: Partial<ApplicationData> = {};
       
@@ -967,6 +1276,121 @@ export default function PrintAllDocuments() {
     );
   }
 
+  // แสดงรายการใบสมัครงานทั้งหมด
+  if (allApplications.length > 0) {
+    return (
+      <div className="min-h-screen bg-gray-100 p-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-4">
+              รายการใบสมัครงานทั้งหมด ({allApplications.length} รายการ)
+            </h1>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {allApplications.map((app, index) => {
+                console.log(`🔍 Processing application ${index}:`, {
+                  id: app.id,
+                  name: `${app.firstName} ${app.lastName}`,
+                  hasProfileImage: !!app.profileImageUrl,
+                  profileImageUrl: app.profileImageUrl,
+                  resolvedImageUrl: app.profileImageUrl ? 
+                    (app.profileImageUrl.startsWith('http') ? app.profileImageUrl : `/api/image?file=${encodeURIComponent(app.profileImageUrl)}`) : 
+                    'No image'
+                });
+                
+                return (
+                <div key={app.id || index} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center space-x-3 mb-3">
+                    {app.profileImageUrl ? (
+                      <img 
+                        src={app.profileImageUrl.startsWith('http') ? app.profileImageUrl : `/api/image?file=${encodeURIComponent(app.profileImageUrl)}`}
+                        alt="Profile"
+                        className="w-12 h-12 rounded-full object-cover"
+                        onLoad={() => {
+                          console.log('✅ Profile image loaded in list:', app.profileImageUrl);
+                          console.log('✅ Profile image URL:', app.profileImageUrl.startsWith('http') ? app.profileImageUrl : `/api/image?file=${encodeURIComponent(app.profileImageUrl)}`);
+                        }}
+                        onError={(e) => {
+                          console.error('❌ Profile image failed to load in list:', app.profileImageUrl);
+                          console.error('❌ Image src:', (e.currentTarget as HTMLImageElement).src);
+                          console.error('❌ Application data:', {
+                            id: app.id,
+                            name: `${app.firstName} ${app.lastName}`,
+                            profileImageUrl: app.profileImageUrl,
+                            resolvedUrl: app.profileImageUrl.startsWith('http') ? app.profileImageUrl : `/api/image?file=${encodeURIComponent(app.profileImageUrl)}`
+                          });
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold ${app.profileImageUrl ? 'hidden' : ''}`}>
+                      {app.firstName?.charAt(0) || '?'}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-800">
+                        {app.prefix || ''} {app.firstName} {app.lastName}
+                      </h3>
+                      <p className="text-sm text-gray-600">{app.expectedPosition}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <p><span className="font-medium">ฝ่าย:</span> {app.department || 'ไม่ระบุ'}</p>
+                    <p><span className="font-medium">อีเมล:</span> {app.email}</p>
+                    <p><span className="font-medium">โทรศัพท์:</span> {app.phone}</p>
+                    <p><span className="font-medium">สถานะ:</span> 
+                      <span className={`ml-2 px-2 py-1 rounded-full text-xs ${
+                        app.status === 'hired' ? 'bg-green-100 text-green-800' :
+                        app.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        app.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {app.status === 'hired' ? 'อนุมัติ' :
+                         app.status === 'pending' ? 'รอดำเนินการ' :
+                         app.status === 'rejected' ? 'ปฏิเสธ' :
+                         app.status || 'ไม่ระบุ'}
+                      </span>
+                    </p>
+                  </div>
+                  
+                  <div className="mt-4 flex space-x-2">
+                    <Button
+                      size="sm"
+                      color="primary"
+                      onClick={() => {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('id', app.id);
+                        window.location.href = url.toString();
+                      }}
+                      className="flex-1"
+                    >
+                      ดูรายละเอียด
+                    </Button>
+                    <Button
+                      size="sm"
+                      color="secondary"
+                      onClick={() => {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('id', app.id);
+                        url.searchParams.set('print', 'true');
+                        window.location.href = url.toString();
+                      }}
+                      className="flex-1"
+                    >
+                      พิมพ์
+                    </Button>
+                  </div>
+                </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // แสดงข้อความเมื่อไม่มีข้อมูล
   if (!applicationData) {
     return (
@@ -1167,6 +1591,8 @@ export default function PrintAllDocuments() {
                 ของโรงพยาบาลราชพิพัฒน์ สำนักการแพทย์ กรุงเทพมหานคร
               </h1>
               
+              
+              
               {/* ช่องติดรูปถ่าย */}
               <div className="w-[1.3in] h-[1.5in] border-2 border-gray-400 flex items-center justify-center absolute right-0 top-0">
                 {applicationData?.profileImage && applicationData.profileImage.trim() !== '' ? (
@@ -1177,7 +1603,14 @@ export default function PrintAllDocuments() {
                       alt="รูปถ่ายผู้สมัคร"
                       className="w-full h-full object-cover border border-gray-200"
                       style={{ objectFit: 'cover', objectPosition: 'center top' }}
+                      onLoad={() => {
+                        console.log('✅ Profile image loaded successfully:', applicationData.profileImage);
+                        console.log('✅ Profile image URL:', resolveProfileImage(applicationData.profileImage));
+                      }}
                       onError={(e) => {
+                        console.error('❌ Profile image failed to load:', applicationData.profileImage);
+                        console.error('❌ Image src:', (e.currentTarget as HTMLImageElement).src);
+                        console.error('❌ Resolved URL:', resolveProfileImage(applicationData.profileImage));
                         try {
                           if (process.env.NODE_ENV !== 'production') {
                             console.warn('❗ Failed to load profile image:', applicationData.profileImage);
@@ -1220,7 +1653,29 @@ export default function PrintAllDocuments() {
                   <div className="text-center p-2">
                     <div className="text-xs text-gray-500 mb-1">ติดรูปถ่าย</div>
                     <div className="text-xs text-gray-500">ขนาด ๑ นิ้ว</div>
-                    <div className="text-xs text-gray-400 mt-2">ไม่มีรูปภาพ</div>
+                    {applicationData?.profileImage && applicationData.profileImage.trim() !== '' ? (
+                      <div className="w-full h-full flex items-center justify-center relative">
+                        <img
+                          src={resolveProfileImage(applicationData.profileImage)}
+                          alt="รูปถ่ายผู้สมัคร"
+                          className="w-full h-full object-cover border border-gray-200"
+                          style={{ objectFit: 'cover', objectPosition: 'center top' }}
+                          onLoad={() => {
+                            console.log('✅ Profile image loaded in fallback:', applicationData.profileImage);
+                          }}
+                          onError={(e) => {
+                            console.error('❌ Profile image failed to load in fallback:', applicationData.profileImage);
+                            console.error('❌ Image src:', (e.currentTarget as HTMLImageElement).src);
+                            // แสดงข้อความ "ไม่มีรูปภาพ" เมื่อโหลดล้มเหลว
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <div className="text-xs text-gray-400 mt-2 hidden">ไม่มีรูปภาพ</div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 mt-2">ไม่มีรูปภาพ</div>
+                    )}
                     {/* Debug info */}
                     {process.env.NODE_ENV === 'development' && (
                       <div className="text-xs text-red-500 mt-2">
