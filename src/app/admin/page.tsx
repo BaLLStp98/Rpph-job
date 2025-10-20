@@ -64,6 +64,7 @@ interface ApplicationData {
   emergencyAddress: string;
   expectedPosition: string;
   department: string;
+  missionGroupId?: string | null;
   phone: string;
   email: string;
   status: string;
@@ -220,14 +221,43 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  // ฟิลเตอร์ กลุ่มงาน/ฝ่าย
+  const [missionGroups, setMissionGroups] = useState<Array<{ id: string; name: string }>>([]);
+  const [hospitalDepartments, setHospitalDepartments] = useState<Array<{ id: string; name: string; missionGroupId: string | null }>>([]);
+  const [selectedMissionGroupId, setSelectedMissionGroupId] = useState<string>('');
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   const [selectedApplication, setSelectedApplication] = useState<ApplicationData | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type: string } | null>(null);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
+  const [detailStatus, setDetailStatus] = useState<string>('');
+
+  // ฟังก์ชันแปลงวันที่จาก ISO format เป็น d/m/Y
+  const formatDateForDisplay = (dateString: string) => {
+    if (!dateString) return '-';
+    try {
+      const date = new Date(dateString);
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch {
+      return dateString;
+    }
+  };
+  
+  // รีเซ็ตตัวกรอง
+  const resetFilters = () => {
+    setSelectedMissionGroupId('');
+    setSelectedDepartmentId('');
+    fetchApplications();
+  };
   
   // Modal controls
   const { isOpen: isDetailModalOpen, onOpen: onDetailModalOpen, onOpenChange: onDetailModalOpenChange } = useDisclosure();
+  const { isOpen: isPendingModalOpen, onOpen: onPendingModalOpen, onOpenChange: onPendingModalOpenChange } = useDisclosure();
+  const { isOpen: isApprovedModalOpen, onOpen: onApprovedModalOpen, onOpenChange: onApprovedModalOpenChange } = useDisclosure();
 
   // สถิติ
   const [stats, setStats] = useState({
@@ -239,6 +269,70 @@ export default function AdminPage() {
   useEffect(() => {
     fetchApplications();
   }, []);
+
+  // โหลดตัวเลือกกลุ่มงาน
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/prisma/mission-groups');
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json?.success && Array.isArray(json.data)) {
+          setMissionGroups(json.data.map((g: any) => ({ id: g.id, name: g.name })));
+        }
+      } catch {}
+    })();
+  }, []);
+
+  // โหลดตัวเลือกฝ่ายตามกลุ่มงาน
+  useEffect(() => {
+    (async () => {
+      try {
+        const url = selectedMissionGroupId
+          ? `/api/hospital-departments?missionGroupId=${selectedMissionGroupId}`
+          : '/api/hospital-departments';
+        const res = await fetch(url);
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && Array.isArray(json)) {
+          setHospitalDepartments(json.map((d: any) => ({ id: String(d.id), name: d.name, missionGroupId: d.missionGroupId || null })));
+        } else if (res.ok && json?.success && Array.isArray(json.data)) {
+          setHospitalDepartments(json.data.map((d: any) => ({ id: String(d.id), name: d.name, missionGroupId: d.missionGroupId || null })));
+        }
+      } catch {}
+    })();
+  }, [selectedMissionGroupId]);
+
+  // เมื่อเลือกฝ่าย ให้รีเฟรชข้อมูลตามฝ่าย
+  useEffect(() => {
+    if (!selectedDepartmentId) return;
+    const dept = hospitalDepartments.find(d => d.id === selectedDepartmentId);
+    if (!dept?.name) return;
+    (async () => {
+      try {
+        const url = new URL('/api/resume-deposit', window.location.origin);
+        url.searchParams.set('admin', 'true');
+        url.searchParams.set('limit', '100');
+        url.searchParams.set('department', dept.name);
+        const res = await fetch(url.toString());
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json?.success && Array.isArray(json.data)) {
+          const mapped = json.data.map((app: any) => ({
+            id: app.id,
+            firstName: app.firstName || '',
+            lastName: app.lastName || '',
+            appliedPosition: app.expectedPosition || 'ไม่ระบุ',
+            email: app.email || '',
+            phone: app.phone || '',
+            department: app.department || dept.name,
+            missionGroupId: dept.missionGroupId || null,
+            status: (app.status || 'PENDING').toLowerCase(),
+            createdAt: app.createdAt || new Date().toISOString(),
+            profileImageUrl: app.profileImageUrl || ''
+          }));
+          setApplications(mapped);
+        }
+      } catch {}
+    })();
+  }, [selectedDepartmentId, hospitalDepartments]);
 
   const fetchApplications = async () => {
     try {
@@ -332,6 +426,12 @@ export default function AdminPage() {
     setSelectedApplication(application);
     setUploadedDocuments([]); // รีเซ็ตข้อมูลไฟล์แนบ
     onDetailModalOpen();
+    // ตั้งค่า dropdown สถานะเริ่มต้นตามข้อมูล
+    try {
+      const current = String((application as any)?.status || '').toLowerCase();
+      const initial = (current === 'approved' || current === 'hired' || current === 'อนุมัติ') ? 'อนุมัติ' : 'รอพิจารณา';
+      setDetailStatus(initial);
+    } catch {}
     
     // Debug: ตรวจสอบข้อมูล profileImage
     console.log('🔍 Selected Application:', application);
@@ -408,6 +508,8 @@ export default function AdminPage() {
     });
     setShowPreviewModal(true);
   };
+
+  
 
   // ฟังก์ชันดึงข้อมูลเอกสารแนบ
   const fetchDocuments = async (resumeDepositId: string) => {
@@ -651,7 +753,24 @@ export default function AdminPage() {
     return statusMap[status] || status || '-';
   };
 
-  const filteredApplications = applications.filter(app => {
+  // กรองตาม dropdown กลุ่มงาน/ฝ่าย ก่อน
+  const applicationsAfterDropdown = applications.filter(app => {
+    // กรองตามฝ่าย (หากเลือกฝ่าย)
+    if (selectedDepartmentId) {
+      const dept = hospitalDepartments.find(d => d.id === selectedDepartmentId);
+      if (dept?.name && app.department !== dept.name) return false;
+    }
+
+    // กรองตามกลุ่มงาน (หากเลือกกลุ่มงาน)
+    if (selectedMissionGroupId) {
+      const deptOfApp = hospitalDepartments.find(d => d.name === app.department);
+      if (!deptOfApp || String(deptOfApp.missionGroupId || '') !== String(selectedMissionGroupId)) return false;
+    }
+
+    return true;
+  });
+
+  const filteredApplications = applicationsAfterDropdown.filter(app => {
     const matchesSearch = 
       app.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -661,6 +780,18 @@ export default function AdminPage() {
     const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
     
     return matchesSearch && matchesStatus;
+  });
+
+  // รายการผู้สมัครที่รอพิจารณา (ตามตัวกรอง dropdown ปัจจุบันด้วย)
+  const pendingApplications = applicationsAfterDropdown.filter((app: ApplicationData) => {
+    const s = (app.status || '').toLowerCase();
+    return s === 'pending' || s === 'รอพิจารณา';
+  });
+
+  // รายการผู้สมัครที่อนุมัติ (ตามตัวกรอง dropdown ปัจจุบันด้วย)
+  const approvedApplications = applicationsAfterDropdown.filter((app: ApplicationData) => {
+    const s = (app.status || '').toLowerCase();
+    return s === 'approved' || s === 'hired' || s === 'อนุมัติ';
   });
 
   if (loading) {
@@ -712,9 +843,10 @@ export default function AdminPage() {
         </div>
 
       <div className="space-y-8">
+        
           {/* สถิติ */}
         <div className="grid grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
-          <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+          <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg">
             <CardBody className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -726,7 +858,7 @@ export default function AdminPage() {
         </CardBody>
       </Card>
 
-          <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+          <Card isPressable className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white cursor-pointer rounded-lg" onPress={onPendingModalOpen}>
             <CardBody className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -738,7 +870,7 @@ export default function AdminPage() {
             </CardBody>
           </Card>
 
-          <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+          <Card isPressable className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg cursor-pointer" onPress={onApprovedModalOpen}>
             <CardBody className="p-4 lg:p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -764,6 +896,10 @@ export default function AdminPage() {
                   startContent={<MagnifyingGlassIcon className="w-4 h-4 lg:w-5 lg:h-5 text-gray-400" />}
                   className="w-full"
                   size="sm"
+                  classNames={{
+                    input: "rounded-lg border-2 border-blue-200 focus:border-blue-500",
+                    inputWrapper: "rounded-lg border-2 border-blue-200 focus-within:border-blue-500"
+                  }}
                 />
               </div>
               <div className="flex gap-4">
@@ -773,6 +909,10 @@ export default function AdminPage() {
                   onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string)}
                   className="w-full lg:w-48"
                   size="sm"
+                  classNames={{
+                    trigger: "rounded-lg border-2 border-blue-200 focus-within:border-blue-500",
+                    value: "text-gray-900"
+                  }}
                 >
                   <SelectItem key="all">ทั้งหมด</SelectItem>
                   <SelectItem key="pending">รอพิจารณา</SelectItem>
@@ -782,6 +922,50 @@ export default function AdminPage() {
             </div>
           </CardBody>
         </Card>
+
+        {/* ฟิลเตอร์ กลุ่มงาน/ฝ่าย แบบ @departments/ */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">กลุ่มงาน</label>
+            <select
+              value={selectedMissionGroupId}
+              onChange={(e) => {
+                setSelectedMissionGroupId(e.target.value);
+                setSelectedDepartmentId('');
+              }}
+              className="w-full border-2 border-blue-200 rounded-lg px-3 py-2 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">ทั้งหมด</option>
+              {missionGroups.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">ฝ่าย</label>
+            <select
+              value={selectedDepartmentId}
+              onChange={(e) => setSelectedDepartmentId(e.target.value)}
+              className="w-full border-2 border-blue-200 rounded-lg px-3 py-2 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">ทั้งหมด</option>
+              {hospitalDepartments
+                .filter((d) => !selectedMissionGroupId || d.missionGroupId === selectedMissionGroupId)
+                .map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="w-full md:w-auto inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium bg-white text-gray-700 hover:bg-gray-50"
+            >
+              รีเซ็ตตัวกรอง
+            </button>
+          </div>
+        </div>
 
         {/* ตารางข้อมูล */}
         <Card>
@@ -806,13 +990,14 @@ export default function AdminPage() {
               </div>
             ) : (
               <Table aria-label="Applications table">
-                <TableHeader>
-                  <TableColumn>ชื่อ-นามสกุล</TableColumn>
-                  <TableColumn>ตำแหน่งที่สมัคร</TableColumn>
-                  <TableColumn>ฝ่าย/กลุ่มงาน</TableColumn>
-                  <TableColumn>สถานะ</TableColumn>
-                  <TableColumn>วันที่สมัคร</TableColumn>
-                  <TableColumn>การดำเนินการ</TableColumn>
+                <TableHeader className="bg-gray-100 rounded-t-lg">
+                  <TableColumn className="bg-gray-100">ชื่อ-นามสกุล</TableColumn>
+                  <TableColumn className="bg-gray-100">ตำแหน่งที่สมัคร</TableColumn>
+                  <TableColumn className="bg-gray-100">กลุ่มงาน</TableColumn>
+                  <TableColumn className="bg-gray-100">ฝ่าย</TableColumn>
+                  <TableColumn className="bg-gray-100">สถานะ</TableColumn>
+                  <TableColumn className="bg-gray-100">วันที่สมัคร</TableColumn>
+                  <TableColumn className="bg-gray-100">การดำเนินการ</TableColumn>
                 </TableHeader>
                 <TableBody>
                   {filteredApplications.map((application) => (
@@ -850,6 +1035,19 @@ export default function AdminPage() {
                       <p className="font-medium">{application.expectedPosition}</p>
                     </TableCell>
                     <TableCell>
+                      <p className="text-gray-600">
+                        {
+                          (() => {
+                            const byId = missionGroups.find(g => g.id === String(application.missionGroupId || ''))?.name;
+                            if (byId) return byId;
+                            const dept = hospitalDepartments.find(d => d.name === application.department);
+                            if (!dept?.missionGroupId) return '-';
+                            return missionGroups.find(g => g.id === String(dept.missionGroupId))?.name || '-';
+                          })()
+                        }
+                      </p>
+                    </TableCell>
+                    <TableCell>
                       <p className="text-gray-600">{application.department}</p>
                     </TableCell>
                     <TableCell>
@@ -857,6 +1055,11 @@ export default function AdminPage() {
                         color={getStatusColor(application.status) as any}
                         variant="flat"
                         size="sm"
+                        className={`rounded-lg ${
+                          application.status === 'approved' || application.status === 'APPROVED' || application.status === 'อนุมัติ'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-orange-100 text-orange-800'
+                        }`}
                       >
                         {getStatusText(application.status)}
                       </Chip>
@@ -877,7 +1080,7 @@ export default function AdminPage() {
                         >
                           ดูรายละเอียด
                         </Button>
-                        <Button
+                        {/* <Button
                           size="sm"
                           color="secondary"
                           variant="flat"
@@ -885,7 +1088,7 @@ export default function AdminPage() {
                           onPress={() => handlePrintDocument(application)}
                         >
                           พิมพ์เอกสาร
-                        </Button>
+                        </Button> */}
                         {/* {(() => {
                           console.log('🔍 Status check for application:', {
                             id: application.id,
@@ -937,12 +1140,12 @@ export default function AdminPage() {
       <Modal 
         isOpen={isDetailModalOpen} 
         onOpenChange={onDetailModalOpenChange}
-        size="5xl"
+        size="full"
         scrollBehavior="inside"
         classNames={{
           base: "max-h-[90vh] bg-gradient-to-br from-blue-50 to-blue-100",
           body: "py-6",
-          backdrop: "bg-blue-900/50 backdrop-blur-sm",
+          backdrop: "bg-black/50 backdrop-blur-md",
           header: "bg-gradient-to-r from-blue-600 to-blue-700 text-white",
           footer: "bg-gradient-to-r from-blue-50 to-blue-100",
         }}
@@ -955,18 +1158,32 @@ export default function AdminPage() {
                   {/* รูปภาพโปรไฟล์ */}
                   <div className="flex-shrink-0">
                     {(selectedApplication as any)?.profileImage ? (
-                      <img
-                        src={(selectedApplication as any)?.profileImage}
-                        alt="รูปภาพโปรไฟล์"
-                        className="w-16 h-16 rounded-full object-cover border-4 border-white shadow-lg"
-                        onError={(e) => {
-                          console.log('❌ รูปภาพโหลดไม่สำเร็จ:', (selectedApplication as any)?.profileImage);
-                          console.log('❌ Error details:', e);
-                        }}
-                        onLoad={() => {
-                          console.log('✅ รูปภาพโหลดสำเร็จ:', (selectedApplication as any)?.profileImage);
-                        }}
-                      />
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={(selectedApplication as any)?.profileImage}
+                          alt="รูปภาพโปรไฟล์"
+                          className="w-16 h-16 rounded-full object-cover border-4 border-white shadow-lg"
+                          onError={(e) => {
+                            console.log('❌ รูปภาพโหลดไม่สำเร็จ:', (selectedApplication as any)?.profileImage);
+                            console.log('❌ Error details:', e);
+                          }}
+                          onLoad={() => {
+                            console.log('✅ รูปภาพโหลดสำเร็จ:', (selectedApplication as any)?.profileImage);
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          color="secondary"
+                          startContent={<EyeIcon className="w-4 h-4" />}
+                          onPress={() => {
+                            const url = (selectedApplication as any)?.profileImage as string;
+                            if (url) handlePreviewFile(url, 'รูปโปรไฟล์');
+                          }}
+                        >
+                          ดูรูป
+                        </Button>
+                      </div>
                     ) : (
                       <Avatar
                         name={`${(selectedApplication as any)?.firstName || ''} ${(selectedApplication as any)?.lastName || ''}`}
@@ -992,7 +1209,7 @@ export default function AdminPage() {
                         {getStatusText((selectedApplication as any)?.status)}
                       </Chip>
                       <span className="text-blue-200 text-xs">
-                        สมัครเมื่อ: {(selectedApplication as any)?.createdAt ? new Date((selectedApplication as any).createdAt).toLocaleDateString('th-TH') : '-'}
+                        สมัครเมื่อ: {formatDateForDisplay((selectedApplication as any)?.createdAt || '')}
                       </span>
             </div>
                   </div>
@@ -1010,59 +1227,87 @@ export default function AdminPage() {
                       <div className="grid grid-cols-3 gap-4">
             <div>
                           <label className="text-sm font-medium text-gray-600">คำนำหน้า</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.prefix || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.prefix || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">ชื่อ</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.firstName || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.firstName || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">นามสกุล</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.lastName || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.lastName || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">อายุ</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.age || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.age || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">วันเกิด</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.birthDate || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {formatDateForDisplay((selectedApplication as any)?.birthDate || '')}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">เพศ</label>
-                          <p className="text-gray-800">{getGenderText((selectedApplication as any)?.gender || '')}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {getGenderText((selectedApplication as any)?.gender || '')}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">อำเภอ/เขตที่เกิด</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.placeOfBirth || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.placeOfBirth || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">จังหวัดที่เกิด</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.placeOfBirthProvince || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.placeOfBirthProvince || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">เชื้อชาติ</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.race || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.race || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">สัญชาติ</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.nationality || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.nationality || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">ศาสนา</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.religion || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.religion || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">สถานภาพ</label>
-                          <p className="text-gray-800">{getMaritalStatusText((selectedApplication as any)?.maritalStatus || '')}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {getMaritalStatusText((selectedApplication as any)?.maritalStatus || '')}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.phone || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.phone || '-'}
+                          </div>
             </div>
             <div>
                           <label className="text-sm font-medium text-gray-600">อีเมล</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.email || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.email || '-'}
+                          </div>
                         </div>
             </div>
           </div>
@@ -1076,19 +1321,27 @@ export default function AdminPage() {
                       <div className="grid grid-cols-3 gap-4">
                 <div>
                           <label className="text-sm font-medium text-gray-600">เลขบัตรประชาชน</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.idNumber || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.idNumber || '-'}
+                          </div>
                 </div>
                 <div>
                           <label className="text-sm font-medium text-gray-600">ออกโดย</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.idCardIssuedAt || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.idCardIssuedAt || '-'}
+                          </div>
                 </div>
                 <div>
                           <label className="text-sm font-medium text-gray-600">วันที่ออกบัตร</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.idCardIssueDate || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {formatDateForDisplay((selectedApplication as any)?.idCardIssueDate || '')}
+                          </div>
                 </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">วันที่บัตรหมดอายุ</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.idCardExpiryDate || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {formatDateForDisplay((selectedApplication as any)?.idCardExpiryDate || '')}
+                          </div>
               </div>
             </div>
                     </div>
@@ -1102,47 +1355,69 @@ export default function AdminPage() {
                       <div className="grid grid-cols-3 gap-4">
                         <div className="col-span-2">
                           <label className="text-sm font-medium text-gray-600">ที่อยู่</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.addressAccordingToHouseRegistration || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.addressAccordingToHouseRegistration || '-'}
+                          </div>
             </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">เลขที่</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_house_number || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_house_number || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">หมู่ที่</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_village_number || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_village_number || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ตรอก/ซอย</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_alley || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_alley || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ถนน</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_road || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_road || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ตำบล/แขวง</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_sub_district || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_sub_district || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">อำเภอ/เขต</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_district || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_district || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">จังหวัด</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_province || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_province || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">รหัสไปรษณีย์</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_postal_code || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_postal_code || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์บ้าน</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_phone || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_phone || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์มือถือ</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.house_registration_mobile || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.house_registration_mobile || '-'}
+                          </div>
                         </div>
             </div>
           </div>
@@ -1156,47 +1431,69 @@ export default function AdminPage() {
                       <div className="grid grid-cols-3 gap-4">
                         <div className="col-span-2">
                           <label className="text-sm font-medium text-gray-600">ที่อยู่</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.currentAddress || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.currentAddress || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">เลขที่</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_house_number || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_house_number || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">หมู่ที่</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_village_number || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_village_number || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ตรอก/ซอย</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_alley || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_alley || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ถนน</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_road || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_road || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ตำบล/แขวง</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_sub_district || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_sub_district || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">อำเภอ/เขต</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_district || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_district || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">จังหวัด</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_province || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_province || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">รหัสไปรษณีย์</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_postal_code || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_postal_code || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์บ้าน</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_phone || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_phone || '-'}
+                          </div>
                         </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์มือถือ</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.current_address_mobile || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.current_address_mobile || '-'}
+                          </div>
                         </div>
             </div>
                     </div>
@@ -1210,19 +1507,27 @@ export default function AdminPage() {
                       <div className="grid grid-cols-3 gap-4">
                         <div>
                           <label className="text-sm font-medium text-gray-600">ชื่อผู้ติดต่อฉุกเฉิน</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.emergencyContact || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.emergencyContact || '-'}
+                          </div>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">ความสัมพันธ์</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.emergencyRelationship || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.emergencyRelationship || '-'}
+                          </div>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">เบอร์โทรศัพท์ฉุกเฉิน</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.emergencyPhone || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.emergencyPhone || '-'}
+                          </div>
               </div>
                         <div className="col-span-2">
                           <label className="text-sm font-medium text-gray-600">ที่อยู่ฉุกเฉิน</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.emergencyAddress || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.emergencyAddress || '-'}
+                          </div>
             </div>
               </div>
             </div>
@@ -1236,19 +1541,27 @@ export default function AdminPage() {
                       <div className="grid grid-cols-3 gap-4">
               <div>
                           <label className="text-sm font-medium text-gray-600">ตำแหน่งที่สมัคร</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.expectedPosition || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.expectedPosition || '-'}
+                          </div>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">ฝ่าย/กลุ่มงาน</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.department || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.department || '-'}
+                          </div>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">เงินเดือนที่คาดหวัง</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.expectedSalary || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.expectedSalary || '-'}
+                          </div>
               </div>
               <div>
                           <label className="text-sm font-medium text-gray-600">วันที่สามารถเริ่มงานได้</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.availableDate || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {formatDateForDisplay((selectedApplication as any)?.availableDate || '')}
+                          </div>
               </div>
                       </div>
                     </div>
@@ -1266,23 +1579,33 @@ export default function AdminPage() {
                               <div className="grid grid-cols-3 gap-4">
               <div>
                                   <label className="text-sm font-medium text-gray-600">ระดับการศึกษา</label>
-                                  <p className="text-gray-800">{edu.level || '-'}</p>
+                                  <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                                    {edu.level || '-'}
+                                  </div>
               </div>
               <div>
                                   <label className="text-sm font-medium text-gray-600">สถาบันการศึกษา</label>
-                                  <p className="text-gray-800">{edu.institution || edu.school || '-'}</p>
+                                  <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                                    {edu.institution || edu.school || '-'}
+                                  </div>
               </div>
               <div>
                                   <label className="text-sm font-medium text-gray-600">สาขาวิชา</label>
-                                  <p className="text-gray-800">{edu.major || '-'}</p>
+                                  <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                                    {edu.major || '-'}
+                                  </div>
               </div>
               <div>
                                   <label className="text-sm font-medium text-gray-600">ปีที่จบ</label>
-                                  <p className="text-gray-800">{edu.year || edu.endYear || '-'}</p>
+                                  <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                                    {edu.year || edu.endYear || '-'}
+                                  </div>
               </div>
                                 <div>
                                   <label className="text-sm font-medium text-gray-600">เกรดเฉลี่ย</label>
-                                  <p className="text-gray-800">{edu.gpa || '-'}</p>
+                                  <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                                    {edu.gpa || '-'}
+                                  </div>
             </div>
             </div>
           </div>
@@ -1488,23 +1811,33 @@ export default function AdminPage() {
                       <div className="grid grid-cols-3 gap-4">
               <div>
                           <label className="text-sm font-medium text-gray-600">ความสามารถพิเศษ</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.skills || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.skills || '-'}
+                          </div>
               </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ภาษา</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.languages || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.languages || '-'}
+                          </div>
               </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ทักษะคอมพิวเตอร์</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.computerSkills || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.computerSkills || '-'}
+                          </div>
             </div>
                         <div>
                           <label className="text-sm font-medium text-gray-600">ใบรับรอง</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.certificates || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.certificates || '-'}
+                          </div>
                         </div>
                         <div className="col-span-2">
                           <label className="text-sm font-medium text-gray-600">บุคคลอ้างอิง</label>
-                          <p className="text-gray-800">{(selectedApplication as any)?.references || '-'}</p>
+                          <div className="px-3 py-2 bg-white border-2 border-blue-200 rounded-lg text-gray-800">
+                            {(selectedApplication as any)?.references || '-'}
+                          </div>
                       </div>
                       </div>
                     </div>
@@ -1591,7 +1924,7 @@ export default function AdminPage() {
                   ปิด
                 </Button>
                 {selectedApplication && (
-                  <>
+                  <div className="flex items-center gap-2">
                     <Button 
                       color="secondary" 
                       variant="flat"
@@ -1600,41 +1933,27 @@ export default function AdminPage() {
                     >
                       พิมพ์เอกสาร
                     </Button>
-                    {(() => {
-                      console.log('🔍 Modal Status check for application:', {
-                        id: selectedApplication.id,
-                        name: `${selectedApplication.firstName} ${selectedApplication.lastName}`,
-                        status: selectedApplication.status,
-                        isPending: selectedApplication.status === 'pending' || selectedApplication.status === 'PENDING' || selectedApplication.status === 'รอพิจารณา',
-                        isApproved: selectedApplication.status === 'approved' || selectedApplication.status === 'APPROVED' || selectedApplication.status === 'อนุมัติ'
-                      });
-                      return selectedApplication.status === 'pending' || selectedApplication.status === 'PENDING' || selectedApplication.status === 'รอพิจารณา';
-                    })() ? (
-                      <Button 
-                        color="success" 
-                        variant="solid"
-                        startContent={<CheckCircleIcon className="w-4 h-4" />}
-                        onPress={() => {
-                          console.log('🔍 Modal Button clicked: อนุมัติ for application:', selectedApplication.id);
-                          handleStatusUpdate(selectedApplication.id, 'อนุมัติ');
-                        }}
-                      >
-                        อนุมัติ
-                      </Button>
-                    ) : (selectedApplication.status === 'approved' || selectedApplication.status === 'APPROVED' || selectedApplication.status === 'อนุมัติ') ? (
-                      <Button 
-                        color="warning" 
-                        variant="solid"
-                        startContent={<ClockIcon className="w-4 h-4" />}
-                        onPress={() => {
-                          console.log('🔍 Modal Button clicked: รอพิจารณา for application:', selectedApplication.id);
-                          handleStatusUpdate(selectedApplication.id, 'รอพิจารณา');
-                        }}
-                      >
-                        รอพิจารณา
-                      </Button>
-                    ) : null}
-                  </>
+                    <Select
+                      size="sm"
+                      aria-label="เลือกสถานะใบสมัคร"
+                      selectedKeys={[detailStatus]}
+                      onSelectionChange={(keys) => setDetailStatus(Array.from(keys)[0] as string)}
+                      className="w-44"
+                    >
+                      <SelectItem key="รอพิจารณา">รอพิจารณา</SelectItem>
+                      <SelectItem key="อนุมัติ">อนุมัติ</SelectItem>
+                    </Select>
+                    <Button 
+                      color="primary" 
+                      variant="solid"
+                      onPress={() => {
+                        if (!detailStatus) return;
+                        handleStatusUpdate(selectedApplication.id, detailStatus);
+                      }}
+                    >
+                      บันทึก
+                    </Button>
+                  </div>
                 )}
               </ModalFooter>
             </>
@@ -1642,9 +1961,112 @@ export default function AdminPage() {
         </ModalContent>
       </Modal>
 
+      {/* Approved Applications Modal */}
+      <Modal 
+        isOpen={isApprovedModalOpen} 
+        onOpenChange={onApprovedModalOpenChange}
+        size="5xl"
+        scrollBehavior="inside"
+        classNames={{
+          base: "max-h-[90vh] bg-gray-50 rounded-2xl shadow-lg",
+          body: "py-6",
+          backdrop: "bg-black/50 backdrop-blur-sm",
+          header: "bg-gray-50 rounded-t-2xl",
+          footer: "bg-gray-50 rounded-b-2xl"
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader>
+                รายชื่อผู้สมัครที่สถานะ "อนุมัติ"
+              </ModalHeader>
+              <ModalBody>
+                <Table aria-label="Approved applications table">
+                  <TableHeader className="bg-gray-100 ">
+                    <TableColumn className="bg-gray-100 rounded-t-lg">ชื่อ-นามสกุล</TableColumn>
+                    <TableColumn className="bg-gray-100 ">ตำแหน่งที่สมัคร</TableColumn>
+                    <TableColumn className="bg-gray-100 ">กลุ่มงาน</TableColumn>
+                    <TableColumn className="bg-gray-100 ">ฝ่าย</TableColumn>
+                    <TableColumn className="bg-gray-100 ">วันที่สมัคร</TableColumn>
+                    <TableColumn className="bg-gray-100 rounded-t-lg">การดำเนินการ</TableColumn>
+                  </TableHeader>
+                  <TableBody emptyContent="ไม่พบรายการ">
+                    {approvedApplications.map((application) => (
+                      <TableRow key={application.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            {application.profileImage ? (
+                              <img
+                                src={application.profileImage}
+                                alt="รูปภาพโปรไฟล์"
+                                className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 shadow-sm "
+                              />
+                            ) : (
+                              <Avatar
+                                name={`${application.firstName} ${application.lastName}`}
+                                size="sm"
+                              />
+                            )}
+                            <div>
+                              <p className="font-medium">
+                                {application.prefix} {application.firstName} {application.lastName}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <p className="font-medium">{application.expectedPosition}</p>
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-gray-600">
+                            {
+                              (() => {
+                                const byId = missionGroups.find(g => g.id === String((application as any).missionGroupId || ''))?.name;
+                                if (byId) return byId;
+                                const dept = hospitalDepartments.find(d => d.name === application.department);
+                                if (!dept?.missionGroupId) return '-';
+                                return missionGroups.find(g => g.id === String(dept.missionGroupId))?.name || '-';
+                              })()
+                            }
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-gray-600">{application.department}</p>
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-sm text-gray-600">
+                            {new Date(application.createdAt).toLocaleDateString('th-TH')}
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              color="primary"
+                              variant="flat"
+                              startContent={<EyeIcon className="w-4 h-4" />}
+                              onPress={() => handleViewDetails(application)}
+                            >
+                              ดูรายละเอียด
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ModalBody>
+              <ModalFooter>
+                <Button color="primary" variant="solid" onPress={onClose}>ปิด</Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
       {/* Preview File Modal */}
       {showPreviewModal && previewFile && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-2">
           <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[95vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="text-lg font-semibold text-gray-800">
@@ -1700,6 +2122,110 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* Pending Applications Modal */}
+      <Modal 
+        isOpen={isPendingModalOpen} 
+        onOpenChange={onPendingModalOpenChange}
+        size="5xl"
+        scrollBehavior="inside"
+        classNames={{
+          base: "max-h-[90vh] bg-gray-50 rounded-2xl shadow-lg",
+          body: "py-6",
+          backdrop: "bg-black/50 backdrop-blur-sm",
+          header: "bg-gray-50 rounded-t-2xl",
+          footer: "bg-gray-50 rounded-b-2xl"
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader>
+                รายชื่อผู้สมัครที่สถานะ "รอพิจารณา"
+              </ModalHeader>
+              <ModalBody>
+                <Table aria-label="Pending applications table">
+                  <TableHeader className="bg-gray-100 rounded-t-lg">
+                    <TableColumn className="bg-gray-100 rounded-t-lg">ชื่อ-นามสกุล</TableColumn>
+                    <TableColumn className="bg-gray-100 ">ตำแหน่งที่สมัคร</TableColumn>
+                    <TableColumn className="bg-gray-100 ">กลุ่มงาน</TableColumn>
+                    <TableColumn className="bg-gray-100 ">ฝ่าย</TableColumn>
+                    <TableColumn className="bg-gray-100 ">วันที่สมัคร</TableColumn>
+                    <TableColumn className="bg-gray-100 rounded-t-lg">การดำเนินการ</TableColumn>
+                  </TableHeader>
+                  <TableBody emptyContent="ไม่พบรายการ">
+                    {pendingApplications.map((application) => (
+                      <TableRow key={application.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            {application.profileImage ? (
+                              <img
+                                src={application.profileImage}
+                                alt="รูปภาพโปรไฟล์"
+                                className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 shadow-sm "
+                              />
+                            ) : (
+                              <Avatar
+                                name={`${application.firstName} ${application.lastName}`}
+                                size="sm"
+                              />
+                            )}
+                            <div>
+                              <p className="font-medium">
+                                {application.prefix} {application.firstName} {application.lastName}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <p className="font-medium">{application.expectedPosition}</p>
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-gray-600">
+                            {
+                              (() => {
+                                const byId = missionGroups.find(g => g.id === String((application as any).missionGroupId || ''))?.name;
+                                if (byId) return byId;
+                                const dept = hospitalDepartments.find(d => d.name === application.department);
+                                if (!dept?.missionGroupId) return '-';
+                                return missionGroups.find(g => g.id === String(dept.missionGroupId))?.name || '-';
+                              })()
+                            }
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-gray-600">{application.department}</p>
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-sm text-gray-600">
+                            {new Date(application.createdAt).toLocaleDateString('th-TH')}
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              color="primary"
+                              variant="flat"
+                              startContent={<EyeIcon className="w-4 h-4" />}
+                              onPress={() => handleViewDetails(application)}
+                            >
+                              ดูรายละเอียด
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ModalBody>
+              <ModalFooter>
+                <Button color="primary" variant="solid" onPress={onClose}>ปิด</Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
     </div>
   );
 } 

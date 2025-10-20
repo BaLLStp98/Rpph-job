@@ -1123,9 +1123,10 @@ export default function Departments() {
   }, [filteredDepartments, page, rowsPerPage]);
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return '';
     try {
-      const [year, month, day] = dateString.split('-').map(Number);
-      const date = new Date(year, month - 1, day);
+      // แปลง ISO format หรือ YYYY-MM-DD เป็น Date object
+      const date = new Date(dateString);
       
       if (isNaN(date.getTime())) {
         return dateString;
@@ -1137,6 +1138,20 @@ export default function Departments() {
       
       return `${thaiDay} ${thaiMonth} ${thaiYear}`;
     } catch (error) {
+      return dateString;
+    }
+  };
+
+  // ฟังก์ชันแปลงวันที่จาก ISO format เป็น d/m/Y (ปีไทย)
+  const formatDateForDisplay = (dateString: string) => {
+    if (!dateString) return 'ไม่ระบุ';
+    try {
+      const date = new Date(dateString);
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear() + 543; // แปลงเป็นปีไทย
+      return `${day}/${month}/${year}`;
+    } catch {
       return dateString;
     }
   };
@@ -1568,7 +1583,7 @@ export default function Departments() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm text-gray-600">
-                        {department.createdAt ? new Date(department.createdAt).toLocaleDateString('th-TH') : 'ไม่ระบุ'}
+                        {formatDateForDisplay(department.createdAt || '')}
                       </div>
                     </TableCell>
                                          <TableCell>

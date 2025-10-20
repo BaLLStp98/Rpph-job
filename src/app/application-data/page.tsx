@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import flatpickr from 'flatpickr';
+import 'flatpickr/dist/flatpickr.css';
+import { Thai } from 'flatpickr/dist/l10n/th.js';
 import {
   Card,
   CardBody,
@@ -188,6 +191,148 @@ const ApplicationFormView = ({
   uploadingFiles?: {[key: string]: boolean};
   onFileSelect?: (event: React.ChangeEvent<HTMLInputElement>, documentType: string, applicationId: string) => void;
 }) => {
+  // Refs for flatpickr
+  const birthDateRef = useRef<HTMLInputElement>(null);
+  const idCardIssueDateRef = useRef<HTMLInputElement>(null);
+  const idCardExpiryDateRef = useRef<HTMLInputElement>(null);
+  const applicationDateRef = useRef<HTMLInputElement>(null);
+  const availableDateRef = useRef<HTMLInputElement>(null);
+
+  // แปลงค่าตำแหน่งที่สมัครให้ถูกต้อง พร้อม fallback หลายแหล่งและถอดรหัส
+  const resolveAppliedPosition = (appLike: any, isApplicationForm?: boolean): string => {
+    console.log('🔍 resolveAppliedPosition called with:', {
+      appLike: appLike,
+      isApplicationForm,
+      appliedPosition: appLike?.appliedPosition,
+      expectedPosition: appLike?.expectedPosition,
+      staff_position: appLike?.staff_position,
+      jobPosition: appLike?.jobPosition
+    });
+
+    // ใช้ฟิลด์ตามชนิดข้อมูล แล้วค่อย fallback แบบปลอดภัย ไม่ใช้ field ทั่วไปที่อาจเป็นชื่อฝ่าย
+    const candidates = [
+      isApplicationForm ? appLike?.appliedPosition : appLike?.expectedPosition,
+      // fallbacks ที่ปลอดภัยกว่า
+      appLike?.appliedPosition,
+      appLike?.expectedPosition,
+      appLike?.staff_position,
+      appLike?.jobPosition,
+    ].filter(Boolean) as string[];
+
+    console.log('🔍 candidates:', candidates);
+
+    if (candidates.length === 0) {
+      console.log('🔍 No candidates found, returning ไม่ระบุ');
+      return 'ไม่ระบุ';
+    }
+    
+    const raw = candidates.find((v) => {
+      if (typeof v !== 'string') return false;
+      const t = v.trim();
+      return t.length > 0 && t.toLowerCase() !== 'null' && t.toLowerCase() !== 'undefined';
+    }) || '';
+
+    console.log('🔍 raw value found:', raw);
+
+    if (!raw) {
+      console.log('🔍 No valid raw value, returning ไม่ระบุ');
+      return 'ไม่ระบุ';
+    }
+    
+    const normalized = raw.replace(/\+/g, ' ').trim();
+    try {
+      const result = decodeURIComponent(normalized);
+      console.log('🔍 Final result:', result);
+      return result;
+    } catch {
+      console.log('🔍 Decode failed, returning normalized:', normalized);
+      return normalized;
+    }
+  };
+
+  // ตั้งค่า flatpickr สำหรับ input วันที่ต่างๆ
+  useEffect(() => {
+    // วันเกิด
+    if (birthDateRef.current) {
+      const inst = (birthDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+      if (inst) inst.destroy();
+      flatpickr(birthDateRef.current, {
+        locale: Thai,
+        dateFormat: 'd/m/Y',
+        allowInput: true,
+        onChange: function(selectedDates, dateStr, instance) {
+          if (onInputChange) {
+            onInputChange('birthDate', dateStr);
+          }
+        }
+      });
+    }
+
+    // วันที่ออกบัตร
+    if (idCardIssueDateRef.current) {
+      const inst = (idCardIssueDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+      if (inst) inst.destroy();
+      flatpickr(idCardIssueDateRef.current, {
+        locale: Thai,
+        dateFormat: 'd/m/Y',
+        allowInput: true,
+        onChange: function(selectedDates, dateStr, instance) {
+          if (onInputChange) {
+            onInputChange('idCardIssueDate', dateStr);
+          }
+        }
+      });
+    }
+
+    // วันหมดอายุบัตร
+    if (idCardExpiryDateRef.current) {
+      const inst = (idCardExpiryDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+      if (inst) inst.destroy();
+      flatpickr(idCardExpiryDateRef.current, {
+        locale: Thai,
+        dateFormat: 'd/m/Y',
+        allowInput: true,
+        onChange: function(selectedDates, dateStr, instance) {
+          if (onInputChange) {
+            onInputChange('idCardExpiryDate', dateStr);
+          }
+        }
+      });
+    }
+
+    // วันที่สมัคร
+    if (applicationDateRef.current) {
+      const inst = (applicationDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+      if (inst) inst.destroy();
+      flatpickr(applicationDateRef.current, {
+        locale: Thai,
+        dateFormat: 'd/m/Y',
+        allowInput: true,
+        onChange: function(selectedDates, dateStr, instance) {
+          if (onInputChange) {
+            onInputChange('applicationDate', dateStr);
+          }
+        }
+      });
+    }
+
+    // วันที่พร้อมเริ่มงาน
+    if (availableDateRef.current) {
+      const inst = (availableDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
+      if (inst) inst.destroy();
+      flatpickr(availableDateRef.current, {
+        locale: Thai,
+        dateFormat: 'd/m/Y',
+        allowInput: true,
+        onChange: function(selectedDates, dateStr, instance) {
+          if (onInputChange) {
+            onInputChange('availableDate', dateStr);
+          }
+        }
+      });
+    }
+  }, [isEditing, application, onInputChange]);
+
   // ฟังก์ชันสำหรับจัดรูปแบบวันที่
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
@@ -198,6 +343,20 @@ const ApplicationFormView = ({
         month: 'long',
         day: 'numeric'
       });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // ฟังก์ชันแปลงวันที่จาก ISO format เป็น d/m/Y สำหรับ flatpickr
+  const formatDateForFlatpickr = (dateString: string) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
     } catch {
       return dateString;
     }
@@ -324,10 +483,12 @@ const ApplicationFormView = ({
                    <label className="text-sm font-medium text-gray-700">วัน เดือน ปีเกิด</label>
                    {isEditing ? (
                      <input
-                       type="date"
-                       value={application.birthDate || ''}
+                       ref={birthDateRef}
+                       type="text"
+                       value={formatDateForFlatpickr(application.birthDate || '')}
                        onChange={(e) => onInputChange?.('birthDate', e.target.value)}
                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="dd/mm/yyyy"
                      />
                    ) : (
                      <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
@@ -565,10 +726,12 @@ const ApplicationFormView = ({
                  <label className="text-sm font-medium text-gray-700">วันที่ออกบัตร</label>
                  {isEditing ? (
                    <input
-                     type="date"
-                     value={application.idCardIssueDate || ''}
+                       ref={idCardIssueDateRef}
+                       type="text"
+                       value={formatDateForFlatpickr(application.idCardIssueDate || '')}
                      onChange={(e) => onInputChange?.('idCardIssueDate', e.target.value)}
                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="dd/mm/yyyy"
                    />
                  ) : (
                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
@@ -580,10 +743,12 @@ const ApplicationFormView = ({
                  <label className="text-sm font-medium text-gray-700">วันที่บัตรหมดอายุ</label>
                  {isEditing ? (
                    <input
-                     type="date"
-                     value={application.idCardExpiryDate || ''}
+                       ref={idCardExpiryDateRef}
+                       type="text"
+                       value={formatDateForFlatpickr(application.idCardExpiryDate || '')}
                      onChange={(e) => onInputChange?.('idCardExpiryDate', e.target.value)}
                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       placeholder="dd/mm/yyyy"
                    />
                  ) : (
                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
@@ -1476,33 +1641,91 @@ const ApplicationFormView = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">ระดับการศึกษา</label>
+                      {isEditing ? (
+                        <select
+                          value={edu.level || ''}
+                          onChange={(e) => onInputChange?.(`education[${index}].level`, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">เลือกระดับการศึกษา</option>
+                          <option value="ประถมศึกษา">ประถมศึกษา</option>
+                          <option value="มัธยมศึกษาตอนต้น">มัธยมศึกษาตอนต้น</option>
+                          <option value="มัธยมศึกษาตอนปลาย">มัธยมศึกษาตอนปลาย</option>
+                          <option value="ประกาศนียบัตรวิชาชีพ (ปวช.)">ประกาศนียบัตรวิชาชีพ (ปวช.)</option>
+                          <option value="ประกาศนียบัตรวิชาชีพชั้นสูง (ปวส.)">ประกาศนียบัตรวิชาชีพชั้นสูง (ปวส.)</option>
+                          <option value="ปริญญาตรี">ปริญญาตรี</option>
+                          <option value="ปริญญาโท">ปริญญาโท</option>
+                          <option value="ปริญญาเอก">ปริญญาเอก</option>
+                        </select>
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {edu.level || '-'}
                      </div>
+                      )}
                      </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">สถาบัน</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={edu.institution || edu.school || ''}
+                          onChange={(e) => onInputChange?.(`education[${index}].institution`, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="ชื่อสถาบัน"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {edu.institution || edu.school || '-'}
                      </div>
+                      )}
                      </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">สาขาวิชา</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={edu.major || ''}
+                          onChange={(e) => onInputChange?.(`education[${index}].major`, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="สาขาวิชา"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {edu.major || '-'}
                      </div>
+                      )}
                    </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">ปีที่จบ</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={edu.year || edu.graduationYear || ''}
+                          onChange={(e) => onInputChange?.(`education[${index}].year`, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="ปีที่จบ (เช่น 2565)"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {edu.year || edu.graduationYear || '-'}
                 </div>
+                      )}
             </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">เกรดเฉลี่ย</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={edu.gpa || ''}
+                          onChange={(e) => onInputChange?.(`education[${index}].gpa`, e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="เกรดเฉลี่ย (เช่น 3.50)"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {edu.gpa || '-'}
             </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1526,45 +1749,142 @@ const ApplicationFormView = ({
         </CardHeader>
         <CardBody className="p-8">
             <div className="space-y-6">
+              {isEditing && (
+                <div className="flex justify-end mb-4">
+                  <Button
+                    color="primary"
+                    size="sm"
+                    onClick={() => {
+                      const newWork = {
+                        position: '',
+                        company: '',
+                        startDate: '',
+                        endDate: '',
+                        salary: '',
+                        reason: ''
+                      };
+                      onInputChange?.('workExperience', [...(application.workExperience || []), newWork]);
+                    }}
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    + เพิ่มประสบการณ์ทำงาน
+                  </Button>
+                </div>
+              )}
               {application.workExperience.map((work, index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-4">
-                  <h4 className="text-md font-semibold text-gray-700 mb-4">ประสบการณ์ทำงาน {index + 1}</h4>
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-md font-semibold text-gray-700">ประสบการณ์ทำงาน {index + 1}</h4>
+                    {isEditing && application.workExperience.length > 1 && (
+                      <Button
+                        color="danger"
+                        size="sm"
+                        onClick={() => {
+                          const updatedWorkExperience = application.workExperience.filter((_, i) => i !== index);
+                          onInputChange?.('workExperience', updatedWorkExperience);
+                        }}
+                        className="bg-red-500 hover:bg-red-600 text-white"
+                      >
+                        ลบ
+                      </Button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">ตำแหน่ง</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={work.position || ''}
+                          onChange={(e) => onInputChange?.(`workExperience[${index}].position`, e.target.value)}
+                          placeholder="กรอกตำแหน่ง"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {work.position || '-'}
                       </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">บริษัท</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={work.company || ''}
+                          onChange={(e) => onInputChange?.(`workExperience[${index}].company`, e.target.value)}
+                          placeholder="กรอกบริษัท"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {work.company || '-'}
                       </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">วันที่เริ่มงาน</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formatDateForFlatpickr(work.startDate || '')}
+                          onChange={(e) => onInputChange?.(`workExperience[${index}].startDate`, e.target.value)}
+                          placeholder="dd/mm/yyyy"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {formatDate(work.startDate || '') || '-'}
                       </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">วันที่สิ้นสุด</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={formatDateForFlatpickr(work.endDate || '')}
+                          onChange={(e) => onInputChange?.(`workExperience[${index}].endDate`, e.target.value)}
+                          placeholder="dd/mm/yyyy"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {formatDate(work.endDate || '') || '-'}
                       </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">เงินเดือน</label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={work.salary || ''}
+                          onChange={(e) => onInputChange?.(`workExperience[${index}].salary`, e.target.value)}
+                          placeholder="กรอกเงินเดือน"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {work.salary || '-'}
                       </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">เหตุผลที่ออก</label>
+                      {isEditing ? (
+                        <textarea
+                          value={work.reason || ''}
+                          onChange={(e) => onInputChange?.(`workExperience[${index}].reason`, e.target.value)}
+                          placeholder="กรอกเหตุผลที่ออก"
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      ) : (
                       <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                         {work.reason || '-'}
                       </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1592,14 +1912,14 @@ const ApplicationFormView = ({
                    {isEditing ? (
                      <input
                        type="text"
-                       value={application.appliedPosition || ''}
+                       value={resolveAppliedPosition(application, true) || ''}
                        onChange={(e) => onInputChange?.('appliedPosition', e.target.value)}
                        placeholder="กรอกตำแหน่งที่สมัคร"
                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                      />
                    ) : (
                  <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
-                   {application.appliedPosition || '-'}
+                   {resolveAppliedPosition(application, true) || '-'}
                  </div>
                        )}
                      </div>
@@ -1621,9 +1941,20 @@ const ApplicationFormView = ({
              </div> */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">วันที่พร้อมเริ่มงาน</label>
+              {isEditing ? (
+                <input
+                  ref={availableDateRef}
+                  type="text"
+                  value={formatDateForFlatpickr(application.availableDate || '')}
+                  onChange={(e) => onInputChange?.('availableDate', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="dd/mm/yyyy"
+                />
+              ) : (
               <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
                 {formatDate(application.availableDate || '') || '-'}
               </div>
+              )}
             </div>
             {/* <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">ฝ่าย</label>
@@ -1745,10 +2076,12 @@ const ApplicationFormView = ({
                  <label className="text-sm font-medium text-gray-700">วันที่สมัคร</label>
                  {isEditing ? (
                    <input
-                     type="date"
-                     value={application.applicationDate || ''}
+                   ref={applicationDateRef}
+                   type="text"
+                   value={formatDateForFlatpickr(application.applicationDate || '')}
                      onChange={(e) => onInputChange?.('applicationDate', e.target.value)}
                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="dd/mm/yyyy"
                    />
                  ) : (
                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
@@ -2613,6 +2946,7 @@ export default function ApplicationData() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingApplication, setEditingApplication] = useState<ApplicationData | null>(null);
 
+
   // ฟังก์ชันสำหรับเพิ่มใบสมัครงานใหม่จากฝ่ายอื่น
   const addNewApplication = async (applicationData: ApplicationData) => {
     try {
@@ -2643,6 +2977,66 @@ export default function ApplicationData() {
       
     } catch (error) {
       console.error('❌ Error adding new application:', error);
+    }
+  };
+
+  // แปลงค่าฝ่ายให้ถูกต้อง และถอดรหัสกรณีเป็น percent-encoded
+  const resolveDepartment = (appLike: any): string => {
+    const candidates = [
+      appLike?.department,
+      appLike?.staff_department,
+      appLike?.departmentName,
+      appLike?.department_name,
+      appLike?.department?.name,
+      // ใช้ค่าจาก query string หากมี (เช่นดูตามฝ่าย)
+      typeof departmentName === 'string' && departmentName ? departmentName : null,
+    ].filter(Boolean) as string[];
+
+    if (candidates.length === 0) return '';
+
+    // เลือกค่าตัวแรกที่ไม่ว่าง และไม่ใช่คำว่า 'null' หรือ 'undefined'
+    const raw = candidates.find((v) => {
+      if (typeof v !== 'string') return false;
+      const t = v.trim();
+      return t.length > 0 && t.toLowerCase() !== 'null' && t.toLowerCase() !== 'undefined';
+    }) || '';
+
+    if (!raw) return '';
+
+    // แก้กรณีเครื่องหมาย '+' แทนช่องว่าง และถอดรหัส URL
+    const normalized = raw.replace(/\+/g, ' ').trim();
+    try {
+      return decodeURIComponent(normalized);
+    } catch {
+      return normalized;
+    }
+  };
+
+  // แปลงค่าตำแหน่งที่สมัครให้ถูกต้อง พร้อม fallback หลายแหล่งและถอดรหัส
+  const resolveAppliedPosition = (appLike: any, isApplicationForm?: boolean): string => {
+    // ใช้ฟิลด์ตามชนิดข้อมูล แล้วค่อย fallback แบบปลอดภัย ไม่ใช้ field ทั่วไปที่อาจเป็นชื่อฝ่าย
+    const candidates = [
+      isApplicationForm ? appLike?.appliedPosition : appLike?.expectedPosition,
+      // fallbacks ที่ปลอดภัยกว่า
+      appLike?.appliedPosition,
+      appLike?.expectedPosition,
+      appLike?.staff_position,
+      appLike?.jobPosition,
+    ].filter(Boolean) as string[];
+
+    if (candidates.length === 0) return 'ไม่ระบุ';
+    const raw = candidates.find((v) => {
+      if (typeof v !== 'string') return false;
+      const t = v.trim();
+      return t.length > 0 && t.toLowerCase() !== 'null' && t.toLowerCase() !== 'undefined';
+    }) || '';
+
+    if (!raw) return 'ไม่ระบุ';
+    const normalized = raw.replace(/\+/g, ' ').trim();
+    try {
+      return decodeURIComponent(normalized);
+    } catch {
+      return normalized;
     }
   };
 
@@ -2836,8 +3230,8 @@ export default function ApplicationData() {
           id: app.id,
           firstName: app.firstName || '',
           lastName: app.lastName || '',
-          // ใช้ appliedPosition สำหรับ ApplicationForm หรือ expectedPosition สำหรับ ResumeDeposit
-          appliedPosition: isApplicationForm ? (app.appliedPosition || 'ไม่ระบุ') : (app.expectedPosition || 'ไม่ระบุ'),
+          // ใช้ตำแหน่งจากการ์ดที่กดสมัครด้วยตัวช่วยที่รองรับหลายรูปแบบ
+          appliedPosition: resolveAppliedPosition(app, isApplicationForm),
           email: app.email || '',
           phone: app.phone || '',
           currentAddress: isApplicationForm ? (app.currentAddress || '') : (app.address || ''),
@@ -2949,7 +3343,7 @@ export default function ApplicationData() {
         expectedSalary: app.expectedSalary || '',
         availableDate: app.availableDate || '',
         currentWork: false, // ไม่มีข้อมูลใน API
-        department: app.department || '',
+        department: resolveDepartment(app),
         unit: app.unit || '',
         skills: app.skills || '',
         languages: app.languages || '',
@@ -2973,7 +3367,6 @@ export default function ApplicationData() {
           console.log('🔍 Status conversion:', { raw: rawStatus, normalized: normalizedStatus });
           return normalizedStatus;
         })(),
-        department: app.department || '',
         createdAt: app.createdAt || new Date().toISOString(),
         // เพิ่มข้อมูลแหล่งที่มา
         source: isResumeDeposit ? 'ResumeDeposit' : isApplicationForm ? 'ApplicationForm' : 'Unknown'
@@ -3171,7 +3564,7 @@ export default function ApplicationData() {
           lastName: updatedData.lastName || '',
           email: updatedData.email || '',
           phone: updatedData.phone || '',
-          appliedPosition: updatedData.expectedPosition || '',
+          appliedPosition: resolveAppliedPosition(updatedData, Array.isArray((updatedData as any)?.education) ? false : false),
           department: updatedData.department || '',
           status: updatedData.status || '',
           createdAt: updatedData.createdAt || '',
@@ -3548,6 +3941,7 @@ export default function ApplicationData() {
     };
   }, []);
 
+
   // ตรวจสอบใบสมัครงานใหม่ทุก 10 วินาที
   useEffect(() => {
     const interval = setInterval(() => {
@@ -3600,10 +3994,10 @@ export default function ApplicationData() {
             id: app.id,
             firstName: app.firstName || '',
             lastName: app.lastName || '',
-            appliedPosition: app.expectedPosition || 'ไม่ระบุ',
+            appliedPosition: resolveAppliedPosition(app, false),
             email: app.email || '',
             phone: app.phone || '',
-            department: app.department || '',
+            department: resolveDepartment(app),
             status: app.status || 'PENDING',
             createdAt: app.createdAt || new Date().toISOString(),
             profileImageUrl: app.profileImageUrl || '',
@@ -3820,7 +4214,11 @@ export default function ApplicationData() {
             <DocumentTextIcon className="w-16 h-16 mx-auto mb-4" />
             <p className="text-lg">ไม่พบข้อมูลใบสมัครงาน</p>
             <div className="mt-4 text-sm text-gray-400">
-              <p>Session: {JSON.stringify({ userId, userEmail, userLineId })}</p>
+              <p>Session: {JSON.stringify({
+                userId: (session?.user as any)?.id || '',
+                userEmail: (session?.user as any)?.email || '',
+                userLineId: (session?.user as any)?.lineId || ''
+              })}</p>
               <p>URL Params: {JSON.stringify({ userIdParam, resumeUserIdParam, departmentName, adminParam, limitParam })}</p>
             </div>
           </div>
@@ -3872,7 +4270,7 @@ export default function ApplicationData() {
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">ตำแหน่ง:</span>
-                    <span className="text-sm font-medium">{application.appliedPosition}</span>
+                    <span className="text-sm font-medium">{resolveAppliedPosition(application, true)}</span>
                       </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">ฝ่าย:</span>
@@ -3882,14 +4280,14 @@ export default function ApplicationData() {
                     <span className="text-sm text-gray-600">เบอร์โทร:</span>
                     <span className="text-sm font-medium">{application.phone}</span>
                     </div>
-                  <div className="flex justify-between">
+                  {/* <div className="flex justify-between">
                     <span className="text-sm text-gray-600">แหล่งข้อมูล:</span>
                     <span className="text-sm font-medium">
                       {application.source === 'ResumeDeposit' ? 'ใบสมัครใบแรก' : 
                        application.source === 'ApplicationForm' ? 'ใบสมัครเพิ่มเติม' : 
                        'ไม่ระบุ'}
                     </span>
-                    </div>
+                    </div> */}
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">วันที่สมัคร:</span>
                     <span className="text-sm font-medium">

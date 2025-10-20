@@ -20,9 +20,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon
 } from '@heroicons/react/24/outline';
-import flatpickr from 'flatpickr';
-import 'flatpickr/dist/flatpickr.css';
-import { Thai } from 'flatpickr/dist/l10n/th.js';
+import ThaiDatePicker from './components/ThaiDatePicker';
 
 interface FormData {
   profileImage?: File;
@@ -188,7 +186,7 @@ export default function ApplicationForm() {
     if (departmentName) {
       setFormData(prev => ({
         ...prev,
-        appliedPosition: departmentName,
+        appliedPosition: '', // ไม่ตั้งค่า appliedPosition จาก departmentName
         department: departmentName,
         departmentId: departmentId || null
       }));
@@ -993,28 +991,17 @@ export default function ApplicationForm() {
         });
       }
 
-      // หากยังไม่มีเรคคอร์ด ให้บังคับเริ่มจากแท็บ personal ก่อน
-      if (!savedResume?.id && tab !== 'personal') {
-        console.log('⚠️ กรุณาบันทึกข้อมูลส่วนตัวก่อน');
-        setIsSaving(false);
-        return;
-      }
-
-      // เรียก API: ถ้ามี id ใช้ PATCH, ถ้าไม่มีก็ POST
+      // บันทึกข้อมูลทุกแท็บในเรคคอร์ดเดียว แต่สามารถบันทึกแยกแท็บได้
+      // ถ้ามี savedResume.id แล้วใช้ PATCH, ถ้าไม่มีใช้ POST
       if (savedResume?.id) {
-        let res: Response;
-        let json: any = {};
-        // ส่งข้อมูลแบบ JSON เท่านั้น (รูปภาพจะจัดการแยกผ่าน profile-image/upload API)
-        console.log('🔍 handleSubmit PATCH - Sending JSON data only');
-        console.log('🔍 handleSubmit PATCH - formData.profileImage:', formData.profileImage);
-        res = await fetch(`/api/resume-deposit/${savedResume.id}`, {
+        // อัปเดตข้อมูลที่มีอยู่แล้ว
+        const res = await fetch(`/api/resume-deposit/${savedResume.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(partial)
         });
-        json = await res.json().catch(() => ({}));
+        const json = await res.json().catch(() => ({}));
         if (!res.ok || json?.success === false) {
-          // ใช้ json ที่ได้จาก response หรือ fallback message
           const statusCode = res?.status || 'Unknown';
           const errorMessage = json?.message || `บันทึกข้อมูลไม่สำเร็จ (HTTP ${statusCode})`;
           console.error('❌ PATCH request failed:', errorMessage);
@@ -1026,12 +1013,12 @@ export default function ApplicationForm() {
           // โหลดรูปโปรไฟล์ใหม่หลังจากบันทึกสำเร็จ
           if (json.data?.profileImageUrl) {
             const imagePath = `/api/image?file=${json.data.profileImageUrl}`;
-            console.log('🔍 Reloading profile image after save:', imagePath);
+            console.log('🔍 Reloading profile image after save (PATCH):', imagePath);
             setProfileImage(imagePath);
           }
         }
       } else {
-        // POST เริ่มเรคคอร์ดใหม่ (ส่งเฉพาะ personal ที่จำเป็น)
+        // สร้างข้อมูลใหม่
         const userId = (session?.user as any)?.id || null;
         const lineIdCandidate = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || null;
         const res = await fetch('/api/resume-deposit', {
@@ -1347,102 +1334,42 @@ export default function ApplicationForm() {
     }
     
     // ดึงข้อมูลแผนกเพิ่มเติมจาก API
+    console.log('🔍 Checking departmentId:', departmentId);
     if (departmentId) {
+      console.log('🔍 Fetching department data for ID:', departmentId);
       fetch(`/api/departments?id=${departmentId}`)
-        .then(response => response.json())
+        .then(response => {
+          console.log('🔍 Department API response status:', response.status);
+          return response.json();
+        })
         .then(data => {
+          console.log('🔍 Department API response data:', data);
           if (data.department) {
-            setFormData(prev => ({
-              ...prev,
-              department: data.department.name,
-              appliedPosition: data.department.positions || '',
-              expectedSalary: data.department.salary || ''
-            }));
+            console.log('🔍 Department data:', data.department);
+            setFormData(prev => {
+              const newData = {
+                ...prev,
+                department: data.department.name,
+                appliedPosition: data.department.positions || '', // ดึงเฉพาะ positions ไม่ใช้ department name
+                expectedSalary: data.department.salary || ''
+              };
+              console.log('✅ ตั้งค่า appliedPosition จาก department positions:', data.department.positions);
+              console.log('✅ ข้อมูลที่ตั้งค่าใหม่:', newData);
+              return newData;
+            });
+          } else {
+            console.log('❌ No department data found in response');
           }
         })
         .catch(error => {
           console.error('Error fetching department details:', error);
         });
+    } else {
+      console.log('❌ No departmentId found, skipping department data fetch');
     }
   }, [searchParams]);
 
-  // ตั้งค่า flatpickr สำหรับ input วันที่ต่างๆ
-  useEffect(() => {
-    // วันเกิด
-      if (birthDateRef.current) {
-        const inst = (birthDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-        if (inst) inst.destroy();
-        flatpickr(birthDateRef.current, {
-            locale: Thai,
-            dateFormat: 'd/m/Y',
-            allowInput: true,
-            clickOpens: true,
-          onChange: (dates) => {
-            if (dates.length > 0) {
-              const d = dates[0];
-              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            handleInputChange('birthDate', iso);
-            }
-          }
-        });
-      }
-
-    // วันที่ออกบัตร
-      if (idCardIssueDateRef.current) {
-        const inst = (idCardIssueDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-        if (inst) inst.destroy();
-        flatpickr(idCardIssueDateRef.current, {
-            locale: Thai,
-            dateFormat: 'd/m/Y',
-            allowInput: true,
-            clickOpens: true,
-          onChange: (dates) => {
-            if (dates.length > 0) {
-              const d = dates[0];
-              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            handleInputChange('idCardIssueDate', iso);
-            }
-          }
-        });
-      }
-
-    // วันหมดอายุบัตร
-      if (idCardExpiryDateRef.current) {
-        const inst = (idCardExpiryDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-        if (inst) inst.destroy();
-        flatpickr(idCardExpiryDateRef.current, {
-            locale: Thai,
-            dateFormat: 'd/m/Y',
-            allowInput: true,
-            clickOpens: true,
-          onChange: (dates) => {
-            if (dates.length > 0) {
-              const d = dates[0];
-              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            handleInputChange('idCardExpiryDate', iso);
-            }
-          }
-        });
-      }
-
-    // วันที่พร้อมเริ่มงาน
-      if (availableDateRef.current) {
-        const inst = (availableDateRef.current as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-        if (inst) inst.destroy();
-        flatpickr(availableDateRef.current, {
-            locale: Thai,
-            dateFormat: 'd/m/Y',
-            allowInput: true,
-            clickOpens: true,
-          onChange: (dates) => {
-            if (dates.length > 0) {
-              const d = dates[0];
-              const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            handleInputChange('availableDate', iso);
-              }
-            }
-          });
-        }
+  // ไม่ต้องตั้งค่า flatpickr แล้ว เนื่องจากใช้ ThaiDatePicker component แทน
 
     // ตั้งค่า flatpickr สำหรับวันที่เริ่มงานและสิ้นสุดงานเมื่อ activeTab เป็น workExperience
     if (activeTab === 'workExperience') {
@@ -1513,7 +1440,7 @@ export default function ApplicationForm() {
         });
       }, 500);
     }
-  }, [activeTab]); // เพิ่ม activeTab ใน dependency array
+   [activeTab]; // เพิ่ม activeTab ใน dependency array
 
   // ตั้งค่า flatpickr สำหรับวันที่เริ่มงานและสิ้นสุดงานเมื่อมีการเพิ่มหรือลบ work experience
   useEffect(() => {
@@ -1859,7 +1786,7 @@ export default function ApplicationForm() {
             setFormData(prev => ({
               ...prev,
               department: departmentName,
-              appliedPosition: departmentName
+              appliedPosition: '' // ไม่ตั้งค่า appliedPosition จาก departmentName
             }));
             console.log('✅ ตั้งค่า department จาก URL parameter:', departmentName);
           }
@@ -2093,7 +2020,7 @@ export default function ApplicationForm() {
             setFormData(prev => ({
               ...prev,
               department: departmentName,
-              appliedPosition: departmentName,
+              appliedPosition: '', // ไม่ตั้งค่า appliedPosition จาก departmentName
               departmentId: departmentId || null
             }));
             console.log('✅ ตั้งค่า department จาก URL parameter:', departmentName);
@@ -2142,7 +2069,7 @@ export default function ApplicationForm() {
             setFormData(prev => ({
               ...prev,
               department: departmentName,
-              appliedPosition: departmentName,
+              appliedPosition: '', // ไม่ตั้งค่า appliedPosition จาก departmentName
               departmentId: departmentId || null
             }));
             console.log('✅ ตั้งค่า department จาก URL parameter:', departmentName);
@@ -4938,15 +4865,21 @@ export default function ApplicationForm() {
                 
                 <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700">วัน เดือน ปีเกิด<span className="text-red-500">*</span></label>
-                  <input
-                        ref={birthDateRef}
-                    type="text"
-                         name="birthDate"
-                         data-error-key="birthDate"
-                         value={formatDateForDisplay(formData.birthDate)}
-                         onChange={(e) => {
-                           const isoDate = parseDateFromThai(e.target.value);
-                           handleInputChange('birthDate', isoDate);
+                  <ThaiDatePicker
+                    value={formData.birthDate}
+                    onChange={(date) => {
+                      handleInputChange('birthDate', date);
+                      // คำนวณอายุอัตโนมัติจากวันเกิด
+                      if (date) {
+                        const birthDate = new Date(date);
+                        const today = new Date();
+                        let age = today.getFullYear() - birthDate.getFullYear();
+                        const monthDiff = today.getMonth() - birthDate.getMonth();
+                        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                          age--;
+                        }
+                        handleInputChange('age', age.toString());
+                      }
                          }}
                          placeholder="เลือกวัน เดือน ปีเกิด"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
@@ -4967,7 +4900,7 @@ export default function ApplicationForm() {
                          data-error-key="age"
                          value={formData.age}
                           onChange={(e) => handleNumberOnlyChange('age', e.target.value)}
-                         placeholder="กรอกอายุ (เฉพาะตัวเลข)"
+                         placeholder="กรอกอายุ (จะคำนวณอัตโนมัติจากวันเกิด)"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('age') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -4977,7 +4910,7 @@ export default function ApplicationForm() {
                        {hasError('age') && (
                          <p className="text-red-500 text-xs mt-1">{getErrorMessage('age')}</p>
                   )}
-                       <p className="text-xs text-gray-500">กรุณากรอกอายุ</p>
+                       
                 </div>
 
                 <div className="space-y-2">
@@ -5291,16 +5224,9 @@ export default function ApplicationForm() {
                   </div>
                 <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">วันที่ออกบัตร<span className="text-red-500">*</span></label>
-                      <input
-                        ref={idCardIssueDateRef}
-                        type="text"
-                        name="idCardIssueDate"
-                        data-error-key="idCardIssueDate"
-                        value={formatDateForDisplay(formData.idCardIssueDate)}
-                        onChange={(e) => {
-                          const isoDate = parseDateFromThai(e.target.value);
-                          handleInputChange('idCardIssueDate', isoDate);
-                        }}
+                      <ThaiDatePicker
+                        value={formData.idCardIssueDate}
+                        onChange={(date) => handleInputChange('idCardIssueDate', date)}
                         placeholder="เลือกวันที่ออกบัตร"
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('idCardIssueDate') 
@@ -5314,16 +5240,9 @@ export default function ApplicationForm() {
               </div>
                 <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">วันหมดอายุบัตร<span className="text-red-500">*</span></label>
-                    <input
-                        ref={idCardExpiryDateRef}
-                      type="text"
-                        name="idCardExpiryDate"
-                        data-error-key="idCardExpiryDate"
-                        value={formatDateForDisplay(formData.idCardExpiryDate)}
-                        onChange={(e) => {
-                          const isoDate = parseDateFromThai(e.target.value);
-                          handleInputChange('idCardExpiryDate', isoDate);
-                        }}
+                    <ThaiDatePicker
+                        value={formData.idCardExpiryDate}
+                        onChange={(date) => handleInputChange('idCardExpiryDate', date)}
                         placeholder="เลือกวันหมดอายุบัตร"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                            hasError('idCardExpiryDate') 
@@ -7599,7 +7518,10 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                       value={formData.appliedPosition}
-                      onChange={(e) => handleTextOnlyChange('appliedPosition', e.target.value)}
+                      onChange={(e) => {
+                        console.log('🔍 appliedPosition input changed:', e.target.value);
+                        handleTextOnlyChange('appliedPosition', e.target.value);
+                      }}
                       placeholder="กรอกตำแหน่งที่สมัคร (เฉพาะตัวอักษร)"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                         errors.appliedPosition 
@@ -7607,6 +7529,8 @@ export default function ApplicationForm() {
                           : 'border-gray-300 focus:ring-blue-500'
                       }`}
                     />
+                   
+                    
                     {errors.appliedPosition && (
                       <p className="text-red-500 text-xs mt-1">{errors.appliedPosition}</p>
                     )}
@@ -7614,11 +7538,9 @@ export default function ApplicationForm() {
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">วันที่พร้อมเริ่มงาน<span className="text-red-500">*</span></label>
-                    <input
-                      ref={availableDateRef}
-                      type="text"
+                    <ThaiDatePicker
                       value={formData.availableDate}
-                      onChange={(e) => handleInputChange('availableDate', e.target.value)}
+                      onChange={(date) => handleInputChange('availableDate', date)}
                       placeholder="เลือกวันที่พร้อมเริ่มงาน"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                         errors.availableDate 

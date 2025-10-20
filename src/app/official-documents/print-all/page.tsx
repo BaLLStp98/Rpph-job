@@ -1130,6 +1130,14 @@ export default function PrintAllDocuments() {
             position: relative;
           }
           
+          .attachment-page img {
+            width: 210mm;
+            height: 297mm;
+            object-fit: contain;
+            object-position: center;
+            display: block;
+          }
+          
           .attachment-page:last-child {
             page-break-after: auto;
           }
@@ -1198,17 +1206,17 @@ export default function PrintAllDocuments() {
                   <img 
                     src="${getAttachmentUrl(doc.filePath)}" 
                     alt="${doc.fileName} - รูปภาพ"
-                    style="width: 100%; height: 100%; object-fit: contain; object-position: center; display: block; margin: 0 auto;"
+                    style="width: 210mm; height: 297mm; object-fit: contain; object-position: center; display: block; margin: 0 auto; max-width: 100%; max-height: 100%;"
                     onError="this.style.display='none'; this.nextElementSibling.style.display='block';"
                   />
                 ` : `
-                  <iframe 
-                    src="${getAttachmentUrl(doc.filePath)}" 
-                    className="attachment-preview"
-                    style="width: 100%; height: 100%; border: none; object-fit: contain; object-position: center; display: block; margin: 0 auto;"
+                <iframe 
+                  src="${getAttachmentUrl(doc.filePath)}" 
+                  className="attachment-preview"
+                  style="width: 100%; height: 100%; border: none; object-fit: contain; object-position: center; display: block; margin: 0 auto;"
                     title="${doc.mimeType === 'application/pdf' ? 'PDF' : 'Document'} Preview"
-                    onError="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                  ></iframe>
+                  onError="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                ></iframe>
                 `}
               </div>
                 <div style="display: none; text-align: center; color: #6b7280;">
@@ -1674,7 +1682,7 @@ export default function PrintAllDocuments() {
                         <div className="text-xs text-gray-400 mt-2 hidden">ไม่มีรูปภาพ</div>
                       </div>
                     ) : (
-                      <div className="text-xs text-gray-400 mt-2">ไม่มีรูปภาพ</div>
+                    <div className="text-xs text-gray-400 mt-2">ไม่มีรูปภาพ</div>
                     )}
                     {/* Debug info */}
                     {process.env.NODE_ENV === 'development' && (
@@ -2237,21 +2245,20 @@ export default function PrintAllDocuments() {
               <span className="text-xm font-bold text-gray-800">- ๒ -</span>
             </div>
             
-            <div className="mb-2">
-              <h2 className="text-xm font-bold text-gray-800 mb-1">๑.๑๐ ขอสมัครเป็นบุคคลภายนอกฯตำแหน่ง</h2>
+            {/* ๑.๑๐ ขอสมัครเป็นบุคคลภายนอกฯตำแหน่ง */}
               <div className="mb-1 px-2">
-                <div className="space-y-2 text-xm">
+              <h3 className="text-xm font-semibold text-gray-700 mb-1">๑.๑๐ ขอสมัครเป็นบุคคลภายนอกฯตำแหน่ง</h3>
+              <div className="grid grid-cols-2 gap-2 text-xm px-2">
                   <div className="flex items-center gap-1">
                     <span>ตำแหน่ง</span>
-                    <div className="w-64 h-4 border-b-2 border-dotted border-gray-600 flex items-center justify-center">
+                  <div className="flex-1 min-w-[128px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.appliedPosition || ''}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <span>ฝ่าย/กลุ่มงาน</span>
-                    <div className="w-64 h-4 border-b-2 border-dotted border-gray-600 flex items-center justify-center">
+                  <div className="flex-1 min-w-[128px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                       <span className="text-xm font-medium text-gray-800">{applicationData?.department || ''}</span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -2260,15 +2267,71 @@ export default function PrintAllDocuments() {
             <div className="mb-2">
               <h2 className="text-xm font-bold text-gray-800 mb-1">๒. ความรู้ ความสามารถ/ทักษะพิเศษ</h2>
               <div className="mb-1 px-2">
-                <div className="space-y-2 text-xm">
-                  <div className="h-20 border border-gray-300 rounded p-2">
-                    <div className="w-full h-full border-b-2 border-dotted border-gray-600"></div>
+                <div className="space-y-3 text-xm">
+                  {/* ความรู้ ความสามารถ และทักษะพิเศษ */}
+                  <div className="space-y-1">
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold">๒.๑</span>
+                      <div className="flex items-center gap-1">
+                    <span>ความรู้ ความสามารถ และทักษะพิเศษ</span>
+                    <div className="w-64 h-4 border-b-2 border-dotted border-gray-600 flex items-center justify-center">
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.skills || ''}</span>
                   </div>
-                  <div className="h-20 border border-gray-300 rounded p-2">
-                    <div className="w-full h-full border-b-2 border-dotted border-gray-600"></div>
                   </div>
-                  <div className="h-20 border border-gray-300 rounded p-2">
-                    <div className="w-full h-full border-b-2 border-dotted border-gray-600"></div>
+                      
+                    </div>
+                  </div>
+
+                  {/* ภาษาที่ใช้ได้ */}
+                  <div className="space-y-1">
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold">๒.๒</span>
+                      <div className="flex items-center gap-1">
+                    <span>ภาษาที่ใช้ได้</span>
+                    <div className="w-64 h-4 border-b-2 border-dotted border-gray-600 flex items-center justify-center">
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.languages || ''}</span>
+                    </div>
+                  </div>
+                    </div>
+                  </div>
+
+                  {/* ทักษะคอมพิวเตอร์ */}
+                  <div className = "flex items-center gap-1">
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold">๒.๓</span>
+                      <div className="flex items-center gap-1">
+                    <span>ทักษะคอมพิวเตอร์</span>
+                    <div className="w-64 h-4 border-b-2 border-dotted border-gray-600 flex items-center justify-center">
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.computerSkills || ''}</span>
+                    </div>
+                  </div>
+                    </div>
+                  </div>
+
+                  {/* ใบรับรอง/ประกาศนียบัตร */}
+                  <div className = "flex items-center gap-1">
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold">๒.๔</span>
+                      <div className="flex items-center gap-1">
+                    <span>ใบรับรอง/ประกาศนียบัตร</span>
+                    <div className="w-64 h-4 border-b-2 border-dotted border-gray-600 flex items-center justify-center">
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.certificates || ''}</span>
+                    </div>
+                  </div>
+                    </div>
+                  </div>
+
+                  {/* บุคคลอ้างอิง */}
+                  <div className = "flex items-center gap-1">
+                    <div className="flex items-start gap-2">
+                      <span className="font-semibold">๒.๕</span>
+                      <div className="flex items-center gap-1">
+                    <span>บุคคลอ้างอิง</span>
+                    <div className="w-64 h-4 border-b-2 border-dotted border-gray-600 flex items-center justify-center">
+                      <span className="text-xm font-medium text-gray-800">{applicationData?.references || ''}</span>
+                    </div>
+                  </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2822,11 +2885,73 @@ export default function PrintAllDocuments() {
                           {doc.fileName}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                          {doc.mimeType === 'application/pdf' ? 'PDF' : 'รูปภาพ'}
-                        </div>
-                      </div>
+                       <div className="flex items-center justify-between">
+                         <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                           {doc.mimeType === 'application/pdf' ? 'PDF' : 'รูปภาพ'}
+                         </div>
+                         {/* ปุ่มปริ้นเอกสารสำหรับรูปภาพ - ทุกเอกสารแนบ */}
+                         {doc.mimeType && doc.mimeType.startsWith('image/') && (
+                           <Button
+                             color="primary"
+                             variant="solid"
+                             size="sm"
+                             startContent={<DocumentTextIcon className="w-4 h-4" />}
+                             onClick={() => {
+                               const fileUrl = getAttachmentUrl(doc.filePath);
+                               
+                               // สร้าง HTML สำหรับปริ้นรูปภาพขนาด A4
+                               const printHtml = `
+                                 <!DOCTYPE html>
+                                 <html>
+                                 <head>
+                                   <meta charset="UTF-8">
+                                   <title>ปริ้นรูปภาพ - ${doc.fileName}</title>
+                                   <style>
+                                     @page {
+                                       size: A4;
+                                       margin: 0;
+                                     }
+                                     
+                                     body {
+                                       margin: 0;
+                                       padding: 0;
+                                       display: flex;
+                                       align-items: center;
+                                       justify-content: center;
+                                       min-height: 100vh;
+                                       background: white;
+                                     }
+                                     
+                                     .print-image {
+                                       width: 210mm;
+                                       height: 297mm;
+                                       object-fit: contain;
+                                       object-position: center;
+                                       display: block;
+                                     }
+                                   </style>
+                                 </head>
+                                 <body>
+                                   <img src="${fileUrl}" alt="${doc.fileName}" class="print-image" />
+                                 </body>
+                                 </html>
+                               `;
+                               
+                               const printWindow = window.open('', '_blank');
+                               if (printWindow) {
+                                 printWindow.document.write(printHtml);
+                                 printWindow.document.close();
+                                 printWindow.onload = () => {
+                                   printWindow.print();
+                                 };
+                               }
+                             }}
+                             className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-all duration-200"
+                           >
+                             ปริ้นเอกสาร
+                           </Button>
+                         )}
+                       </div>
                     </div>
                   </div>
                   
@@ -2845,56 +2970,58 @@ export default function PrintAllDocuments() {
                         console.log('🔍 MIME Type:', doc.mimeType);
                         
                         return (
-                          <div className="w-full h-full flex items-center justify-center bg-gray-50" style={{ width: '210mm', height: '297mm' }}>
-                            {/* สำหรับรูปภาพ - ใช้ img tag */}
-                            {doc.mimeType && doc.mimeType.startsWith('image/') ? (
-                              <img
-                                src={fileUrl}
-                                alt={`${doc.fileName} - รูปภาพ`}
-                                className="w-full h-full object-contain"
-                                style={{ 
-                                  maxWidth: '100%',
-                                  maxHeight: '100%',
-                                  objectFit: 'contain',
-                                  objectPosition: 'center'
-                                }}
-                                onLoad={() => {
-                                  console.log(`✅ Image loaded successfully:`, doc.fileName);
-                                }}
-                                onError={(e) => {
-                                  console.error(`❌ Error loading image:`, doc.fileName);
-                                  console.error('❌ File URL:', fileUrl);
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                  if (fallback) fallback.style.display = 'flex';
-                                }}
-                              />
-                            ) : (
+                           <div className="w-full h-full flex items-center justify-center bg-gray-50" style={{ width: '210mm', height: '297mm' }}>
+                             {/* สำหรับรูปภาพ - ใช้ img tag ขนาด A4 */}
+                             {doc.mimeType && doc.mimeType.startsWith('image/') ? (
+                               <img
+                                 src={fileUrl}
+                                 alt={`${doc.fileName} - รูปภาพ`}
+                                 className="w-full h-full object-contain"
+                                 style={{ 
+                                   width: '210mm',
+                                   height: '297mm',
+                                   objectFit: 'contain',
+                                   objectPosition: 'center',
+                                   display: 'block',
+                                   margin: '0 auto'
+                                 }}
+                                 onLoad={() => {
+                                   console.log(`✅ Image loaded successfully:`, doc.fileName);
+                                 }}
+                                 onError={(e) => {
+                                   console.error(`❌ Error loading image:`, doc.fileName);
+                                   console.error('❌ File URL:', fileUrl);
+                                   e.currentTarget.style.display = 'none';
+                                   const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                   if (fallback) fallback.style.display = 'flex';
+                                 }}
+                               />
+                             ) : (
                               /* สำหรับ PDF และไฟล์อื่นๆ - ใช้ iframe */
-                              <iframe
-                                src={fileUrl}
-                                className="w-full h-full border-0"
+                          <iframe
+                            src={fileUrl}
+                            className="w-full h-full border-0"
                                 title={`${doc.mimeType === 'application/pdf' ? 'PDF' : 'Document'} Preview - ${doc.fileName}`}
-                                style={{ 
-                                  width: '100%', 
-                                  height: '100%',
-                                  objectFit: 'contain',
-                                  objectPosition: 'center',
-                                  display: 'block',
-                                  margin: '0 auto'
-                                }}
-                                onLoad={() => {
+                              style={{ 
+                                width: '100%', 
+                                height: '100%',
+                                objectFit: 'contain',
+                                objectPosition: 'center',
+                                display: 'block',
+                                margin: '0 auto'
+                              }}
+                              onLoad={() => {
                                   console.log(`✅ ${doc.mimeType === 'application/pdf' ? 'PDF' : 'Document'} loaded successfully via iframe:`, doc.fileName);
-                                }}
-                                onError={(e) => {
+                              }}
+                              onError={(e) => {
                                   console.error(`❌ Error loading ${doc.mimeType === 'application/pdf' ? 'PDF' : 'document'} via iframe:`, doc.fileName);
-                                  console.error('❌ File URL:', fileUrl);
-                                  console.error('❌ Original Path:', doc.filePath);
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                                  if (fallback) fallback.style.display = 'flex';
-                                }}
-                              />
+                                console.error('❌ File URL:', fileUrl);
+                                console.error('❌ Original Path:', doc.filePath);
+                                e.currentTarget.style.display = 'none';
+                                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
                             )}
                           </div>
                         );
@@ -2909,7 +3036,7 @@ export default function PrintAllDocuments() {
                           {doc.mimeType && doc.mimeType.startsWith('image/') ? (
                             <DocumentIcon className="w-20 h-20 mx-auto mb-6 text-gray-400" />
                           ) : (
-                            <DocumentTextIcon className="w-20 h-20 mx-auto mb-6 text-gray-400" />
+                          <DocumentTextIcon className="w-20 h-20 mx-auto mb-6 text-gray-400" />
                           )}
                           <h3 className="text-xl font-semibold text-gray-600 mb-2">
                             ไม่สามารถแสดง{doc.mimeType && doc.mimeType.startsWith('image/') ? 'รูปภาพ' : 'ไฟล์'}ได้
