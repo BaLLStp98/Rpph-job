@@ -84,6 +84,9 @@ model UserWorkExperience {
   isCurrent   Boolean   @default(false) @map("is_current")
   description String?   @db.Text
   salary      String?   @db.VarChar(50)
+  district    String?   @db.VarChar(100)
+  province    String?   @db.VarChar(100)
+  phone       String?   @db.VarChar(20)
   createdAt   DateTime  @default(now()) @map("created_at")
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -504,6 +507,9 @@ model ResumeDepositWorkExperience {
   isCurrent       Boolean       @default(false) @map("is_current")
   description     String?       @db.Text
   salary          String?       @db.VarChar(50)
+  district        String?       @db.VarChar(100)
+  province        String?       @db.VarChar(100)
+  phone           String?       @db.VarChar(20)
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   resumeDeposit   ResumeDeposit @relation(fields: [resumeDepositId], references: [id], onDelete: Cascade)

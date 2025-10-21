@@ -225,7 +225,10 @@ export async function PUT(
             startDate: work.startDate || '',
             endDate: work.endDate || '',
             salary: work.salary || '',
-            reason: work.reason || ''
+            reason: work.reason || '',
+            district: work.district || null,
+            province: work.province || null,
+            phone: work.phone || null
           }))
         });
         console.log('✅ PUT API - Work experience records updated:', data.workExperience.length);
@@ -346,6 +349,8 @@ export async function PATCH(
     console.log('🔍 PATCH API - Received request:', { id, data });
     console.log('🔍 PATCH API - Request method:', request.method);
     console.log('🔍 PATCH API - Request URL:', request.url);
+    console.log('🔍 PATCH API - Status field in data:', data.status);
+    console.log('🔍 PATCH API - Data type:', typeof data.status);
     
     if (!id) {
       return NextResponse.json(
@@ -423,6 +428,47 @@ export async function PATCH(
     if (data.staff_department !== undefined) updateData.staff_department = data.staff_department;
     if (data.staff_start_work !== undefined) updateData.staff_start_work = data.staff_start_work;
     
+    // ข้อมูลสถานที่ทำงานผู้ติดต่อฉุกเฉิน
+    if (data.emergency_workplace_name !== undefined) updateData.emergency_workplace_name = data.emergency_workplace_name;
+    if (data.emergency_workplace_district !== undefined) updateData.emergency_workplace_district = data.emergency_workplace_district;
+    if (data.emergency_workplace_province !== undefined) updateData.emergency_workplace_province = data.emergency_workplace_province;
+    if (data.emergency_workplace_phone !== undefined) updateData.emergency_workplace_phone = data.emergency_workplace_phone;
+
+    // ที่อยู่ตามทะเบียนบ้าน
+    if (data.house_registration_house_number !== undefined) updateData.house_registration_house_number = data.house_registration_house_number;
+    if (data.house_registration_village_number !== undefined) updateData.house_registration_village_number = data.house_registration_village_number;
+    if (data.house_registration_alley !== undefined) updateData.house_registration_alley = data.house_registration_alley;
+    if (data.house_registration_road !== undefined) updateData.house_registration_road = data.house_registration_road;
+    if (data.house_registration_sub_district !== undefined) updateData.house_registration_sub_district = data.house_registration_sub_district;
+    if (data.house_registration_district !== undefined) updateData.house_registration_district = data.house_registration_district;
+    if (data.house_registration_province !== undefined) updateData.house_registration_province = data.house_registration_province;
+    if (data.house_registration_postal_code !== undefined) updateData.house_registration_postal_code = data.house_registration_postal_code;
+    if (data.house_registration_phone !== undefined) updateData.house_registration_phone = data.house_registration_phone;
+    if (data.house_registration_mobile !== undefined) updateData.house_registration_mobile = data.house_registration_mobile;
+
+    // ที่อยู่ปัจจุบัน
+    if (data.current_address_house_number !== undefined) updateData.current_address_house_number = data.current_address_house_number;
+    if (data.current_address_village_number !== undefined) updateData.current_address_village_number = data.current_address_village_number;
+    if (data.current_address_alley !== undefined) updateData.current_address_alley = data.current_address_alley;
+    if (data.current_address_road !== undefined) updateData.current_address_road = data.current_address_road;
+    if (data.current_address_sub_district !== undefined) updateData.current_address_sub_district = data.current_address_sub_district;
+    if (data.current_address_district !== undefined) updateData.current_address_district = data.current_address_district;
+    if (data.current_address_province !== undefined) updateData.current_address_province = data.current_address_province;
+    if (data.current_address_postal_code !== undefined) updateData.current_address_postal_code = data.current_address_postal_code;
+    if (data.current_address_phone !== undefined) updateData.current_address_phone = data.current_address_phone;
+    if (data.current_address_mobile !== undefined) updateData.current_address_mobile = data.current_address_mobile;
+
+    // ที่อยู่ฉุกเฉิน
+    if (data.emergency_address_house_number !== undefined) updateData.emergency_address_house_number = data.emergency_address_house_number;
+    if (data.emergency_address_village_number !== undefined) updateData.emergency_address_village_number = data.emergency_address_village_number;
+    if (data.emergency_address_alley !== undefined) updateData.emergency_address_alley = data.emergency_address_alley;
+    if (data.emergency_address_road !== undefined) updateData.emergency_address_road = data.emergency_address_road;
+    if (data.emergency_address_sub_district !== undefined) updateData.emergency_address_sub_district = data.emergency_address_sub_district;
+    if (data.emergency_address_district !== undefined) updateData.emergency_address_district = data.emergency_address_district;
+    if (data.emergency_address_province !== undefined) updateData.emergency_address_province = data.emergency_address_province;
+    if (data.emergency_address_postal_code !== undefined) updateData.emergency_address_postal_code = data.emergency_address_postal_code;
+    if (data.emergency_address_phone !== undefined) updateData.emergency_address_phone = data.emergency_address_phone;
+    
     // จัดการ status field
     if (data.status !== undefined) {
       console.log('🔍 PATCH API - Processing status field:', { 
@@ -440,6 +486,7 @@ export async function PATCH(
         hired: 'HIRED',
         archived: 'ARCHIVED',
         'รอพิจารณา': 'PENDING',
+        'ผ่านการพิจารณา': 'HIRED',
         'อนุมัติ': 'HIRED',
         'ไม่อนุมัติ': 'REJECTED',
         'กำลังพิจารณา': 'REVIEWING',
@@ -568,7 +615,10 @@ export async function PATCH(
             endDate: work.endDate ? new Date(work.endDate) : null,
             isCurrent: !!work.isCurrent,
             description: work.description || work.reason || '',
-            salary: work.salary || ''
+            salary: work.salary || '',
+            district: work.district || null,
+            province: work.province || null,
+            phone: work.phone || null
           }))
         });
         console.log('✅ PATCH API - Work experience records updated:', data.workExperience.length);
@@ -610,6 +660,8 @@ export async function PATCH(
     }
     
     console.log('🔍 PATCH API - About to update database with:', { id, updateData });
+    console.log('🔍 PATCH API - Status in updateData:', updateData.status);
+    console.log('🔍 PATCH API - Full updateData object:', JSON.stringify(updateData, null, 2));
     
     try {
       const updatedResumeDeposit = await prisma.resumeDeposit.update({

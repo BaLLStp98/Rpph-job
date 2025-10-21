@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/route';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../../../../lib/prisma';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
-
-const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
@@ -259,7 +257,10 @@ export async function POST(request: NextRequest) {
                 endDate: work.endDate ? new Date(work.endDate) : null,
                 isCurrent: !!work.isCurrent,
                 description: work.description || work.reason || '',
-                salary: work.salary || ''
+                salary: work.salary || '',
+                district: work.district || null,
+                province: work.province || null,
+                phone: work.phone || null
               };
             });
             console.log('🔍 API - Work experience records to create:', workData.length);
@@ -339,7 +340,7 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   } finally {
-    await prisma.$disconnect();
+    // await prisma.$disconnect(); // ไม่ต้อง disconnect เพราะใช้ shared instance
   }
 }
 
@@ -400,7 +401,23 @@ export async function GET(request: NextRequest) {
     }
     
     if (status) {
-      where.status = status;
+      // Map status values to match Prisma enum
+      const statusMap: Record<string, string> = {
+        'pending': 'PENDING',
+        'approved': 'HIRED',
+        'rejected': 'REJECTED',
+        'reviewing': 'REVIEWING',
+        'contacted': 'CONTACTED',
+        'archived': 'ARCHIVED',
+        'รอพิจารณา': 'PENDING',
+        'ผ่านการพิจารณา': 'HIRED',
+        'ปฏิเสธ': 'REJECTED',
+        'กำลังพิจารณา': 'REVIEWING',
+        'ติดต่อแล้ว': 'CONTACTED',
+        'เก็บถาวร': 'ARCHIVED'
+      };
+      
+      where.status = statusMap[status] || status;
     }
     
     if (search) {
@@ -418,6 +435,8 @@ export async function GET(request: NextRequest) {
       where.department = department;
     }
     
+    console.log('🔍 API - Query parameters:', { where, skip, take: limit });
+    
     const [resumeDeposits, total] = await Promise.all([
       prisma.resumeDeposit.findMany({
         where,
@@ -434,6 +453,11 @@ export async function GET(request: NextRequest) {
       prisma.resumeDeposit.count({ where })
     ]);
     
+    console.log('🔍 API - Query results:', { 
+      resumeDepositsCount: resumeDeposits.length, 
+      total 
+    });
+    
     return NextResponse.json({
       success: true,
       data: resumeDeposits,
@@ -446,12 +470,21 @@ export async function GET(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error('Error fetching resume deposits:', error);
+    console.error('❌ Error fetching resume deposits:', error);
+    console.error('❌ Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace'
+    });
     return NextResponse.json(
-      { success: false, message: 'เกิดข้อผิดพลาดในการดึงข้อมูล' },
+      { 
+        success: false, 
+        message: 'เกิดข้อผิดพลาดในการดึงข้อมูล',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   } finally {
-    await prisma.$disconnect();
+    // await prisma.$disconnect(); // ไม่ต้อง disconnect เพราะใช้ shared instance
   }
 }

@@ -18,7 +18,8 @@ import {
   BuildingOfficeIcon,
   UserGroupIcon,
   DocumentCheckIcon,
-  CogIcon
+  CogIcon,
+  ClipboardDocumentListIcon
 } from '@heroicons/react/24/outline';
 
 interface AdminLayoutProps {
@@ -35,6 +36,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       title: 'หน้าแรก',
       icon: HomeIcon,
       href: '/admin'
+    },
+    {
+      key: 'applicants',
+      title: 'จัดการผู้สมัคร',
+      icon: ClipboardDocumentListIcon,
+      href: '/admin/applicants'
     },
     {
       key: 'departments',

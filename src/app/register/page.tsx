@@ -80,6 +80,9 @@ interface FormData {
     endDate: string;
     salary: string;
     reason: string;
+    district: string;
+    province: string;
+    phone: string;
   }>;
   previousGovernmentService: Array<{
     position: string;
@@ -166,6 +169,8 @@ export default function ApplicationForm() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
   const [copyFromRegisteredAddress, setCopyFromRegisteredAddress] = useState(false);
   
   // รับข้อมูล department และ resumeId จาก URL parameters (decode เผื่อมีการ encode มาก่อนหน้า)
@@ -346,7 +351,6 @@ export default function ApplicationForm() {
   const [previewFile, setPreviewFile] = useState<{ file: File; name: string; type: string } | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<any[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
   // โหลดข้อมูลฝากประวัติของผู้ใช้ปัจจุบัน (ถ้ามี) มาแสดงบนหน้าและเติมลงฟอร์ม
   useEffect(() => {
     const loadMyResume = async () => {
@@ -568,7 +572,10 @@ export default function ApplicationForm() {
           startDate: w.startDate ? new Date(w.startDate).toISOString().slice(0, 10) : '',
           endDate: w.endDate ? new Date(w.endDate).toISOString().slice(0, 10) : '',
           salary: w.salary || '',
-          reason: w.description || ''
+          reason: w.description || '',
+          district: w.district || '',
+          province: w.province || '',
+          phone: w.phone || ''
         }))
       : [];
     const mappedPreviousGovernmentService = Array.isArray(resume.previousGovernmentService)
@@ -676,7 +683,6 @@ export default function ApplicationForm() {
         otherDocuments: resume.otherDocuments ? resume.otherDocuments.map((doc: any) => ({ name: doc, uploaded: true })) : prev.documents?.otherDocuments
       }
     }));
-
     // จัดการรูปภาพโปรไฟล์
     console.log('🔍 applyResumeToFormInputs - Resume data:', resume);
     console.log('🔍 applyResumeToFormInputs - ProfileImageUrl:', resume.profileImageUrl);
@@ -845,7 +851,73 @@ export default function ApplicationForm() {
       if (tabErrors.length > 0) {
         // แสดงข้อความแจ้งเตือนให้ผู้ใช้ทราบ
         const errorMessages = tabErrors.map(key => validationErrors[key]).join(', ');
-        alert(`ข้อมูลในแท็บ ${activeTab} ไม่ครบถ้วน: ${errorMessages}`);
+        
+        // แสดง toast notification แทน alert
+        const toast = document.createElement('div');
+        toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 max-w-md';
+        toast.innerHTML = `
+          <div class="flex items-center">
+            <div class="flex-1">
+              <div class="font-semibold">ข้อมูลไม่ครบถ้วน (${tabErrors.length} ข้อผิดพลาด)</div>
+              <div class="text-sm mt-1">${errorMessages}</div>
+              <div class="text-xs mt-2 opacity-90">กำลังเลื่อนไปยังจุดที่มีข้อผิดพลาด...</div>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+        `;
+        document.body.appendChild(toast);
+        
+        // ลบ toast หลังจาก 5 วินาที
+        setTimeout(() => {
+          if (toast.parentElement) {
+            toast.parentElement.removeChild(toast);
+          }
+        }, 5000);
+        
+        // แสดง error summary ที่ด้านบนของฟอร์ม
+        const errorSummary = document.createElement('div');
+        errorSummary.id = 'error-summary';
+        errorSummary.className = 'bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-lg';
+        errorSummary.innerHTML = `
+          <div class="flex">
+            <div class="flex-shrink-0">
+              <svg class="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <h3 class="text-sm font-medium text-red-800">
+                กรุณาแก้ไขข้อมูลให้ครบถ้วน (${tabErrors.length} ข้อผิดพลาด)
+              </h3>
+              <div class="mt-2 text-sm text-red-700">
+                <ul class="list-disc list-inside space-y-1">
+                  ${tabErrors.map(key => `<li>${validationErrors[key]}</li>`).join('')}
+                </ul>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        // ลบ error summary เก่า (ถ้ามี)
+        const existingErrorSummary = document.getElementById('error-summary');
+        if (existingErrorSummary) {
+          existingErrorSummary.remove();
+        }
+        
+        // แทรก error summary ที่ด้านบนของฟอร์ม
+        const formContainer = document.querySelector('.max-w-4xl');
+        if (formContainer) {
+          formContainer.insertBefore(errorSummary, formContainer.firstChild);
+        }
+        
+        // Scroll ไปยัง error แรก
+        if (tabErrors.length > 0) {
+          scrollToError(tabErrors[0]);
+        }
         return;
       }
     }
@@ -954,6 +1026,9 @@ export default function ApplicationForm() {
           isCurrent: !!formData.currentWork,
           description: w.reason || null,
           salary: w.salary || null,
+          district: w.district || null,
+          province: w.province || null,
+          phone: w.phone || null,
         }));
         // ข้อมูลการรับราชการก่อนหน้า
         partial.previousGovernmentService = (formData.previousGovernmentService || []).map((g) => ({
@@ -990,11 +1065,14 @@ export default function ApplicationForm() {
           // documents: formData.documents || null,
         });
       }
-
       // บันทึกข้อมูลทุกแท็บในเรคคอร์ดเดียว แต่สามารถบันทึกแยกแท็บได้
       // ถ้ามี savedResume.id แล้วใช้ PATCH, ถ้าไม่มีใช้ POST
+      console.log('🔍 saveCurrentTab - savedResume:', savedResume);
+      console.log('🔍 saveCurrentTab - savedResume.id:', savedResume?.id);
       if (savedResume?.id) {
         // อัปเดตข้อมูลที่มีอยู่แล้ว
+        console.log('🔍 saveCurrentTab - Using PATCH method (updating existing record)');
+        console.log('✅ กำลังอัปเดตข้อมูลที่มีอยู่แล้ว...');
         const res = await fetch(`/api/resume-deposit/${savedResume.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -1016,9 +1094,12 @@ export default function ApplicationForm() {
             console.log('🔍 Reloading profile image after save (PATCH):', imagePath);
             setProfileImage(imagePath);
           }
+          console.log('✅ อัปเดตข้อมูลสำเร็จ');
         }
       } else {
         // สร้างข้อมูลใหม่
+        console.log('🔍 saveCurrentTab - Using POST method (creating new record)');
+        console.log('✅ กำลังสร้างข้อมูลใหม่...');
         const userId = (session?.user as any)?.id || null;
         const lineIdCandidate = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || null;
         const res = await fetch('/api/resume-deposit', {
@@ -1047,6 +1128,7 @@ export default function ApplicationForm() {
           console.log('🔍 Reloading profile image after save (POST):', imagePath);
           setProfileImage(imagePath);
         }
+        console.log('✅ สร้างข้อมูลใหม่สำเร็จ');
       }
 
       // ไปแท็บถัดไปอัตโนมัติหลังบันทึกสำเร็จ หรือ redirect ไปหน้า dashboard
@@ -1078,8 +1160,6 @@ export default function ApplicationForm() {
   const idCardIssueDateRef = useRef<HTMLInputElement | null>(null);
   const idCardExpiryDateRef = useRef<HTMLInputElement | null>(null);
   const availableDateRef = useRef<HTMLInputElement | null>(null);
-  const workStartRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const workEndRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // ฟังก์ชันสำหรับกรอกข้อมูลตัวอย่าง (Random)
   const fillRandomData = () => {
@@ -1316,7 +1396,6 @@ export default function ApplicationForm() {
       router.push('/auth/signin');
     }
   }, [status, router]);
-
   // รับข้อมูลแผนกจาก URL parameters
   useEffect(() => {
     const departmentRaw = searchParams.get('department');
@@ -1324,6 +1403,8 @@ export default function ApplicationForm() {
       try { return departmentRaw ? decodeURIComponent(departmentRaw) : departmentRaw; } catch { return departmentRaw; }
     })();
     const departmentId = searchParams.get('departmentId');
+    
+    console.log('🔍 Department URL params:', { department, departmentId });
     
     if (department) {
       setFormData(prev => ({
@@ -1334,18 +1415,25 @@ export default function ApplicationForm() {
     }
     
     // ดึงข้อมูลแผนกเพิ่มเติมจาก API
-    console.log('🔍 Checking departmentId:', departmentId);
     if (departmentId) {
       console.log('🔍 Fetching department data for ID:', departmentId);
-      fetch(`/api/departments?id=${departmentId}`)
-        .then(response => {
+      
+      const fetchDepartmentData = async () => {
+        try {
+          const response = await fetch(`/api/departments?id=${departmentId}`);
           console.log('🔍 Department API response status:', response.status);
-          return response.json();
-        })
-        .then(data => {
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
           console.log('🔍 Department API response data:', data);
+          
           if (data.department) {
             console.log('🔍 Department data:', data.department);
+            console.log('🔍 Positions data:', data.department.positions);
+            
             setFormData(prev => {
               const newData = {
                 ...prev,
@@ -1360,10 +1448,17 @@ export default function ApplicationForm() {
           } else {
             console.log('❌ No department data found in response');
           }
-        })
-        .catch(error => {
-          console.error('Error fetching department details:', error);
-        });
+        } catch (error) {
+          console.error('❌ Error fetching department details:', error);
+          // Retry after 1 second
+      setTimeout(() => {
+            console.log('🔄 Retrying department data fetch...');
+            fetchDepartmentData();
+          }, 1000);
+        }
+      };
+      
+      fetchDepartmentData();
     } else {
       console.log('❌ No departmentId found, skipping department data fetch');
     }
@@ -1371,140 +1466,15 @@ export default function ApplicationForm() {
 
   // ไม่ต้องตั้งค่า flatpickr แล้ว เนื่องจากใช้ ThaiDatePicker component แทน
 
-    // ตั้งค่า flatpickr สำหรับวันที่เริ่มงานและสิ้นสุดงานเมื่อ activeTab เป็น workExperience
-    if (activeTab === 'workExperience') {
-      console.log('🔍 Setting up flatpickr for work experience dates...');
-      setTimeout(() => {
-        formData.workExperience.forEach((_, index) => {
-          console.log(`🔍 Setting up flatpickr for work experience ${index}`);
-          
-          // วันที่เริ่มงาน
-          if (workStartRefs.current && workStartRefs.current[index]) {
-            console.log(`🔍 Setting up flatpickr for start date ${index}`);
-            const inst = (workStartRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-            if (inst) inst.destroy();
-            flatpickr(workStartRefs.current[index], {
-              locale: Thai,
-              dateFormat: 'd/m/Y',
-              allowInput: true,
-              clickOpens: true,
-              disableMobile: true,
-              appendTo: typeof document !== 'undefined' ? document.body : undefined,
-              onOpen: function() {
-                try {
-                  const c = (this as any).calendarContainer as HTMLElement;
-                  if (c) c.style.zIndex = '9999';
-                } catch {}
-              },
-              defaultDate: formData.workExperience[index]?.startDate ? new Date(formData.workExperience[index].startDate) : undefined,
-              onChange: (dates) => {
-                if (dates.length > 0) {
-                  const d = dates[0];
-                  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  console.log(`🔍 Start date changed: ${iso}`);
-                  handleWorkExperienceChange(index, 'startDate', iso);
-                }
-              }
-            });
-          }
-
-          // วันที่สิ้นสุดงาน
-          if (workEndRefs.current && workEndRefs.current[index]) {
-            console.log(`🔍 Setting up flatpickr for end date ${index}`);
-            const inst = (workEndRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-            if (inst) inst.destroy();
-            flatpickr(workEndRefs.current[index], {
-              locale: Thai,
-              dateFormat: 'd/m/Y',
-              allowInput: true,
-              clickOpens: true,
-              disableMobile: true,
-              appendTo: typeof document !== 'undefined' ? document.body : undefined,
-              onOpen: function() {
-                try {
-                  const c = (this as any).calendarContainer as HTMLElement;
-                  if (c) c.style.zIndex = '9999';
-                } catch {}
-              },
-              defaultDate: formData.workExperience[index]?.endDate ? new Date(formData.workExperience[index].endDate) : undefined,
-              onChange: (dates) => {
-                if (dates.length > 0) {
-                  const d = dates[0];
-                  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  console.log(`🔍 End date changed: ${iso}`);
-                  handleWorkExperienceChange(index, 'endDate', iso);
-                }
-              }
-            });
-          }
-        });
-      }, 500);
-    }
-   [activeTab]; // เพิ่ม activeTab ใน dependency array
-
-  // ตั้งค่า flatpickr สำหรับวันที่เริ่มงานและสิ้นสุดงานเมื่อมีการเพิ่มหรือลบ work experience
-  useEffect(() => {
-    if (activeTab === 'workExperience') {
-      console.log('🔍 Setting up flatpickr for work experience dates (useEffect 2)...');
-      const timer = setTimeout(() => {
-        formData.workExperience.forEach((_, index) => {
-          console.log(`🔍 Setting up flatpickr for work experience ${index} (useEffect 2)`);
-          
-          // วันที่เริ่มงาน
-          if (workStartRefs.current && workStartRefs.current[index]) {
-            console.log(`🔍 Setting up flatpickr for start date ${index} (useEffect 2)`);
-            const inst = (workStartRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-            if (inst) inst.destroy();
-            flatpickr(workStartRefs.current[index], {
-              locale: Thai,
-              dateFormat: 'd/m/Y',
-              allowInput: true,
-              clickOpens: true,
-              disableMobile: true,
-              defaultDate: formData.workExperience[index]?.startDate ? new Date(formData.workExperience[index].startDate) : undefined,
-              onChange: (dates) => {
-                if (dates.length > 0) {
-                  const d = dates[0];
-                  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  console.log(`🔍 Start date changed (useEffect 2): ${iso}`);
-                  handleWorkExperienceChange(index, 'startDate', iso);
-                }
-              }
-            });
-          }
-
-          // วันที่สิ้นสุดงาน
-          if (workEndRefs.current && workEndRefs.current[index]) {
-            console.log(`🔍 Setting up flatpickr for end date ${index} (useEffect 2)`);
-            const inst = (workEndRefs.current[index] as HTMLInputElement & { _flatpickr?: any })._flatpickr;
-            if (inst) inst.destroy();
-            flatpickr(workEndRefs.current[index], {
-              locale: Thai,
-              dateFormat: 'd/m/Y',
-              allowInput: true,
-              clickOpens: true,
-              disableMobile: true,
-              defaultDate: formData.workExperience[index]?.endDate ? new Date(formData.workExperience[index].endDate) : undefined,
-              onChange: (dates) => {
-                if (dates.length > 0) {
-                  const d = dates[0];
-                  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                  console.log(`🔍 End date changed (useEffect 2): ${iso}`);
-                  handleWorkExperienceChange(index, 'endDate', iso);
-                }
-              }
-            });
-          }
-        });
-      }, 500);
-
-      return () => clearTimeout(timer);
-    }
-  }, [formData.workExperience.length, activeTab]);
-
   // ฟังก์ชันดึงข้อมูลจาก ResumeDeposit
   const fetchProfileData = async () => {
     if (status === 'loading') return;
+    
+    // ตรวจสอบว่ามี department parameter หรือไม่
+    const hasDepartmentParam = searchParams.get('department');
+    if (hasDepartmentParam) {
+      console.log('🔍 fetchProfileData - Department parameter detected, preserving department data...');
+    }
     
     console.log('🔍 fetchProfileData - Starting to fetch profile data from ResumeDeposit...');
     console.log('🔍 fetchProfileData - Session:', session);
@@ -1547,6 +1517,7 @@ export default function ApplicationForm() {
           console.log('🔍 fetchProfileData - Resume ID:', user.id);
           
           setProfileData(user);
+          setSavedResume(user); // ตั้งค่า savedResume เพื่อให้สามารถใช้ PATCH ได้
           setIsProfileLoaded(true);
             
             // เติมข้อมูลจาก ResumeDeposit ลงใน form
@@ -1610,18 +1581,21 @@ export default function ApplicationForm() {
               startDate: work.startDate ? new Date(work.startDate).toISOString().slice(0, 10) : '',
               endDate: work.endDate ? new Date(work.endDate).toISOString().slice(0, 10) : '',
               salary: work.salary || '',
-              reason: work.description || ''
+              reason: work.description || '',
+              district: work.district || '',
+              province: work.province || '',
+              phone: work.phone || ''
             })) || [],
             skills: user.skills || '',
             languages: user.languages || '',
             computerSkills: user.computerSkills || '',
             certificates: user.certificates || '',
             references: user.references || '',
-            appliedPosition: user.appliedPosition || '',
+            appliedPosition: formData.appliedPosition || user.appliedPosition || '',
             expectedSalary: user.expectedSalary || '',
             availableDate: user.availableDate ? new Date(user.availableDate).toISOString().split('T')[0] : '',
             currentWork: user.currentWork || false,
-            department: user.department || '',
+            department: formData.department || user.department || '',
             // ที่อยู่ทะเบียนบ้าน
             registeredAddress: {
               houseNumber: user.house_registration_house_number || '',
@@ -1680,6 +1654,13 @@ export default function ApplicationForm() {
           console.log('🔍 fetchProfileData - Resume ID:', user.id);
           console.log('🔍 fetchProfileData - Current profileImage state:', profileImage);
           
+          // ตรวจสอบว่ามี department parameter หรือไม่
+          if (hasDepartmentParam) {
+            console.log('🔍 fetchProfileData - Department parameter detected, preserving department and appliedPosition data...');
+            console.log('🔍 fetchProfileData - Current formData.department:', formData.department);
+            console.log('🔍 fetchProfileData - Current formData.appliedPosition:', formData.appliedPosition);
+          }
+          
           if (user.profileImageUrl) {
             console.log('✅ fetchProfileData - Using profileImageUrl:', user.profileImageUrl);
             // ใช้ path แบบเดียวกับ profile page
@@ -1691,7 +1672,13 @@ export default function ApplicationForm() {
             // อัปเดต formData.profileImage ด้วย
             setFormData(prev => ({
               ...prev,
-              profileImage: new File([], user.profileImageUrl, { type: 'image/jpeg' })
+              profileImage: new File([], user.profileImageUrl, { type: 'image/jpeg' }),
+              // ป้องกันไม่ให้ override ข้อมูล department เมื่อมี parameter
+              ...(hasDepartmentParam ? {
+                department: prev.department,
+                appliedPosition: prev.appliedPosition,
+                expectedSalary: prev.expectedSalary
+              } : {})
             }));
           } else if (user.id) {
             // Try to find image by ID - ลองหา .jpg ก่อน เพราะมีมากกว่า .png
@@ -1705,7 +1692,13 @@ export default function ApplicationForm() {
                 // อัปเดต formData.profileImage ด้วย
                 setFormData(prev => ({
                   ...prev,
-                  profileImage: new File([], `profile_${user.id}.jpg`, { type: 'image/jpeg' })
+                  profileImage: new File([], `profile_${user.id}.jpg`, { type: 'image/jpeg' }),
+                  // ป้องกันไม่ให้ override ข้อมูล department เมื่อมี parameter
+                  ...(hasDepartmentParam ? {
+                    department: prev.department,
+                    appliedPosition: prev.appliedPosition,
+                    expectedSalary: prev.expectedSalary
+                  } : {})
                 }));
               } else {
                 const pngPath = `/api/image?file=profile_${user.id}.png`;
@@ -1717,7 +1710,13 @@ export default function ApplicationForm() {
                   // อัปเดต formData.profileImage ด้วย
                   setFormData(prev => ({
                     ...prev,
-                    profileImage: new File([], `profile_${user.id}.png`, { type: 'image/png' })
+                    profileImage: new File([], `profile_${user.id}.png`, { type: 'image/png' }),
+                    // ป้องกันไม่ให้ override ข้อมูล department เมื่อมี parameter
+                    ...(hasDepartmentParam ? {
+                      department: prev.department,
+                      appliedPosition: prev.appliedPosition,
+                      expectedSalary: prev.expectedSalary
+                    } : {})
                   }));
                 } else {
                   console.log('❌ fetchProfileData - No image found for ID:', user.id);
@@ -1730,15 +1729,43 @@ export default function ApplicationForm() {
           
           // ไม่ต้องเรียก loadProfileData เพราะได้เติมข้อมูลลงในฟอร์มแล้ว
           console.log('🔍 fetchProfileData - Resume data loaded and form filled');
+          
+          // ตรวจสอบว่ามี department parameter หรือไม่ และป้องกันไม่ให้ override
+          if (hasDepartmentParam) {
+            console.log('🔍 fetchProfileData - Department parameter detected, preserving department data...');
+            console.log('🔍 fetchProfileData - Final formData.department:', formData.department);
+            console.log('🔍 fetchProfileData - Final formData.appliedPosition:', formData.appliedPosition);
+          }
         } else {
           console.log('🔍 fetchProfileData - No resume data found');
           console.log('🔍 fetchProfileData - Result:', result);
+          
+          // ตรวจสอบว่ามี department parameter หรือไม่ และป้องกันไม่ให้ override
+          if (hasDepartmentParam) {
+            console.log('🔍 fetchProfileData - Department parameter detected, preserving department data...');
+            console.log('🔍 fetchProfileData - Final formData.department:', formData.department);
+            console.log('🔍 fetchProfileData - Final formData.appliedPosition:', formData.appliedPosition);
+          }
         }
       } else {
         console.log('🔍 fetchProfileData - API response not ok:', response.status, response.statusText);
+        
+        // ตรวจสอบว่ามี department parameter หรือไม่ และป้องกันไม่ให้ override
+        if (hasDepartmentParam) {
+          console.log('🔍 fetchProfileData - Department parameter detected, preserving department data...');
+          console.log('🔍 fetchProfileData - Final formData.department:', formData.department);
+          console.log('🔍 fetchProfileData - Final formData.appliedPosition:', formData.appliedPosition);
+        }
       }
     } catch (error) {
       console.error('Error fetching resume data:', error);
+      
+      // ตรวจสอบว่ามี department parameter หรือไม่ และป้องกันไม่ให้ override
+      if (hasDepartmentParam) {
+        console.log('🔍 fetchProfileData - Department parameter detected, preserving department data...');
+        console.log('🔍 fetchProfileData - Final formData.department:', formData.department);
+        console.log('🔍 fetchProfileData - Final formData.appliedPosition:', formData.appliedPosition);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -1985,7 +2012,6 @@ export default function ApplicationForm() {
             console.log('✅ พบข้อมูลตาม department:', found.id, 'department:', found.department, 'appliedPosition:', found.appliedPosition);
           }
         }
-        
         // วิธีที่ 9: ค้นหาตามเบอร์โทร (ถ้ามี)
         if (!found && userEmail) {
           // ลองดึงเบอร์โทรจากอีเมล (ถ้าเป็นรูปแบบ phone@domain.com)
@@ -2200,7 +2226,10 @@ export default function ApplicationForm() {
         startDate: work.startDate || '',
         endDate: work.endDate || '',
         salary: work.salary || '',
-        reason: work.description || ''
+        reason: work.description || '',
+        district: work.district || '',
+        province: work.province || '',
+        phone: work.phone || ''
       })) || []
     }));
 
@@ -2260,6 +2289,8 @@ export default function ApplicationForm() {
   };
 
   const scrollToError = (errorKey: string) => {
+    console.log('🔍 scrollToError - Looking for error key:', errorKey);
+    
     // Map error keys ไปยัง section refs
     let targetSection: keyof typeof sectionRefs | null = null;
     
@@ -2281,45 +2312,91 @@ export default function ApplicationForm() {
       targetSection = 'documents';
     }
     
+    console.log('🔍 scrollToError - Target section:', targetSection);
+    
     if (targetSection) {
+      // Scroll ไปยัง section ก่อน
       setTimeout(() => {
         scrollTo(targetSection!);
         
-        // เพิ่มการ scroll ไปยังฟิลด์ที่มี error โดยตรง
+        // ค้นหาฟิลด์ที่มี error โดยตรง
         setTimeout(() => {
-          // ค้นหาฟิลด์ที่มี error โดยใช้หลายวิธี
-          let errorField = document.querySelector(`[name="${errorKey}"], [data-error-key="${errorKey}"]`);
+          let errorField = null;
           
-          // ถ้าไม่เจอ ให้ค้นหาด้วยวิธีอื่น
+          // 1. ค้นหาด้วย name attribute
+          errorField = document.querySelector(`[name="${errorKey}"]`);
+          console.log('🔍 scrollToError - Found by name:', !!errorField);
+          
+          // 2. ค้นหาด้วย data-error-key attribute
           if (!errorField) {
-            // ค้นหาด้วย label text
+            errorField = document.querySelector(`[data-error-key="${errorKey}"]`);
+            console.log('🔍 scrollToError - Found by data-error-key:', !!errorField);
+          }
+          
+          // 3. ค้นหาด้วย id attribute
+          if (!errorField) {
+            errorField = document.querySelector(`#${errorKey}`);
+            console.log('🔍 scrollToError - Found by id:', !!errorField);
+          }
+          
+          // 4. ค้นหาด้วย label text ที่เกี่ยวข้อง
+          if (!errorField) {
             const labels = document.querySelectorAll('label');
             for (const label of labels) {
-              if (label.textContent?.includes(errorKey) || label.textContent?.includes(getErrorMessage(errorKey))) {
-                const input = label.querySelector('input, select, textarea');
-                if (input) {
-                  errorField = input;
-                  break;
-                }
+              const labelText = label.textContent?.toLowerCase() || '';
+              const errorKeyLower = errorKey.toLowerCase();
+              
+              // ค้นหาด้วยคำสำคัญ
+              if (labelText.includes('ชื่อ') && errorKeyLower.includes('firstname')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('นามสกุล') && errorKeyLower.includes('lastname')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('อายุ') && errorKeyLower.includes('age')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('วันเกิด') && errorKeyLower.includes('birthdate')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('บัตรประชาชน') && errorKeyLower.includes('idnumber')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('หมู่ที่') && errorKeyLower.includes('villagenumber')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('ตรอก') && errorKeyLower.includes('alley')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('ถนน') && errorKeyLower.includes('road')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('ตำบล') && errorKeyLower.includes('subdistrict')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('อำเภอ') && errorKeyLower.includes('district')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('จังหวัด') && errorKeyLower.includes('province')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('รหัสไปรษณีย์') && errorKeyLower.includes('postalcode')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('โทรศัพท์') && errorKeyLower.includes('phone')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
+              } else if (labelText.includes('อีเมล') && errorKeyLower.includes('email')) {
+                errorField = label.querySelector('input, select, textarea');
+                if (errorField) break;
               }
             }
+            console.log('🔍 scrollToError - Found by label text:', !!errorField);
           }
           
-          // ถ้าไม่เจอ ให้ค้นหาด้วย placeholder
+          // 5. ค้นหาด้วย error message ที่แสดงอยู่
           if (!errorField) {
-            const inputs = document.querySelectorAll('input, select, textarea');
-            for (const input of inputs) {
-              if (input.getAttribute('placeholder')?.includes(errorKey) || 
-                  input.getAttribute('placeholder')?.includes(getErrorMessage(errorKey))) {
-                errorField = input;
-                break;
-              }
-            }
-          }
-          
-          // ถ้าไม่เจอ ให้ค้นหา error message
-          if (!errorField) {
-            const errorMessages = document.querySelectorAll('.text-red-500');
+            const errorMessages = document.querySelectorAll('.text-red-500, .text-red-600');
             for (const errorMsg of errorMessages) {
               if (errorMsg.textContent?.includes(getErrorMessage(errorKey))) {
                 // หา input ที่ใกล้ที่สุด
@@ -2330,20 +2407,12 @@ export default function ApplicationForm() {
                 }
               }
             }
-          }
-          
-          // ถ้ายังไม่เจอ ให้ค้นหา error message โดยตรง
-          if (!errorField) {
-            const errorMessages = document.querySelectorAll('.text-red-500');
-            for (const errorMsg of errorMessages) {
-              if (errorMsg.textContent?.includes(getErrorMessage(errorKey))) {
-                errorField = errorMsg;
-                break;
-              }
-            }
+            console.log('🔍 scrollToError - Found by error message:', !!errorField);
           }
           
           if (errorField) {
+            console.log('🔍 scrollToError - Found error field:', errorField);
+            
             // Scroll ไปยัง error field
             errorField.scrollIntoView({ 
               behavior: 'smooth', 
@@ -2365,7 +2434,7 @@ export default function ApplicationForm() {
               }, 3000);
               
               // ถ้าเป็น error message ให้ highlight parent element
-              if (errorField.classList.contains('text-red-500')) {
+              if (errorField.classList.contains('text-red-500') || errorField.classList.contains('text-red-600')) {
                 const parentDiv = errorField.closest('div');
                 if (parentDiv) {
                   parentDiv.classList.add('animate-pulse', 'ring-2', 'ring-red-500', 'bg-red-50');
@@ -2375,9 +2444,11 @@ export default function ApplicationForm() {
                 }
               }
             }
+          } else {
+            console.log('❌ scrollToError - Could not find error field for:', errorKey);
           }
-        }, 300);
-      }, 100);
+        }, 500);
+      }, 200);
     }
   };
 
@@ -2386,6 +2457,12 @@ export default function ApplicationForm() {
     if (key === 'department' && searchParams.get('department')) {
       console.log('🚫 Department cannot be changed when selected from Dashboard');
       return;
+    }
+    
+    // ลบ error summary เมื่อผู้ใช้แก้ไขข้อมูล
+    const errorSummary = document.getElementById('error-summary');
+    if (errorSummary) {
+      errorSummary.remove();
     }
 
     // อัปเดต form data ก่อน
@@ -2443,6 +2520,12 @@ export default function ApplicationForm() {
 
   // ฟังก์ชันป้องกันการกรอกตัวเลข (เฉพาะตัวอักษรภาษาไทย อังกฤษ และช่องว่าง)
   const handleTextOnlyChange = (key: string, value: string) => {
+    // ลบ error summary เมื่อผู้ใช้แก้ไขข้อมูล
+    const errorSummary = document.getElementById('error-summary');
+    if (errorSummary) {
+      errorSummary.remove();
+    }
+    
     // ลบตัวเลขออกจาก value
     const textOnly = value.replace(/[0-9]/g, '');
     handleInputChange(key, textOnly);
@@ -2450,13 +2533,38 @@ export default function ApplicationForm() {
 
   // ฟังก์ชันป้องกันการกรอกตัวอักษร (เฉพาะตัวเลข)
   const handleNumberOnlyChange = (key: string, value: string) => {
+    // ลบ error summary เมื่อผู้ใช้แก้ไขข้อมูล
+    const errorSummary = document.getElementById('error-summary');
+    if (errorSummary) {
+      errorSummary.remove();
+    }
+    
     // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลข
     const numberOnly = value.replace(/[^0-9]/g, '');
     handleInputChange(key, numberOnly);
   };
 
+  // ฟังก์ชันสำหรับหมู่ที่ (อนุญาตตัวเลขและ -)
+  const handleVillageNumberChange = (key: string, value: string) => {
+    // ลบ error summary เมื่อผู้ใช้แก้ไขข้อมูล
+    const errorSummary = document.getElementById('error-summary');
+    if (errorSummary) {
+      errorSummary.remove();
+    }
+    
+    // อนุญาตเฉพาะตัวเลขและ - เท่านั้น
+    const allowedValue = value.replace(/[^0-9-]/g, '');
+    handleInputChange(key, allowedValue);
+  };
+
   // ฟังก์ชันสำหรับเลขบัตรประชาชน (จำกัด 13 หลัก)
   const handleIdNumberChange = (value: string) => {
+    // ลบ error summary เมื่อผู้ใช้แก้ไขข้อมูล
+    const errorSummary = document.getElementById('error-summary');
+    if (errorSummary) {
+      errorSummary.remove();
+    }
+    
     // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลข
     const numberOnly = value.replace(/[^0-9]/g, '');
     // จำกัดความยาวไม่เกิน 13 หลัก
@@ -2466,6 +2574,12 @@ export default function ApplicationForm() {
 
   // ฟังก์ชันสำหรับรหัสไปรษณีย์ (จำกัด 5 หลัก)
   const handlePostalCodeChange = (key: string, value: string) => {
+    // ลบ error summary เมื่อผู้ใช้แก้ไขข้อมูล
+    const errorSummary = document.getElementById('error-summary');
+    if (errorSummary) {
+      errorSummary.remove();
+    }
+    
     // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลข
     const numberOnly = value.replace(/[^0-9]/g, '');
     // จำกัดความยาวไม่เกิน 5 หลัก
@@ -2475,6 +2589,12 @@ export default function ApplicationForm() {
 
   // ฟังก์ชันสำหรับเกรดเฉลี่ย (ทศนิยม 2 ตำแหน่ง)
   const handleGpaChange = (value: string) => {
+    // ลบ error summary เมื่อผู้ใช้แก้ไขข้อมูล
+    const errorSummary = document.getElementById('error-summary');
+    if (errorSummary) {
+      errorSummary.remove();
+    }
+    
     // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลขและจุด
     const numberOnly = value.replace(/[^0-9.]/g, '');
     
@@ -2506,6 +2626,12 @@ export default function ApplicationForm() {
 
   // ฟังก์ชันสำหรับปีที่จบ (จำกัด 4 หลัก)
   const handleYearChange = (value: string) => {
+    // ลบ error summary เมื่อผู้ใช้แก้ไขข้อมูล
+    const errorSummary = document.getElementById('error-summary');
+    if (errorSummary) {
+      errorSummary.remove();
+    }
+    
     // ลบตัวอักษรออกจาก value เหลือเฉพาะตัวเลข
     const numberOnly = value.replace(/[^0-9]/g, '');
     // จำกัดความยาวไม่เกิน 4 หลัก
@@ -2520,8 +2646,22 @@ export default function ApplicationForm() {
     return limitedValue;
   };
 
+  // แปลงค่าที่เป็น '-' ให้เป็นค่าว่างก่อนส่งบันทึก
+  const normalizeDash = (v?: string | null) => {
+    if (v == null) return null;
+    const t = String(v).trim();
+    if (t === '-' ) return '';
+    return t;
+  };
+
   // ฟังก์ชันคัดลอกข้อมูลจากที่อยู่ทะเบียนบ้านไปที่อยู่ปัจจุบัน
   const handleCopyFromRegisteredAddress = (checked: boolean) => {
+    // ลบ error summary เมื่อผู้ใช้แก้ไขข้อมูล
+    const errorSummary = document.getElementById('error-summary');
+    if (errorSummary) {
+      errorSummary.remove();
+    }
+    
     setCopyFromRegisteredAddress(checked);
     
     if (checked && formData.registeredAddress) {
@@ -2624,7 +2764,6 @@ export default function ApplicationForm() {
       return [];
     }
   };
-
   const handlePreviewFile = (file: File, fileName: string) => {
     setPreviewFile({
       file,
@@ -2756,7 +2895,10 @@ export default function ApplicationForm() {
           startDate: '',
           endDate: '',
           salary: '',
-          reason: ''
+          reason: '',
+          district: '',
+          province: '',
+          phone: ''
         }]
     }));
   };
@@ -2817,33 +2959,6 @@ export default function ApplicationForm() {
     }));
   };
 
-  // ฟังก์ชันสำหรับการแปลงวันที่ให้แสดงผลในรูปแบบไทย
-  const formatDateForDisplay = (dateString: string) => {
-    if (!dateString) return '';
-    try {
-      const date = new Date(dateString);
-      // ใช้ toLocaleDateString แบบไม่ระบุ locale เพื่อให้แสดงปี ค.ศ. ปกติ
-      return date.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch (error) {
-      return dateString;
-    }
-  };
-
-  // ฟังก์ชันสำหรับการแปลงวันที่จากรูปแบบไทยเป็น ISO
-  const parseDateFromThai = (thaiDate: string) => {
-    if (!thaiDate) return '';
-    try {
-      const [day, month, year] = thaiDate.split('/');
-      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return date.toISOString().split('T')[0];
-    } catch (error) {
-      return thaiDate;
-    }
-  };
   // ฟังก์ชัน validation สำหรับตรวจสอบข้อมูลทั้งหมดในทุกแท็บ
   const validateAllTabs = () => {
     const errors: Record<string, string> = {};
@@ -2945,8 +3060,8 @@ export default function ApplicationForm() {
     }
     if (!formData.emergencyPhone || formData.emergencyPhone.trim() === '') {
       errors.emergencyPhone = 'กรุณากรอกเบอร์โทรศัพท์ผู้ติดต่อฉุกเฉิน';
-    } else if (!/^[0-9]{10}$/.test(formData.emergencyPhone.replace(/[-\s]/g, ''))) {
-      errors.emergencyPhone = 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง (10 หลัก)';
+    } else if (!/^[0-9]{9,10}$/.test(formData.emergencyPhone.replace(/[-\s]/g, ''))) {
+      errors.emergencyPhone = 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง (9-10 หลัก)';
     }
     if (!formData.emergencyAddress?.houseNumber || formData.emergencyAddress.houseNumber.trim() === '') {
       errors.emergencyAddressHouseNumber = 'กรุณากรอกบ้านเลขที่ผู้ติดต่อฉุกเฉิน';
@@ -2977,8 +3092,8 @@ export default function ApplicationForm() {
     }
     if (!formData.emergencyWorkplace?.phone || formData.emergencyWorkplace.phone.trim() === '') {
       errors.emergencyWorkplacePhone = 'กรุณากรอกโทรศัพท์สถานที่ทำงานผู้ติดต่อฉุกเฉิน';
-    } else if (!/^[0-9]{10}$/.test(formData.emergencyWorkplace.phone.replace(/[-\s]/g, ''))) {
-      errors.emergencyWorkplacePhone = 'กรุณากรอกเบอร์โทรศัพท์สถานที่ทำงานให้ถูกต้อง (10 หลัก)';
+    } else if (!/^[0-9]{9,10}$/.test(formData.emergencyWorkplace.phone.replace(/[-\s]/g, ''))) {
+      errors.emergencyWorkplacePhone = 'กรุณากรอกเบอร์โทรศัพท์สถานที่ทำงานให้ถูกต้อง (9-10 หลัก)';
     }
     
     // ข้อมูลคู่สมรส (จำเป็นถ้าเลือกสมรส) - มี *
@@ -3088,32 +3203,64 @@ export default function ApplicationForm() {
     if (!formData.maritalStatus) errors.maritalStatus = 'กรุณาเลือกสถานภาพทางครอบครัว';
     
     // ข้อมูลบัตรประชาชน (จำเป็น)
-    if (!formData.idNumber) errors.idNumber = 'กรุณากรอกเลขบัตรประชาชน';
+    if (!formData.idNumber) {
+      errors.idNumber = 'กรุณากรอกเลขบัตรประชาชน';
+    } else if (!/^[0-9]{13}$/.test(formData.idNumber.replace(/[-\s]/g, ''))) {
+      errors.idNumber = 'กรุณากรอกเลขบัตรประชาชนให้ถูกต้อง (13 หลัก)';
+    }
     if (!formData.idCardIssuedAt) errors.idCardIssuedAt = 'กรุณากรอกสถานที่ออกบัตร';
     if (!formData.idCardIssueDate) errors.idCardIssueDate = 'กรุณากรอกวันที่ออกบัตร';
     if (!formData.idCardExpiryDate) errors.idCardExpiryDate = 'กรุณากรอกวันหมดอายุบัตร';
     
     // ที่อยู่ตามทะเบียนบ้าน (จำเป็น)
     if (!formData.registeredAddress?.houseNumber) errors.registeredAddressHouseNumber = 'กรุณากรอกเลขที่';
-    if (!formData.registeredAddress?.villageNumber) errors.registeredAddressVillageNumber = 'กรุณากรอกหมู่ที่';
-    if (!formData.registeredAddress?.alley) errors.registeredAddressAlley = 'กรุณากรอกตรอก/ซอย';
-    if (!formData.registeredAddress?.road) errors.registeredAddressRoad = 'กรุณากรอกถนน';
+    if (!formData.registeredAddress?.villageNumber || formData.registeredAddress.villageNumber.trim() === '') {
+      errors.registeredAddressVillageNumber = 'กรุณากรอกหมู่ที่';
+    }
+    if (!formData.registeredAddress?.alley || formData.registeredAddress.alley.trim() === '') {
+      errors.registeredAddressAlley = 'กรุณากรอกตรอก/ซอย';
+    }
+    if (!formData.registeredAddress?.road || formData.registeredAddress.road.trim() === '') {
+      errors.registeredAddressRoad = 'กรุณากรอกถนน';
+    }
     if (!formData.registeredAddress?.subDistrict) errors.registeredAddressSubDistrict = 'กรุณากรอกตำบล/แขวง';
     if (!formData.registeredAddress?.district) errors.registeredAddressDistrict = 'กรุณากรอกอำเภอ/เขต';
     if (!formData.registeredAddress?.province) errors.registeredAddressProvince = 'กรุณากรอกจังหวัด';
-    if (!formData.registeredAddress?.postalCode) errors.registeredAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์';
-    if (!formData.registeredAddress?.mobile) errors.registeredAddressMobile = 'กรุณากรอกโทรศัพท์มือถือ';
+    if (!formData.registeredAddress?.postalCode) {
+      errors.registeredAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์';
+    } else if (!/^[0-9]{5}$/.test(formData.registeredAddress.postalCode.replace(/[-\s]/g, ''))) {
+      errors.registeredAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์ให้ถูกต้อง (5 หลัก)';
+    }
+    if (!formData.registeredAddress?.mobile) {
+      errors.registeredAddressMobile = 'กรุณากรอกโทรศัพท์มือถือ';
+    } else if (!/^[0-9]{9,10}$/.test(formData.registeredAddress.mobile.replace(/[-\s]/g, ''))) {
+      errors.registeredAddressMobile = 'กรุณากรอกโทรศัพท์มือถือให้ถูกต้อง (9-10 หลัก)';
+    }
     
     // ที่อยู่ปัจจุบัน (จำเป็น)
     if (!formData.currentAddressDetail?.houseNumber) errors.currentAddressHouseNumber = 'กรุณากรอกเลขที่';
-    if (!formData.currentAddressDetail?.villageNumber) errors.currentAddressVillageNumber = 'กรุณากรอกหมู่ที่';
-    if (!formData.currentAddressDetail?.alley) errors.currentAddressAlley = 'กรุณากรอกตรอก/ซอย';
-    if (!formData.currentAddressDetail?.road) errors.currentAddressRoad = 'กรุณากรอกถนน';
+    if (!formData.currentAddressDetail?.villageNumber || formData.currentAddressDetail.villageNumber.trim() === '') {
+      errors.currentAddressVillageNumber = 'กรุณากรอกหมู่ที่';
+    }
+    if (!formData.currentAddressDetail?.alley || formData.currentAddressDetail.alley.trim() === '') {
+      errors.currentAddressAlley = 'กรุณากรอกตรอก/ซอย';
+    }
+    if (!formData.currentAddressDetail?.road || formData.currentAddressDetail.road.trim() === '') {
+      errors.currentAddressRoad = 'กรุณากรอกถนน';
+    }
     if (!formData.currentAddressDetail?.subDistrict) errors.currentAddressSubDistrict = 'กรุณากรอกตำบล/แขวง';
     if (!formData.currentAddressDetail?.district) errors.currentAddressDistrict = 'กรุณากรอกอำเภอ/เขต';
     if (!formData.currentAddressDetail?.province) errors.currentAddressProvince = 'กรุณากรอกจังหวัด';
-    if (!formData.currentAddressDetail?.postalCode) errors.currentAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์';
-    if (!formData.currentAddressDetail?.mobilePhone) errors.currentAddressMobilePhone = 'กรุณากรอกโทรศัพท์มือถือ';
+    if (!formData.currentAddressDetail?.postalCode) {
+      errors.currentAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์';
+    } else if (!/^[0-9]{5}$/.test(formData.currentAddressDetail.postalCode.replace(/[-\s]/g, ''))) {
+      errors.currentAddressPostalCode = 'กรุณากรอกรหัสไปรษณีย์ให้ถูกต้อง (5 หลัก)';
+    }
+    if (!formData.currentAddressDetail?.mobilePhone) {
+      errors.currentAddressMobilePhone = 'กรุณากรอกโทรศัพท์มือถือ';
+    } else if (!/^[0-9]{9,10}$/.test(formData.currentAddressDetail.mobilePhone.replace(/[-\s]/g, ''))) {
+      errors.currentAddressMobilePhone = 'กรุณากรอกโทรศัพท์มือถือให้ถูกต้อง (9-10 หลัก)';
+    }
     if (!formData.phone) errors.phone = 'กรุณากรอกเบอร์โทรศัพท์';
     if (!formData.email) errors.email = 'กรุณากรอกอีเมล';
     
@@ -3129,8 +3276,8 @@ export default function ApplicationForm() {
     }
     if (!formData.emergencyPhone || formData.emergencyPhone.trim() === '') {
       errors.emergencyPhone = 'กรุณากรอกเบอร์โทรศัพท์ผู้ติดต่อฉุกเฉิน';
-    } else if (!/^[0-9]{10}$/.test(formData.emergencyPhone.replace(/[-\s]/g, ''))) {
-      errors.emergencyPhone = 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง (10 หลัก)';
+    } else if (!/^[0-9]{9,10}$/.test(formData.emergencyPhone.replace(/[-\s]/g, ''))) {
+      errors.emergencyPhone = 'กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง (9-10 หลัก)';
     }
     if (!formData.emergencyAddress?.houseNumber || formData.emergencyAddress.houseNumber.trim() === '') {
       errors.emergencyAddressHouseNumber = 'กรุณากรอกบ้านเลขที่ผู้ติดต่อฉุกเฉิน';
@@ -3172,8 +3319,8 @@ export default function ApplicationForm() {
     }
     if (!formData.emergencyWorkplace?.phone || formData.emergencyWorkplace.phone.trim() === '') {
       errors.emergencyWorkplacePhone = 'กรุณากรอกโทรศัพท์สถานที่ทำงานผู้ติดต่อฉุกเฉิน';
-    } else if (!/^[0-9]{10}$/.test(formData.emergencyWorkplace.phone.replace(/[-\s]/g, ''))) {
-      errors.emergencyWorkplacePhone = 'กรุณากรอกเบอร์โทรศัพท์สถานที่ทำงานให้ถูกต้อง (10 หลัก)';
+    } else if (!/^[0-9]{9,10}$/.test(formData.emergencyWorkplace.phone.replace(/[-\s]/g, ''))) {
+      errors.emergencyWorkplacePhone = 'กรุณากรอกเบอร์โทรศัพท์สถานที่ทำงานให้ถูกต้อง (9-10 หลัก)';
     }
     
     // ข้อมูลการสมัคร (จำเป็น) - ตรวจสอบในแท็บ position
@@ -3469,7 +3616,10 @@ export default function ApplicationForm() {
           endDate: w.endDate ? new Date(w.endDate) : null,
           salary: w.salary || null,
           description: w.reason || null,
-          isCurrent: w.endDate === null || w.endDate === '' || w.endDate === 'ปัจจุบัน'
+          isCurrent: w.endDate === null || w.endDate === '' || w.endDate === 'ปัจจุบัน',
+          district: w.district || null,
+          province: w.province || null,
+          phone: w.phone || null,
         })),
         // ข้อมูลการรับราชการก่อนหน้า - ส่งเป็น array ธรรมดา (API จะจัดการ nested create)
         previousGovernmentService: (formData.previousGovernmentService || []).map((g) => {
@@ -3561,6 +3711,17 @@ export default function ApplicationForm() {
       console.log('🔍 handleSubmit PATCH - resumePayload.workExperience.length:', resumePayload.workExperience?.length || 0);
       console.log('🔍 handleSubmit PATCH - resumePayload.previousGovernmentService:', resumePayload.previousGovernmentService);
       console.log('🔍 handleSubmit PATCH - resumePayload.previousGovernmentService.length:', resumePayload.previousGovernmentService?.length || 0);
+      console.log('🔍 handleSubmit PATCH - Village Number Data:', {
+        villageNumber: resumePayload.house_registration_village_number,
+        alley: resumePayload.house_registration_alley,
+        road: resumePayload.house_registration_road
+      });
+      console.log('🔍 handleSubmit PATCH - Emergency Workplace Data:', {
+        name: resumePayload.emergency_workplace_name,
+        district: resumePayload.emergency_workplace_district,
+        province: resumePayload.emergency_workplace_province,
+        phone: resumePayload.emergency_workplace_phone
+      });
 
       const res = await fetch(`/api/resume-deposit/${id}`, {
         method: 'PATCH',
@@ -3644,7 +3805,6 @@ export default function ApplicationForm() {
       throw error; // Re-throw error to be handled by handleSubmit
     }
   };
-
   // ฟังก์ชันบันทึกข้อมูลไปที่ ResumeDeposit
   const saveToResumeDeposit = async () => {
     try {
@@ -3679,16 +3839,25 @@ export default function ApplicationForm() {
         religion: formData.religion || null,
           maritalStatus: formData.maritalStatus || 'UNKNOWN',
           // ที่อยู่
-        address: formData.currentAddress || null,
+        address: formData.currentAddress || formData.addressAccordingToHouseRegistration || null,
         phone: formData.phone || null,
         email: formData.email || null,
         // ข้อมูลฉุกเฉิน
-        emergencyContact: formData.emergencyContact || null,
+        emergencyContact: formData.emergencyContact || `${formData.emergencyContactFirstName || ''} ${formData.emergencyContactLastName || ''}`.trim(),
         emergencyContactFirstName: formData.emergencyContactFirstName || null,
         emergencyContactLastName: formData.emergencyContactLastName || null,
           emergencyPhone: formData.emergencyPhone || null,
           emergencyRelationship: formData.emergencyRelationship || null,
-        emergencyAddress: formData.emergencyAddress || null,
+        emergency_address_house_number: formData.emergencyAddress?.houseNumber || null,
+        emergency_address_village_number: formData.emergencyAddress?.villageNumber || null,
+        emergency_address_alley: formData.emergencyAddress?.alley || null,
+        emergency_address_road: formData.emergencyAddress?.road || null,
+        emergency_address_sub_district: formData.emergencyAddress?.subDistrict || null,
+        emergency_address_district: formData.emergencyAddress?.district || null,
+        emergency_address_province: formData.emergencyAddress?.province || null,
+        emergency_address_postal_code: formData.emergencyAddress?.postalCode || null,
+        emergency_address_phone: formData.emergencyAddress?.phone || null,
+        
         // ข้อมูลเพิ่มเติม
           skills: formData.skills || null,
           languages: formData.languages || null,
@@ -3719,7 +3888,10 @@ export default function ApplicationForm() {
             endDate: w.endDate ? new Date(w.endDate) : null,
             salary: w.salary || null,
             description: w.reason || null,
-            isCurrent: w.endDate === null || w.endDate === '' || w.endDate === 'ปัจจุบัน'
+            isCurrent: w.endDate === null || w.endDate === '' || w.endDate === 'ปัจจุบัน',
+            district: w.district || null,
+            province: w.province || null,
+            phone: w.phone || null,
           })),
           // ข้อมูลการรับราชการก่อนหน้า - ส่งเป็น array ธรรมดา (API จะจัดการ nested create)
           previousGovernmentService: (formData.previousGovernmentService || []).map((g) => {
@@ -3819,6 +3991,17 @@ export default function ApplicationForm() {
       console.log('🔍 handleSubmit POST - resumePayload.workExperience.length:', resumePayload.workExperience?.length || 0);
       console.log('🔍 handleSubmit POST - resumePayload.previousGovernmentService:', resumePayload.previousGovernmentService);
       console.log('🔍 handleSubmit POST - resumePayload.previousGovernmentService.length:', resumePayload.previousGovernmentService?.length || 0);
+      console.log('🔍 handleSubmit POST - Village Number Data:', {
+        villageNumber: resumePayload.house_registration_village_number,
+        alley: resumePayload.house_registration_alley,
+        road: resumePayload.house_registration_road
+      });
+      console.log('🔍 handleSubmit POST - Emergency Workplace Data:', {
+        name: resumePayload.emergency_workplace_name,
+        district: resumePayload.emergency_workplace_district,
+        province: resumePayload.emergency_workplace_province,
+        phone: resumePayload.emergency_workplace_phone
+      });
 
       const res = await fetch('/api/resume-deposit', {
         method: 'POST',
@@ -3977,7 +4160,10 @@ export default function ApplicationForm() {
           startDate: work.startDate ? new Date(work.startDate) : null,
           endDate: work.endDate ? new Date(work.endDate) : null,
           salary: work.salary || null,
-          reason: work.reason || null
+          reason: work.reason || null,
+          district: work.district || null,
+          province: work.province || null,
+          phone: work.phone || null
         }))
       };
 
@@ -3988,7 +4174,6 @@ export default function ApplicationForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(applicationPayload)
       });
-
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         console.error('❌ ApplicationForm create failed:', res.status, json);
@@ -3997,7 +4182,6 @@ export default function ApplicationForm() {
 
       console.log('✅ ApplicationForm created successfully:', json.data?.id);
       return json.data;
-      
     } catch (error) {
       console.error('❌ Error creating ApplicationForm:', error);
       throw error; // Re-throw error to be handled by handleSubmit
@@ -4451,10 +4635,27 @@ export default function ApplicationForm() {
               form.append('file', file)
               form.append('applicationId', tempId)
               
-              try {
-                const res = await fetch('/api/profile-image/upload', { method: 'POST', body: form })
-                const data = await res.json()
-                if (res.ok && data.profileImage) {
+              setIsUploading(true);
+              setUploadProgress(0);
+              
+              // ใช้ XMLHttpRequest เพื่อติดตาม progress
+              const xhr = new XMLHttpRequest();
+              
+              xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                  const percentComplete = Math.round((e.loaded / e.total) * 100);
+                  setUploadProgress(percentComplete);
+                }
+              });
+              
+              xhr.addEventListener('load', () => {
+                setIsUploading(false);
+                setUploadProgress(0);
+                
+                if (xhr.status === 200) {
+                  try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.profileImage) {
                   console.log('✅ Profile image upload success with temp ID:', data.profileImage);
                   setProfileImage(`/api/image?file=${data.profileImage}`)
                   setFormData((prev: any) => ({ ...prev, profileImage: file }))
@@ -4463,7 +4664,9 @@ export default function ApplicationForm() {
                   setSavedResume((prev: any) => prev ? {
                     ...prev,
                     profileImageUrl: data.profileImage
-                  } : null);
+                  } : {
+                    profileImageUrl: data.profileImage
+                  });
                   
                   console.log('🔍 Updated formData.profileImage:', file);
                   console.log('🔍 Updated savedResume.profileImageUrl:', data.profileImage);
@@ -4473,21 +4676,52 @@ export default function ApplicationForm() {
                   console.error('❌ อัปโหลดรูปภาพไม่สำเร็จ')
                 }
               } catch (err) {
-                console.error(err)
-                console.error('❌ เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ')
-              } finally {
-                if (fileInputRef.current) fileInputRef.current.value = ''
-              }
+                    console.error('❌ Error parsing response:', err);
+                  }
+                } else {
+                  console.error('❌ Upload failed with status:', xhr.status);
+                }
+                
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              });
+              
+              xhr.addEventListener('error', () => {
+                setIsUploading(false);
+                setUploadProgress(0);
+                console.error('❌ เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              });
+              
+              xhr.open('POST', '/api/profile-image/upload');
+              xhr.send(form);
                 return;
             }
             
             const form = new FormData()
             form.append('file', file)
             form.append('applicationId', savedResume.id) // ใช้ resume ID จริง
-            try {
-              const res = await fetch('/api/profile-image/upload', { method: 'POST', body: form })
-              const data = await res.json()
-              if (res.ok && data.profileImage) {
+            
+            setIsUploading(true);
+            setUploadProgress(0);
+            
+            // ใช้ XMLHttpRequest เพื่อติดตาม progress
+            const xhr = new XMLHttpRequest();
+            
+            xhr.upload.addEventListener('progress', (e) => {
+              if (e.lengthComputable) {
+                const percentComplete = Math.round((e.loaded / e.total) * 100);
+                setUploadProgress(percentComplete);
+              }
+            });
+            
+            xhr.addEventListener('load', () => {
+              setIsUploading(false);
+              setUploadProgress(0);
+              
+              if (xhr.status === 200) {
+                try {
+                  const data = JSON.parse(xhr.responseText);
+                  if (data.profileImage) {
                 console.log('✅ Profile image upload success:', data.profileImage);
                 setProfileImage(`/api/image?file=${data.profileImage}`)
                 setFormData((prev: any) => ({ ...prev, profileImage: file }))
@@ -4496,7 +4730,9 @@ export default function ApplicationForm() {
                 setSavedResume((prev: any) => prev ? {
                   ...prev,
                   profileImageUrl: data.profileImage
-                } : null);
+                } : {
+                  profileImageUrl: data.profileImage
+                });
                 
                 console.log('🔍 Updated formData.profileImage:', file);
                 console.log('🔍 Updated savedResume.profileImageUrl:', data.profileImage);
@@ -4506,11 +4742,24 @@ export default function ApplicationForm() {
                 console.error('❌ อัปโหลดรูปภาพไม่สำเร็จ')
               }
             } catch (err) {
-              console.error(err)
-              console.error('❌ เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ')
-            } finally {
-              if (fileInputRef.current) fileInputRef.current.value = ''
-            }
+                  console.error('❌ Error parsing response:', err);
+                }
+              } else {
+                console.error('❌ Upload failed with status:', xhr.status);
+              }
+              
+              if (fileInputRef.current) fileInputRef.current.value = '';
+            });
+            
+            xhr.addEventListener('error', () => {
+              setIsUploading(false);
+              setUploadProgress(0);
+              console.error('❌ เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
+              if (fileInputRef.current) fileInputRef.current.value = '';
+            });
+            
+            xhr.open('POST', '/api/profile-image/upload');
+            xhr.send(form);
           }}
         />
         {/* Profile Image Section */}
@@ -4581,12 +4830,21 @@ export default function ApplicationForm() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-colors duration-200 flex items-center gap-2 hover:shadow-lg"
+                      disabled={isUploading}
+                      className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-colors duration-200 flex items-center gap-2 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {isUploading && (
+                        <div 
+                          className="absolute inset-0 bg-blue-400 transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      )}
+                      <svg className="w-4 h-4 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      อัปโหลดรูปใหม่
+                      <span className="relative z-10">
+                        {isUploading ? `กำลังอัปโหลด ${uploadProgress}%` : 'อัปโหลดรูปใหม่'}
+                      </span>
                     </button>
                     <button
                       type="button"
@@ -4625,12 +4883,21 @@ export default function ApplicationForm() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-colors duration-200 flex items-center gap-2 mx-auto hover:shadow-lg"
+                      disabled={isUploading}
+                      className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-colors duration-200 flex items-center gap-2 mx-auto hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      {isUploading && (
+                        <div 
+                          className="absolute inset-0 bg-blue-400 transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      )}
+                      <svg className="w-4 h-4 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      อัปโหลดรูปโปรไฟล์
+                      <span className="relative z-10">
+                        {isUploading ? `กำลังอัปโหลด ${uploadProgress}%` : 'อัปโหลดรูปโปรไฟล์'}
+                      </span>
                     </button>
                     
                     
@@ -5282,8 +5549,8 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                         value={formData.registeredAddress?.villageNumber || ''}
-                         onChange={(e) => handleNumberOnlyChange('registeredAddress.villageNumber', e.target.value)}
-                        placeholder="กรอกหมู่ที่ (เฉพาะตัวเลข)"
+                         onChange={(e) => handleVillageNumberChange('registeredAddress.villageNumber', e.target.value)}
+                        placeholder="กรอกหมู่ที่ (เฉพาะตัวเลข หรือ -)"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressVillageNumber') 
                           ? 'border-red-500 focus:ring-red-500' 
@@ -5299,8 +5566,8 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                         value={formData.registeredAddress?.alley || ''}
-                        onChange={(e) => handleInputChange('registeredAddress.alley', e.target.value)}
-                        placeholder="กรอกตรอก/ซอย"
+                        onChange={(e) => handleVillageNumberChange('registeredAddress.alley', e.target.value)}
+                        placeholder="กรอกตรอก/ซอย หรือ -"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressAlley') 
                           ? 'border-red-500 focus:ring-red-500' 
@@ -5316,8 +5583,8 @@ export default function ApplicationForm() {
                     <input
                       type="text"
                         value={formData.registeredAddress?.road || ''}
-                        onChange={(e) => handleInputChange('registeredAddress.road', e.target.value)}
-                        placeholder="กรอกถนน"
+                        onChange={(e) => handleVillageNumberChange('registeredAddress.road', e.target.value)}
+                        placeholder="กรอกถนน หรือ -"
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('registeredAddressRoad') 
                         ? 'border-red-500 focus:ring-red-500' 
@@ -5477,8 +5744,8 @@ export default function ApplicationForm() {
                       <input
                         type="text"
                         value={formData.currentAddressDetail?.villageNumber || ''}
-                         onChange={(e) => handleNumberOnlyChange('currentAddressDetail.villageNumber', e.target.value)}
-                        placeholder="กรอกหมู่ที่ (เฉพาะตัวเลข)"
+                         onChange={(e) => handleVillageNumberChange('currentAddressDetail.villageNumber', e.target.value)}
+                        placeholder="กรอกหมู่ที่ (เฉพาะตัวเลข หรือ -)"
                         disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressVillageNumber') 
@@ -5493,12 +5760,32 @@ export default function ApplicationForm() {
                     )}
                   </div>
                     <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">ตรอก/ซอย<span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={formData.currentAddressDetail?.alley || ''}
+                        onChange={(e) => handleVillageNumberChange('currentAddressDetail.alley', e.target.value)}
+                        placeholder="กรอกตรอก/ซอย หรือ -"
+                        disabled={copyFromRegisteredAddress}
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                          hasError('currentAddressAlley') 
+                            ? 'border-red-500 focus:ring-red-500' 
+                            : copyFromRegisteredAddress
+                            ? 'border-gray-200 bg-gray-100 text-gray-500'
+                            : 'border-gray-300 focus:ring-blue-500'
+                        }`}
+                      />
+                      {hasError('currentAddressAlley') && (
+                        <p className="text-red-500 text-xs mt-1">{getErrorMessage('currentAddressAlley')}</p>
+                    )}
+                  </div>
+                    <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">ถนน<span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         value={formData.currentAddressDetail?.road || ''}
-                        onChange={(e) => handleInputChange('currentAddressDetail.road', e.target.value)}
-                        placeholder="กรอกถนน"
+                        onChange={(e) => handleVillageNumberChange('currentAddressDetail.road', e.target.value)}
+                        placeholder="กรอกถนน หรือ -"
                         disabled={copyFromRegisteredAddress}
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
                           hasError('currentAddressRoad') 
@@ -5728,8 +6015,8 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyAddress?.villageNumber || ''}
-                            onChange={(e) => handleInputChange('emergencyAddress.villageNumber', e.target.value)}
-                            placeholder="กรอกหมู่ที่"
+                            onChange={(e) => handleVillageNumberChange('emergencyAddress.villageNumber', e.target.value)}
+                            placeholder="กรอกหมู่ที่ (เฉพาะตัวเลข หรือ -)"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressVillageNumber') ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError('emergencyAddressVillageNumber') && (
@@ -5743,8 +6030,8 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyAddress?.alley || ''}
-                            onChange={(e) => handleInputChange('emergencyAddress.alley', e.target.value)}
-                            placeholder="กรอกตรอก/ซอย"
+                            onChange={(e) => handleVillageNumberChange('emergencyAddress.alley', e.target.value)}
+                            placeholder="กรอกตรอก/ซอย หรือ -"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressAlley') ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError('emergencyAddressAlley') && (
@@ -5758,8 +6045,8 @@ export default function ApplicationForm() {
                           <input
                             type="text"
                             value={formData.emergencyAddress?.road || ''}
-                            onChange={(e) => handleInputChange('emergencyAddress.road', e.target.value)}
-                            placeholder="กรอกถนน"
+                            onChange={(e) => handleVillageNumberChange('emergencyAddress.road', e.target.value)}
+                            placeholder="กรอกถนน หรือ -"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError('emergencyAddressRoad') ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError('emergencyAddressRoad') && (
@@ -5991,7 +6278,6 @@ export default function ApplicationForm() {
             </CardBody>
           </Card>
           )}
-
           {/* ข้อมูลความรู้ ความสามารถ และทักษะพิเศษ */}
           {activeTab === 'skills' && (
           <Card className="shadow-xl border-0">
@@ -7113,7 +7399,7 @@ export default function ApplicationForm() {
                           </button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-gray-700">ชื่อสถานที่ทำงาน<span className="text-red-500">*</span></label>
                           <input
@@ -7145,71 +7431,41 @@ export default function ApplicationForm() {
                           )}
                         </div>
                         <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">วันที่เริ่มงาน<span className="text-red-500">*</span></label>
+                          <label className="text-sm font-medium text-gray-700">อำเภอ/เขต</label>
                           <input
-                            ref={(el) => {
-                              if (workStartRefs.current) {
-                                workStartRefs.current[index] = el;
-                              }
-                            }}
                             type="text"
-                            value={formatDateForDisplay(work.startDate)}
-                            autoComplete="off"
-                            onFocus={() => {
-                              const el = workStartRefs.current[index] as any;
-                              let inst = el?._flatpickr;
-                              if (!inst && el) {
-                                try {
-                                  inst = flatpickr(el, {
-                                    locale: Thai,
-                                    dateFormat: 'd/m/Y',
-                                    allowInput: true,
-                                    clickOpens: true,
-                                    disableMobile: true,
-                                    appendTo: typeof document !== 'undefined' ? document.body : undefined,
-                                    defaultDate: work.startDate ? new Date(work.startDate) : undefined,
-                                    onChange: (dates: Date[]) => {
-                                      if (dates.length > 0) {
-                                        const d = dates[0];
-                                        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                                        handleWorkExperienceChange(index, 'startDate', iso);
-                                      }
-                                    }
-                                  } as any);
-                                } catch {}
-                              }
-                              if (inst) inst.open();
-                            }}
-                            onClick={() => {
-                              const el = workStartRefs.current[index] as any;
-                              let inst = el?._flatpickr;
-                              if (!inst && el) {
-                                try {
-                                  inst = flatpickr(el, {
-                                    locale: Thai,
-                                    dateFormat: 'd/m/Y',
-                                    allowInput: true,
-                                    clickOpens: true,
-                                    disableMobile: true,
-                                    appendTo: typeof document !== 'undefined' ? document.body : undefined,
-                                    defaultDate: work.startDate ? new Date(work.startDate) : undefined,
-                                    onChange: (dates: Date[]) => {
-                                      if (dates.length > 0) {
-                                        const d = dates[0];
-                                        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                                        handleWorkExperienceChange(index, 'startDate', iso);
-                                      }
-                                    }
-                                  } as any);
-                                } catch {}
-                              }
-                              if (inst) inst.open();
-                            }}
-                            onChange={(e) => {
-                              const isoDate = parseDateFromThai(e.target.value);
-                              handleWorkExperienceChange(index, 'startDate', isoDate);
-                            }}
-                            placeholder="กรอกวันที่เริ่มงาน"
+                            value={work.district}
+                            onChange={(e) => handleWorkExperienceChange(index, 'district', e.target.value)}
+                            placeholder="กรอกอำเภอ/เขต"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">จังหวัด</label>
+                          <input
+                            type="text"
+                            value={work.province}
+                            onChange={(e) => handleWorkExperienceChange(index, 'province', e.target.value)}
+                            placeholder="กรอกจังหวัด"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">โทรศัพท์</label>
+                          <input
+                            type="text"
+                            value={work.phone}
+                            onChange={(e) => handleWorkExperienceChange(index, 'phone', e.target.value)}
+                            placeholder="กรอกเบอร์โทรศัพท์"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">วันที่เริ่มงาน<span className="text-red-500">*</span></label>
+                          <ThaiDatePicker
+                            value={work.startDate}
+                            onChange={(date) => handleWorkExperienceChange(index, 'startDate', date)}
+                            placeholder="เลือกวันที่เริ่มงาน"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError(`workExperience${index}StartDate`) ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError(`workExperience${index}StartDate`) && (
@@ -7220,70 +7476,10 @@ export default function ApplicationForm() {
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-gray-700">วันที่สิ้นสุดงาน<span className="text-red-500">*</span></label>
-                          <input
-                            ref={(el) => {
-                              if (workEndRefs.current) {
-                                workEndRefs.current[index] = el;
-                              }
-                            }}
-                            type="text"
-                            value={formatDateForDisplay(work.endDate)}
-                            autoComplete="off"
-                            onFocus={() => {
-                              const el = workEndRefs.current[index] as any;
-                              let inst = el?._flatpickr;
-                              if (!inst && el) {
-                                try {
-                                  inst = flatpickr(el, {
-                                    locale: Thai,
-                                    dateFormat: 'd/m/Y',
-                                    allowInput: true,
-                                    clickOpens: true,
-                                    disableMobile: true,
-                                    appendTo: typeof document !== 'undefined' ? document.body : undefined,
-                                    defaultDate: work.endDate ? new Date(work.endDate) : undefined,
-                                    onChange: (dates: Date[]) => {
-                                      if (dates.length > 0) {
-                                        const d = dates[0];
-                                        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                                        handleWorkExperienceChange(index, 'endDate', iso);
-                                      }
-                                    }
-                                  } as any);
-                                } catch {}
-                              }
-                              if (inst) inst.open();
-                            }}
-                            onClick={() => {
-                              const el = workEndRefs.current[index] as any;
-                              let inst = el?._flatpickr;
-                              if (!inst && el) {
-                                try {
-                                  inst = flatpickr(el, {
-                                    locale: Thai,
-                                    dateFormat: 'd/m/Y',
-                                    allowInput: true,
-                                    clickOpens: true,
-                                    disableMobile: true,
-                                    appendTo: typeof document !== 'undefined' ? document.body : undefined,
-                                    defaultDate: work.endDate ? new Date(work.endDate) : undefined,
-                                    onChange: (dates: Date[]) => {
-                                      if (dates.length > 0) {
-                                        const d = dates[0];
-                                        const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                                        handleWorkExperienceChange(index, 'endDate', iso);
-                                      }
-                                    }
-                                  } as any);
-                                } catch {}
-                              }
-                              if (inst) inst.open();
-                            }}
-                            onChange={(e) => {
-                              const isoDate = parseDateFromThai(e.target.value);
-                              handleWorkExperienceChange(index, 'endDate', isoDate);
-                            }}
-                            placeholder="กรอกวันที่สิ้นสุดงาน (หรือ 'ปัจจุบัน' ถ้ายังทำงานอยู่)"
+                          <ThaiDatePicker
+                            value={work.endDate}
+                            onChange={(date) => handleWorkExperienceChange(index, 'endDate', date)}
+                            placeholder="เลือกวันที่สิ้นสุดงาน"
                             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${hasError(`workExperience${index}EndDate`) ? 'border-red-500' : 'border-gray-300'}`}
                           />
                           {hasError(`workExperience${index}EndDate`) && (
@@ -7343,7 +7539,7 @@ export default function ApplicationForm() {
 
               {/* ๑.๙ เคยรับราชการเป็นข้าราชการ/ลูกจ้าง */}
               <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">๑.๙ เคยรับราชการเป็นข้าราชการ/ลูกจ้าง</h3>
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">๑.๙ ข้าราชการ/ลูกจ้าง</h3>
                 
                 {/* Radio Button เลือกประเภท: ข้าราชการ หรือ ลูกจ้าง */}
                 

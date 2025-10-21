@@ -42,6 +42,57 @@ export default function Dashboard() {
   const openDetail = (dept: any) => { setDetailDepartment(dept); setIsDetailOpen(true) }
   const closeDetail = () => { setIsDetailOpen(false); setDetailDepartment(null) }
 
+  // Announcement modal state
+  const [isAnnouncementOpen, setIsAnnouncementOpen] = useState(false)
+  const [announcementDepartment, setAnnouncementDepartment] = useState<any | null>(null)
+  const [approvedApplicants, setApprovedApplicants] = useState<any[]>([])
+  const [loadingApplicants, setLoadingApplicants] = useState(false)
+  
+  // Statistics state
+  const [approvedCounts, setApprovedCounts] = useState<Record<string, number>>({})
+  const openAnnouncement = (dept: any) => { 
+    setAnnouncementDepartment(dept); 
+    setIsAnnouncementOpen(true);
+    fetchApprovedApplicants(dept.name);
+  }
+  const closeAnnouncement = () => { 
+    setIsAnnouncementOpen(false); 
+    setAnnouncementDepartment(null);
+    setApprovedApplicants([]);
+  }
+
+  // ฟังก์ชันดึงข้อมูลผู้ผ่านการสมัคร
+  const fetchApprovedApplicants = async (departmentName: string) => {
+    try {
+      setLoadingApplicants(true);
+      console.log('🔄 กำลังดึงข้อมูลผู้ผ่านการพิจารณาสำหรับ:', departmentName);
+      
+      const response = await fetch(`/api/resume-deposit?department=${encodeURIComponent(departmentName)}&status=approved&admin=true`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ ข้อมูลผู้ผ่านการพิจารณา:', data);
+        setApprovedApplicants(data.data || []);
+      } else {
+        console.error('❌ Error fetching approved applicants:', response.status, response.statusText);
+        setApprovedApplicants([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching approved applicants:', error);
+      setApprovedApplicants([]);
+    } finally {
+      setLoadingApplicants(false);
+    }
+  }
+
+  // ฟังก์ชันตรวจสอบว่าหมดเวลารับสมัครหรือไม่
+  const isApplicationExpired = (endDate: string | null) => {
+    if (!endDate) return false;
+    const now = new Date();
+    const deadline = new Date(endDate);
+    return now > deadline;
+  }
+
   // Sidebar toggle state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
@@ -302,6 +353,19 @@ export default function Dashboard() {
             status: (d.status || 'ACTIVE').toString().toLowerCase()
           }));
           setDepartmentsData(list);
+          
+          // ดึงข้อมูลสถิติผู้ผ่านการพิจารณาสำหรับแต่ละฝ่าย
+          const counts: Record<string, number> = {};
+          for (const dept of list) {
+            try {
+              const count = await getApprovedCount(dept.name);
+              counts[dept.name] = count;
+            } catch (error) {
+              console.error(`Error fetching approved count for ${dept.name}:`, error);
+              counts[dept.name] = 0;
+            }
+          }
+          setApprovedCounts(counts);
         } else {
           // Failed to fetch departments
         }
@@ -335,6 +399,31 @@ export default function Dashboard() {
       fetchResumeDepositData();
     }
   }, [status, (session as any)?.user?.id, (session as any)?.user?.email])
+
+  // ฟังการเปลี่ยนแปลงจากหน้าอื่น (เช่น การเปลี่ยนสถานะในหน้า admin)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'statusChanged' && e.newValue) {
+        console.log('🔄 ตรวจพบการเปลี่ยนสถานะ รีเฟรชข้อมูลสถิติ');
+        refreshApprovedCounts();
+        // ลบข้อมูลจาก localStorage หลังจากใช้แล้ว
+        localStorage.removeItem('statusChanged');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // ตรวจสอบ localStorage เมื่อโหลดหน้า
+    if (localStorage.getItem('statusChanged')) {
+      console.log('🔄 ตรวจพบการเปลี่ยนสถานะใน localStorage รีเฟรชข้อมูลสถิติ');
+      refreshApprovedCounts();
+      localStorage.removeItem('statusChanged');
+    }
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [departmentsData]);
 
   // รีเฟรชข้อมูลเมื่อผู้ใช้กลับมาจากหน้า resume-deposit
   useEffect(() => {
@@ -378,6 +467,36 @@ export default function Dashboard() {
       workGroup: 'ไม่ระบุ',
       appliedPosition: 'ไม่ระบุ'
     };
+  };
+
+  // ฟังก์ชันดึงข้อมูลสถิติผู้ผ่านการพิจารณา
+  const getApprovedCount = async (deptName: string) => {
+    try {
+      const response = await fetch(`/api/resume-deposit?department=${encodeURIComponent(deptName)}&status=approved&admin=true`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.data ? data.data.length : 0;
+      }
+      return 0;
+    } catch (error) {
+      console.error('Error fetching approved count:', error);
+      return 0;
+    }
+  };
+
+  // ฟังก์ชันรีเฟรชข้อมูลสถิติ
+  const refreshApprovedCounts = async () => {
+    const counts: Record<string, number> = {};
+    for (const dept of departmentsData) {
+      try {
+        const count = await getApprovedCount(dept.name);
+        counts[dept.name] = count;
+      } catch (error) {
+        console.error(`Error fetching approved count for ${dept.name}:`, error);
+        counts[dept.name] = 0;
+      }
+    }
+    setApprovedCounts(counts);
   };
 
   // Filter and sort departments based on selected department, status, and search query
@@ -886,6 +1005,16 @@ export default function Dashboard() {
                               </svg>
                               <span className="text-gray-600 truncate">วุฒิการศึกษา: {dept.education || 'ไม่ระบุ'}</span>
                             </div>
+
+                            {/* จำนวนผู้ผ่านการพิจารณา */}
+                            {/* <div className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm">
+                              <svg className="w-3 h-3 sm:w-4 sm:h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="text-green-600 font-medium truncate">
+                                ผู้ผ่านการพิจารณา: {approvedCounts[dept.name] || 0} คน
+                              </span>
+                            </div> */}
                       
                      
 
@@ -915,55 +1044,87 @@ export default function Dashboard() {
                       </div>
 
                       <div className="flex flex-row space-x-2 pt-2">
+                    {/* ปุ่มสมัครงาน - disable เมื่อหมดเวลารับสมัคร */}
                     <Button
                       color="primary"
                       variant="solid"
-                          size="sm"
-                          className={`flex-1 text-xs sm:text-sm border-0 rounded-xl text-white ${userHasResume ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 text-gray-600'}`}
-                          isLoading={applyingDeptId === String(dept.id) || resumeDepositLoading}
-                          onClick={() => {
-                            setApplyingDeptId(String(dept.id))
-                            if (!userHasResume) {
-                              alert('กรุณาฝากประวัติก่อนทำการสมัครงาน')
-                              try {
-                                const userId = (session as any)?.user?.id || ''
-                                const email = (session as any)?.user?.email || ''
-                                const params = new URLSearchParams()
-                                if (userId) params.set('resumeUserId', String(userId))
-                                else if (email) params.set('resumeEmail', String(email))
-                                const url = params.toString() ? `/register?${params.toString()}` : '/register'
-                                router.push(url)
-                              } catch {
-                                router.push('/register')
-                              }
-                              setApplyingDeptId(null)
-                              return
-                            }
-                            try {
-                              const userId = (session as any)?.user?.id || ''
-                              const email = (session as any)?.user?.email || ''
-                              const params = new URLSearchParams()
-                              params.set('department', encodeURIComponent(dept.name))
-                              params.set('departmentId', String(dept.id))
-                              if (userId) params.set('resumeUserId', String(userId))
-                              else if (email) params.set('resumeEmail', String(email))
-                              router.push(`/register?${params.toString()}`)
-                            } catch {
-                              router.push(`/register?department=${encodeURIComponent(dept.name)}&departmentId=${dept.id}`)
-                            }
-                          }}
-                        >
-                          {resumeDepositLoading ? 'กำลังตรวจสอบ...' : (userHasResume ? 'สมัครงาน' : 'ฝากประวัติก่อน')}
+                      size="sm"
+                      disabled={isApplicationExpired(dept.applicationEndDate)}
+                      className={`flex-1 text-xs sm:text-sm border-0 rounded-xl text-white ${
+                        isApplicationExpired(dept.applicationEndDate) 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                          : userHasResume 
+                            ? 'bg-blue-600 hover:bg-blue-700' 
+                            : 'bg-gray-300 text-gray-600'
+                      }`}
+                      isLoading={applyingDeptId === String(dept.id) || resumeDepositLoading}
+                      onClick={() => {
+                        if (isApplicationExpired(dept.applicationEndDate)) {
+                          alert('หมดเวลารับสมัครแล้ว');
+                          return;
+                        }
+                        setApplyingDeptId(String(dept.id))
+                        if (!userHasResume) {
+                          alert('กรุณาฝากประวัติก่อนทำการสมัครงาน')
+                          try {
+                            const userId = (session as any)?.user?.id || ''
+                            const email = (session as any)?.user?.email || ''
+                            const params = new URLSearchParams()
+                            if (userId) params.set('resumeUserId', String(userId))
+                            else if (email) params.set('resumeEmail', String(email))
+                            const url = params.toString() ? `/register?${params.toString()}` : '/register'
+                            router.push(url)
+                          } catch {
+                            router.push('/register')
+                          }
+                          setApplyingDeptId(null)
+                          return
+                        }
+                        try {
+                          const userId = (session as any)?.user?.id || ''
+                          const email = (session as any)?.user?.email || ''
+                          const params = new URLSearchParams()
+                          params.set('department', encodeURIComponent(dept.name))
+                          params.set('departmentId', String(dept.id))
+                          if (userId) params.set('resumeUserId', String(userId))
+                          else if (email) params.set('resumeEmail', String(email))
+                          router.push(`/register?${params.toString()}`)
+                        } catch {
+                          router.push(`/register?department=${encodeURIComponent(dept.name)}&departmentId=${dept.id}`)
+                        }
+                      }}
+                    >
+                      {isApplicationExpired(dept.applicationEndDate) 
+                        ? 'หมดเวลารับสมัคร' 
+                        : resumeDepositLoading 
+                          ? 'กำลังตรวจสอบ...' 
+                          : (userHasResume ? 'สมัครงาน' : 'ฝากประวัติก่อน')
+                      }
                     </Button>
+                    
+                    {/* ปุ่มรายละเอียด */}
                     <Button
                       color="secondary"
                       variant="solid"
-                          size="sm"
-                          className="flex-1 bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs sm:text-sm border-0 rounded-xl"
-                                onClick={() => openDetail(dept)}
-                        >
-                          รายละเอียด
+                      size="sm"
+                      className="flex-1 bg-gray-200 text-gray-700 hover:bg-gray-300 text-xs sm:text-sm border-0 rounded-xl"
+                      onClick={() => openDetail(dept)}
+                    >
+                      รายละเอียด
                     </Button>
+                    
+                    {/* ปุ่มประกาศรายชื่อ - แสดงเมื่อหมดเวลารับสมัคร */}
+                    {isApplicationExpired(dept.applicationEndDate) && (
+                      <Button
+                        color="success"
+                        variant="solid"
+                        size="sm"
+                        className="flex-1 bg-green-600 text-white hover:bg-green-700 text-xs sm:text-sm border-0 rounded-xl"
+                        onClick={() => openAnnouncement(dept)}
+                      >
+                        ประกาศรายชื่อ
+                      </Button>
+                    )}
                       </div>
                   </div>
                 </CardBody>
@@ -1134,9 +1295,179 @@ export default function Dashboard() {
       </Modal>
       )}
 
+      {/* Announcement Modal - แสดงรายชื่อผู้ผ่านการสมัคร */}
+      {isAnnouncementOpen && (
+        <Modal 
+          isOpen={isAnnouncementOpen} 
+          onClose={closeAnnouncement} 
+          size="5xl" 
+          scrollBehavior="inside"
+          backdrop="blur"
+          classNames={{
+            backdrop: "bg-black/50 backdrop-blur-sm",
+            base: "backdrop-blur-sm"
+          }}
+        >
+          <ModalContent className="bg-white shadow-2xl">
+            <ModalHeader className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold">ประกาศรายชื่อผู้ผ่านการสมัคร</h3>
+                  <p className="text-sm text-green-100">
+                    {announcementDepartment?.name} - {approvedApplicants.length} คน
+                  </p>
+                </div>
+              </div>
+            </ModalHeader>
+            <ModalBody className="bg-white p-6">
+              {loadingApplicants ? (
+                <div className="flex justify-center items-center py-8">
+                  <Spinner size="lg" color="primary" />
+                  <span className="ml-3 text-gray-600">กำลังโหลดข้อมูล...</span>
+                </div>
+              ) : approvedApplicants.length > 0 ? (
+                <div className="space-y-4">
+                  {/* สถิติ */}
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-semibold text-green-800">สรุปผลการประกาศ</h4>
+                        <p className="text-green-600">จำนวนผู้ผ่านการสมัคร: {approvedApplicants.length} คน</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-green-600">วันที่ประกาศ: {new Date().toLocaleDateString('th-TH')}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ตารางรายชื่อ */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse border border-gray-300">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">ลำดับ</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">ชื่อ-นามสกุล</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">ตำแหน่งที่สมัคร</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">เบอร์โทรศัพท์</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">อีเมล</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">สถานะ</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">วันที่สมัคร</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {approvedApplicants.map((applicant, index) => (
+                          <tr key={applicant.id} className="hover:bg-gray-50">
+                            <td className="border border-gray-300 px-4 py-3 text-sm text-gray-700">{index + 1}</td>
+                            <td className="border border-gray-300 px-4 py-3 text-sm text-gray-700">
+                              {applicant.prefix} {applicant.firstName} {applicant.lastName}
+                            </td>
+                            <td className="border border-gray-300 px-4 py-3 text-sm text-gray-700">
+                              {applicant.expectedPosition || '-'}
+                            </td>
+                            <td className="border border-gray-300 px-4 py-3 text-sm text-gray-700">
+                              {applicant.phone || '-'}
+                            </td>
+                            <td className="border border-gray-300 px-4 py-3 text-sm text-gray-700">
+                              {applicant.email || '-'}
+                            </td>
+                            <td className="border border-gray-300 px-4 py-3 text-sm text-gray-700">
+                              <Chip
+                                color="success"
+                                variant="flat"
+                                size="sm"
+                                className="text-xs"
+                              >
+                                ผ่านการพิจารณา
+                              </Chip>
+                            </td>
+                            <td className="border border-gray-300 px-4 py-3 text-sm text-gray-700">
+                              {applicant.createdAt ? new Date(applicant.createdAt).toLocaleDateString('th-TH') : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* ปุ่มพิมพ์ */}
+                  {/* <div className="flex justify-center gap-4 mt-6">
+                    <Button
+                      color="primary"
+                      variant="solid"
+                      size="lg"
+                      className="bg-blue-600 text-white hover:bg-blue-700"
+                      onClick={() => window.print()}
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                      พิมพ์รายชื่อ
+                    </Button>
+                  </div> */}
+
+                  {/* หมายเหตุ */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-blue-800 mb-2">หมายเหตุ</h4>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li>• รายชื่อผู้ผ่านการสมัครจะได้รับการติดต่อกลับในขั้นตอนต่อไป</li>
+                      <li>• หากมีข้อสงสัย กรุณาติดต่อฝ่ายทรัพยากรบุคคล</li>
+                      <li>• ข้อมูลนี้เป็นข้อมูลล่าสุด ณ วันที่ประกาศ</li>
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 mb-4">
+                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-600 mb-2">ยังไม่มีรายชื่อผู้ผ่านการสมัคร</h3>
+                  <p className="text-gray-500">กรุณาติดต่อฝ่ายทรัพยากรบุคคลเพื่อตรวจสอบข้อมูล</p>
+                </div>
+              )}
+            </ModalBody>
+            <ModalFooter className="bg-gray-50">
+              <Button 
+                color="default" 
+                variant="light" 
+                onPress={closeAnnouncement}
+                className="mr-2"
+              >
+                ปิด
+              </Button>
+              {/* <Button 
+                color="primary" 
+                onPress={() => {
+                  // ฟังก์ชันพิมพ์หรือส่งออกข้อมูล
+                  window.print();
+                }}
+              >
+                พิมพ์รายชื่อ
+              </Button> */}
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
+
       {/* Renew Contract Modal */}
       {isRenewOpen && (
-        <Modal isOpen={isRenewOpen} onClose={closeRenewModal} size="xl" scrollBehavior="inside">
+        <Modal 
+          isOpen={isRenewOpen} 
+          onClose={closeRenewModal} 
+          size="xl" 
+          scrollBehavior="inside"
+          backdrop="blur"
+          classNames={{
+            backdrop: "bg-black/50 backdrop-blur-sm",
+            base: "backdrop-blur-sm"
+          }}
+        >
           <ModalContent className="bg-white shadow-2xl">
             <ModalHeader className="bg-white">
               <div>

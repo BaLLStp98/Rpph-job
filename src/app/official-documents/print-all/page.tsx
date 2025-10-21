@@ -248,11 +248,11 @@ export default function PrintAllDocuments() {
     if (!dateString) return '';
     try {
       const date = new Date(dateString);
+      const thaiYear = date.getFullYear() + 543;
       return new Intl.DateTimeFormat('th-TH-u-ca-gregory', {
-        year: 'numeric',
         month: 'long',
         day: 'numeric'
-      }).format(date);
+      }).format(date) + ` พ.ศ. ${thaiYear}`;
     } catch (error) {
       return dateString;
     }
@@ -273,11 +273,11 @@ export default function PrintAllDocuments() {
     return new Intl.DateTimeFormat('th-TH-u-ca-gregory', { month: 'long' }).format(d);
   };
 
-  const getGregorianYear = (dateString: string) => {
+  const getThaiYear = (dateString: string) => {
     if (!dateString) return '';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '';
-    return String(d.getFullYear());
+    return String(d.getFullYear() + 543);
   };
 
   // ฟังก์ชันสำหรับแยกข้อมูลที่อยู่
@@ -655,7 +655,11 @@ export default function PrintAllDocuments() {
       console.log('🔍 ResumeDeposit fields:', { 
         hasExpectedPosition: !!data.expectedPosition,
         hasSchool: !!data.education?.[0]?.school,
-        hasDescription: !!data.workExperience?.[0]?.description
+        hasDescription: !!data.workExperience?.[0]?.description,
+        emergencyWorkplaceName: data.emergency_workplace_name,
+        emergencyWorkplaceDistrict: data.emergency_workplace_district,
+        emergencyWorkplaceProvince: data.emergency_workplace_province,
+        emergencyWorkplacePhone: data.emergency_workplace_phone
       });
       
       // แปลงข้อมูลจาก ResumeDeposit เป็น ApplicationData
@@ -696,7 +700,12 @@ export default function PrintAllDocuments() {
         emergencyPhone: data.emergencyPhone || data.emergencyContactPhone || '',
         emergencyRelationship: data.emergencyRelationship || data.emergencyContactRelationship || '',
         emergencyAddress: data.emergencyAddress || undefined,
-        emergencyWorkplace: data.emergencyWorkplace || undefined,
+        emergencyWorkplace: data.emergencyWorkplace || {
+          name: data.emergency_workplace_name || '',
+          district: data.emergency_workplace_district || '',
+          province: data.emergency_workplace_province || '',
+          phone: data.emergency_workplace_phone || ''
+        },
         // ใช้ expectedPosition สำหรับ ResumeDeposit
         appliedPosition: data.expectedPosition || data.position || '',
         expectedSalary: data.expectedSalary || data.salary || '',
@@ -1227,7 +1236,7 @@ export default function PrintAllDocuments() {
             </div>
             
             <div class="attachment-footer">
-              <p>หน้า ${index + 1} จาก ${uploadedDocuments.length} | ประเภท: ${getDocumentTypeName(doc.documentType)} | วันที่อัปโหลด: ${new Date(doc.createdAt || doc.updatedAt || Date.now()).toLocaleDateString('th-TH')}</p>
+              <p>หน้า ${index + 1} จาก ${uploadedDocuments.length} | ประเภท: ${getDocumentTypeName(doc.documentType)} | วันที่อัปโหลด: ${formatDateThai(doc.createdAt || doc.updatedAt || new Date().toISOString())}</p>
             </div>
           </div>
         `;
@@ -1776,16 +1785,18 @@ export default function PrintAllDocuments() {
                     </label>
                   </div>
                 </div>
+                {applicationData?.maritalStatus === 'สมรส' && (
                 <div className="flex items-center gap-1 mt-1 text-xm px-2">
                   <span>ชื่อ-สกุล คู่สมรส</span>
                   <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
                     <span className="text-xm font-medium text-gray-800">
-                      {applicationData?.maritalStatus === 'สมรส' && applicationData?.spouseInfo 
+                        {applicationData?.spouseInfo
                         ? `${applicationData.spouseInfo.firstName || ''} ${applicationData.spouseInfo.lastName || ''}`.trim()
                         : ''}
                     </span>
                   </div>
                 </div>
+                )}
               </div>
 
               {/* ๑.๓ เลขที่บัตรประจำตัวประชาชน */}
@@ -1817,7 +1828,7 @@ export default function PrintAllDocuments() {
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{getGregorianYear(applicationData?.idCardIssueDate || '')}</span>
+                      <span className="text-xm font-medium text-gray-800">{getThaiYear(applicationData?.idCardIssueDate || '')}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-1 min-w-0">
@@ -1832,7 +1843,7 @@ export default function PrintAllDocuments() {
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{getGregorianYear(applicationData?.idCardExpiryDate || '')}</span>
+                      <span className="text-xm font-medium text-gray-800">{getThaiYear(applicationData?.idCardExpiryDate || '')}</span>
                       
                     </div>
                   </div>
@@ -1975,7 +1986,7 @@ export default function PrintAllDocuments() {
 
               {/* ๑.๖ บุคคลที่สามารถติดต่อได้ทันที */}
               <div className="mb-1 px-2">
-                <h3 className="text-xm font-semibold text-gray-700 mb-1">๑.๖ บุคคลที่สามารถติดต่อได้ทันที ชื่อ</h3>
+                <h3 className="text-xm font-semibold text-gray-700 mb-1">๑.๖ บุคคลที่สามารถติดต่อได้ทันที</h3>
                 <div className="grid grid-cols-4 gap-2 text-xm px-2">
                   <div className="flex items-center gap-1">
                     <span>ชื่อ</span>
@@ -2079,7 +2090,14 @@ export default function PrintAllDocuments() {
               {/* ๑.๗ ประวัติการศึกษา */}
               <div className="mb-1 px-2">
                 <h3 className="text-xm font-semibold text-gray-700 mb-1">๑.๗ ประวัติการศึกษา</h3>
-                {(applicationData?.education || []).slice(0, 3).map((edu, index) => (
+                {(applicationData?.education || [])
+                  .filter((edu) => {
+                    const level = (edu.level || edu.degree || '').toString().trim();
+                    const major = (edu.major || '').toString().trim();
+                    const school = (edu.institution || edu.school || '').toString().trim();
+                    return level !== '' || major !== '' || school !== '';
+                  })
+                  .map((edu, index) => (
                   <div key={index} className="mb-1 p-1 text-xm px-2">
                     <div className="flex items-center gap-2 w-full">
                       <div className="flex items-center gap-1 flex-1 min-w-0">
@@ -2100,24 +2118,11 @@ export default function PrintAllDocuments() {
                           <span className="text-xm font-medium text-gray-800 whitespace-nowrap">{edu.institution || edu.school || ''}</span>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
-                {/* แสดงช่องว่างสำหรับข้อมูลที่เหลือ */}
-                {Array.from({ length: Math.max(0, 3 - (applicationData?.education || []).length) }).map((_, index) => (
-                  <div key={`empty-${index}`} className="mb-0.5 p-1 text-xm px-2">
-                    <div className="flex items-center gap-2 w-full">
                       <div className="flex items-center gap-1 flex-1 min-w-0">
-                        <span className="whitespace-nowrap">วุฒิการศึกษา</span>
-                        <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900"></div>
+                        <span className="whitespace-nowrap">ปีที่จบ</span>
+                        <div className="flex-1 min-w-[80px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
+                          <span className="text-xm font-medium text-gray-800">{edu.graduationYear ? getThaiYear(edu.graduationYear) : (edu.year ? getThaiYear(edu.year) : '')}</span>
                       </div>
-                      <div className="flex items-center gap-1 flex-1 min-w-0">
-                        <span className="whitespace-nowrap">สาขา/วิชาเอก</span>
-                        <div className="flex-1 min-w-[100px] h-3 border-b-2 border-dotted border-gray-900"></div>
-                      </div>
-                      <div className="flex items-center gap-1 flex-1 min-w-0">
-                        <span className="whitespace-nowrap">จากสถานศึกษา</span>
-                        <div className="flex-1 min-w-[120px] h-3 border-b-2 border-dotted border-gray-900"></div>
                       </div>
                     </div>
                   </div>
@@ -2126,8 +2131,9 @@ export default function PrintAllDocuments() {
 
               {/* ๑.๘ ปัจจุบันทำงานในตำแหน่ง */}
               <div className="mb-1 px-2">
+              <h3 className="text-xm font-semibold text-gray-700 mb-1">๑.๘ ประวัติการทำงาน</h3>
                 <div className="flex items-baseline gap-2">
-                  <h3 className="text-xm font-semibold text-gray-700 whitespace-nowrap">๑.๘</h3>
+                  <h3 className="text-xm font-semibold text-gray-700 whitespace-nowrap"></h3>
                   <div className="flex items-center gap-2 text-xm w-full">
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="whitespace-nowrap">ชื่อสถานที่ทำงาน</span>
@@ -2162,6 +2168,12 @@ export default function PrintAllDocuments() {
                       <span className="text-xm font-medium text-gray-800">{(applicationData?.workExperience || [])[0]?.phone || ''}</span>
                     </div>
                   </div>
+                  <div className="flex items-center gap-1 flex-1 min-w-0">
+                    <span>เงินเดือน</span>
+                    <div className="flex-1 min-w-[80px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
+                      <span className="text-xm font-medium text-gray-800">{(applicationData?.workExperience || [])[0]?.salary || ''}</span>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-1">
                     <span className="whitespace-nowrap">ตั้งแต่วันที่</span>
                     <div className="flex-1 min-w-[48px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
@@ -2173,7 +2185,7 @@ export default function PrintAllDocuments() {
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{getGregorianYear((applicationData?.workExperience || [])[0]?.startDate || '')}</span>
+                      <span className="text-xm font-medium text-gray-800">{getThaiYear((applicationData?.workExperience || [])[0]?.startDate || '')}</span>
                     </div>
                   </div>
                 </div>
@@ -2189,14 +2201,22 @@ export default function PrintAllDocuments() {
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{getGregorianYear((applicationData?.workExperience || [])[0]?.endDate || '')}</span>
+                      <span className="text-xm font-medium text-gray-800">{getThaiYear((applicationData?.workExperience || [])[0]?.endDate || '')}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5 text-xm px-2 w-full">
+                  <div className="flex items-center gap-1 flex-1 min-w-0">
+                    <span className="whitespace-nowrap">เหตุผลที่ออกจากงาน</span>
+                    <div className="flex-1 min-w-[200px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
+                      <span className="text-xm font-medium text-gray-800">{(applicationData?.workExperience || [])[0]?.reason || ''}</span>
                     </div>
                   </div>
                 </div>
               </div>
               
               {/* ๑.๙ เคยรับราชการเป็นข้าราชการ/ลูกจ้าง */}
-              <div className="mb-1 px-2">
+              {/* <div className="mb-1 px-2">
                 <h3 className="text-xm font-semibold text-gray-700 mb-1">๑.๙ เคยรับราชการเป็นข้าราชการ/ลูกจ้าง</h3>
                 <div className="grid grid-cols-3 gap-2 text-xm px-2">
                   <div className="flex items-center gap-1">
@@ -2228,11 +2248,11 @@ export default function PrintAllDocuments() {
                     </div>
                     <span>ปี</span>
                     <div className="flex-1 min-w-[64px] h-3 border-b-2 border-dotted border-gray-900 flex items-center justify-center">
-                      <span className="text-xm font-medium text-gray-800">{getGregorianYear((applicationData?.workExperience || [])[0]?.endDate || '')}</span>
+                      <span className="text-xm font-medium text-gray-800">{getThaiYear((applicationData?.workExperience || [])[0]?.endDate || '')}</span>
                     </div>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               
               
@@ -2245,9 +2265,9 @@ export default function PrintAllDocuments() {
               <span className="text-xm font-bold text-gray-800">- ๒ -</span>
             </div>
             
-            {/* ๑.๑๐ ขอสมัครเป็นบุคคลภายนอกฯตำแหน่ง */}
+            {/* ๑.๙ ขอสมัครเป็นบุคคลภายนอกฯตำแหน่ง */}
               <div className="mb-1 px-2">
-              <h3 className="text-xm font-semibold text-gray-700 mb-1">๑.๑๐ ขอสมัครเป็นบุคคลภายนอกฯตำแหน่ง</h3>
+              <h3 className="text-xm font-semibold text-gray-700 mb-1">๑.๙ ขอสมัครเป็นบุคคลภายนอกฯตำแหน่ง</h3>
               <div className="grid grid-cols-2 gap-2 text-xm px-2">
                   <div className="flex items-center gap-1">
                     <span>ตำแหน่ง</span>
