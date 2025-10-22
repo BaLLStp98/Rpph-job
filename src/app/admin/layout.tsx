@@ -19,7 +19,8 @@ import {
   UserGroupIcon,
   DocumentCheckIcon,
   CogIcon,
-  ClipboardDocumentListIcon
+  ClipboardDocumentListIcon,
+  Bars3Icon
 } from '@heroicons/react/24/outline';
 
 interface AdminLayoutProps {
@@ -66,9 +67,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
-      <div className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${
+      <div className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white/95 backdrop-blur-md border-r border-gray-200 transform transition-transform duration-300 ease-in-out ${
         isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-      } lg:translate-x-0`}>
+      } lg:translate-x-0 lg:bg-white lg:backdrop-blur-none`}>
         {/* Sidebar Header */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
@@ -104,7 +105,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 lg:hidden transition-all duration-300"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -114,17 +115,17 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {/* Top Navigation */}
         <header className="bg-white border-b border-gray-200 px-4 lg:px-6 py-4">
           <div className="flex items-center justify-between">
-            {/* <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="lg:hidden p-2 rounded-md hover:bg-gray-100"
+                className="lg:hidden p-2 rounded-md hover:bg-gray-100 transition-colors"
               >
-                <Bars3Icon className="w-5 h-5" />
+                <Bars3Icon className="w-5 h-5 text-gray-600" />
               </button>
               <h1 className="text-lg lg:text-xl font-semibold text-gray-800">ระบบจัดการ</h1>
-            </div> */}
+            </div>
               
-              <div className="flex items-center gap-2 lg:gap-4">
+            <div className="flex items-center gap-2 lg:gap-4">
                 {/* Notifications */}
                 <Button
                   isIconOnly

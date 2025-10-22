@@ -812,7 +812,6 @@ export default function ApplicationForm() {
       setProfileImage(imagePath);
     }
   };
-
   // บันทึกเฉพาะแท็บปัจจุบัน (partial save)
   const saveCurrentTab = async () => {
     if (isSaving) return;
@@ -1073,6 +1072,7 @@ export default function ApplicationForm() {
         // อัปเดตข้อมูลที่มีอยู่แล้ว
         console.log('🔍 saveCurrentTab - Using PATCH method (updating existing record)');
         console.log('✅ กำลังอัปเดตข้อมูลที่มีอยู่แล้ว...');
+        console.log('📝 Mode: UPDATE - มีข้อมูลในฐานข้อมูลแล้ว');
         const res = await fetch(`/api/resume-deposit/${savedResume.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -1083,7 +1083,48 @@ export default function ApplicationForm() {
           const statusCode = res?.status || 'Unknown';
           const errorMessage = json?.message || `บันทึกข้อมูลไม่สำเร็จ (HTTP ${statusCode})`;
           console.error('❌ PATCH request failed:', errorMessage);
-          throw new Error(errorMessage);
+          // Fallback: ถ้าไม่พบข้อมูล (เช่น 404) ให้สร้างเรคคอร์ดใหม่ด้วย POST
+          if (statusCode === 404 || /ไม่พบ/i.test(String(errorMessage))) {
+            console.log('🔁 PATCH not found → fallback to POST create');
+            const userId = (session?.user as any)?.id || null;
+            const lineIdCandidate = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || null;
+            const createRes = await fetch('/api/resume-deposit', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId,
+                lineId: lineIdCandidate,
+                firstName: formData.firstName,
+                lastName: formData.lastName,
+                phone: formData.phone,
+                email: formData.email,
+                ...partial,
+              })
+            });
+            const createJson = await createRes.json().catch(() => ({}));
+            if (!createRes.ok || createJson?.success === false) {
+              throw new Error(createJson?.message || 'บันทึกข้อมูลไม่สำเร็จ');
+            }
+            setSavedResume(createJson.data || createJson);
+            applyResumeToFormInputs(createJson.data || createJson);
+            // Upload profile image along with personal tab save
+            if (tab === 'personal' && formData.profileImage instanceof File) {
+              try {
+                const rid = (createJson?.data?.id || createJson?.id);
+                if (rid) {
+                  const imgFd = new FormData();
+                  imgFd.append('profileImage', formData.profileImage);
+                  imgFd.append('resumeId', String(rid));
+                  const imgRes = await fetch('/api/profile-image/upload', { method: 'POST', body: imgFd });
+                  if (!imgRes.ok) console.warn('⚠️ Profile image upload failed (fallback POST path):', imgRes.status);
+                }
+              } catch (e) {
+                console.error('⚠️ Profile image upload error (fallback POST path):', e);
+              }
+            }
+          } else {
+            throw new Error(errorMessage);
+          }
         } else {
           setSavedResume(json.data || json);
           applyResumeToFormInputs(json.data || json);
@@ -1095,11 +1136,27 @@ export default function ApplicationForm() {
             setProfileImage(imagePath);
           }
           console.log('✅ อัปเดตข้อมูลสำเร็จ');
+          // Upload profile image along with personal tab save
+          if (tab === 'personal' && formData.profileImage instanceof File) {
+            try {
+              const rid = (json?.data?.id || json?.id || savedResume?.id);
+              if (rid) {
+                const imgFd = new FormData();
+                imgFd.append('profileImage', formData.profileImage);
+                imgFd.append('resumeId', String(rid));
+                const imgRes = await fetch('/api/profile-image/upload', { method: 'POST', body: imgFd });
+                if (!imgRes.ok) console.warn('⚠️ Profile image upload failed (PATCH path):', imgRes.status);
+              }
+            } catch (e) {
+              console.error('⚠️ Profile image upload error (PATCH path):', e);
+            }
+          }
         }
       } else {
         // สร้างข้อมูลใหม่
         console.log('🔍 saveCurrentTab - Using POST method (creating new record)');
         console.log('✅ กำลังสร้างข้อมูลใหม่...');
+        console.log('📝 Mode: CREATE - ไม่มีข้อมูลในฐานข้อมูล');
         const userId = (session?.user as any)?.id || null;
         const lineIdCandidate = (session?.user as any)?.lineId || (session?.user as any)?.sub || (session as any)?.profile?.userId || null;
         const res = await fetch('/api/resume-deposit', {
@@ -1129,6 +1186,21 @@ export default function ApplicationForm() {
           setProfileImage(imagePath);
         }
         console.log('✅ สร้างข้อมูลใหม่สำเร็จ');
+        // Upload profile image along with personal tab save
+        if (tab === 'personal' && formData.profileImage instanceof File) {
+          try {
+            const rid = (json?.data?.id || json?.id);
+            if (rid) {
+              const imgFd = new FormData();
+              imgFd.append('profileImage', formData.profileImage);
+              imgFd.append('resumeId', String(rid));
+              const imgRes = await fetch('/api/profile-image/upload', { method: 'POST', body: imgFd });
+              if (!imgRes.ok) console.warn('⚠️ Profile image upload failed (POST path):', imgRes.status);
+            }
+          } catch (e) {
+            console.error('⚠️ Profile image upload error (POST path):', e);
+          }
+        }
       }
 
       // ไปแท็บถัดไปอัตโนมัติหลังบันทึกสำเร็จ หรือ redirect ไปหน้า dashboard
@@ -1160,7 +1232,6 @@ export default function ApplicationForm() {
   const idCardIssueDateRef = useRef<HTMLInputElement | null>(null);
   const idCardExpiryDateRef = useRef<HTMLInputElement | null>(null);
   const availableDateRef = useRef<HTMLInputElement | null>(null);
-
   // ฟังก์ชันสำหรับกรอกข้อมูลตัวอย่าง (Random)
   const fillRandomData = () => {
     const prefixes = ['นาย', 'นาง', 'นางสาว'];
@@ -1463,9 +1534,7 @@ export default function ApplicationForm() {
       console.log('❌ No departmentId found, skipping department data fetch');
     }
   }, [searchParams]);
-
   // ไม่ต้องตั้งค่า flatpickr แล้ว เนื่องจากใช้ ThaiDatePicker component แทน
-
   // ฟังก์ชันดึงข้อมูลจาก ResumeDeposit
   const fetchProfileData = async () => {
     if (status === 'loading') return;
@@ -2287,7 +2356,6 @@ export default function ApplicationForm() {
   const hasError = (fieldName: string) => {
     return !!errors[fieldName];
   };
-
   const scrollToError = (errorKey: string) => {
     console.log('🔍 scrollToError - Looking for error key:', errorKey);
     
@@ -2777,7 +2845,6 @@ export default function ApplicationForm() {
     setShowPreviewModal(false);
     setPreviewFile(null);
   };
-
   // ฟังก์ชันลบไฟล์เอกสารแนบ
   const handleDeleteDocument = async (documentId: string, documentType: string) => {
     if (!savedResume?.id) {
@@ -4039,7 +4106,6 @@ export default function ApplicationForm() {
           console.error('❌ Error uploading profile image:', err);
         }
       }
-
       // 3. อัปโหลดเอกสารแนบ (ถ้ามี)
       if (formData.documents) {
         const docTypes = [
@@ -4822,6 +4888,30 @@ export default function ApplicationForm() {
                     <div className="absolute -top-2 -right-2 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
                       R
                     </div>
+                    {/* ปุ่ม Preview รูปภาพ */}
+                    <button
+                      onClick={() => {
+                        if (profileImage) {
+                          // สร้าง File object จาก URL สำหรับ preview
+                          fetch(profileImage)
+                            .then(response => response.blob())
+                            .then(blob => {
+                              const file = new File([blob], 'profile-image.jpg', { type: blob.type });
+                              handlePreviewFile(file, 'รูปภาพโปรไฟล์');
+                            })
+                            .catch(error => {
+                              console.error('Error creating file for preview:', error);
+                            });
+                        }
+                      }}
+                      className="absolute -bottom-2 -right-2 w-10 h-10 bg-gray-400 hover:bg-gray-500 text-white rounded-full flex items-center justify-center shadow-lg transition-colors duration-200 opacity-70 hover:opacity-100"
+                      title="ดูรูปภาพขนาดใหญ่"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
                   </div>
                   <p className="text-sm text-blue-600 mt-3 font-medium">
                     {savedResume?.profileImageUrl ? 'รูปภาพที่บันทึกไว้แล้ว' : profileData?.profileImageUrl ? 'รูปภาพจากโปรไฟล์' : 'รูปภาพใหม่'}
@@ -4849,9 +4939,18 @@ export default function ApplicationForm() {
                     <button
                       type="button"
                       onClick={() => {
-                        setProfileImage(null)
-                        setFormData(prev => ({ ...prev, profileImage: undefined }))
-                        console.log('✅ ลบรูปภาพเรียบร้อยแล้ว')
+                        console.log('🗑️ กำลังลบรูปภาพ...');
+                        setProfileImage(null);
+                        setFormData(prev => ({ ...prev, profileImage: undefined }));
+                        // ลบรูปภาพจาก savedResume ด้วย
+                        if (savedResume) {
+                          setSavedResume(prev => prev ? { ...prev, profileImageUrl: null } : null);
+                        }
+                        // ลบรูปภาพจาก profileData ด้วย
+                        if (profileData) {
+                          setProfileData(prev => prev ? { ...prev, profileImageUrl: null } : null);
+                        }
+                        console.log('✅ ลบรูปภาพเรียบร้อยแล้ว');
                       }}
                       className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 shadow-md transition-colors duration-200 flex items-center gap-2 hover:shadow-lg"
                     >
@@ -5009,7 +5108,7 @@ export default function ApplicationForm() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="text-sm text-green-700 font-semibold mb-1">
-                    {resumeId ? 'โหลดข้อมูลฝากประวัติเรียบร้อยแล้ว' : 'บันทึกข้อมูลเรียบร้อยแล้ว'}
+                    {savedResume?.id ? 'อัปเดตข้อมูลเรียบร้อยแล้ว' : 'บันทึกข้อมูลใหม่เรียบร้อยแล้ว'}
                   </div>
                   <div className="text-sm text-green-800">
                     <span className="font-medium">ชื่อ-นามสกุล:</span> {savedResume.firstName} {savedResume.lastName}
@@ -5036,7 +5135,6 @@ export default function ApplicationForm() {
           </CardBody>
         </Card>
         )} */}
-
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* ข้อมูลส่วนตัว */}
           {activeTab === 'personal' && (
@@ -5644,7 +5742,7 @@ export default function ApplicationForm() {
                     />
                       {hasError('registeredAddressProvince') && (
                         <p className="text-red-500 text-xs mt-1">{getErrorMessage('registeredAddressProvince')}</p>
-                    )}
+                      )}
                 </div>
                   <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">รหัสไปรษณีย์<span className="text-red-500">*</span></label>
@@ -5941,9 +6039,10 @@ export default function ApplicationForm() {
                         {hasError('emergencyContactFirstName') && (
                           <div className="text-xs text-red-600">
                             {getErrorMessage('emergencyContactFirstName')}
-                  </div>
+              </div>
                         )}
-                </div>
+                      </div>
+
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700">นามสกุล ผู้ติดต่อฉุกเฉิน<span className="text-red-500">*</span></label>
                         <input
@@ -5956,7 +6055,7 @@ export default function ApplicationForm() {
                         {hasError('emergencyContactLastName') && (
                           <div className="text-xs text-red-600">
                             {getErrorMessage('emergencyContactLastName')}
-              </div>
+                          </div>
                         )}
                       </div>
                       <div className="space-y-2">
@@ -6374,7 +6473,6 @@ export default function ApplicationForm() {
             </CardBody>
           </Card>
           )}
-
           {/* ข้อมูลแนบเอกสาร */}
           {activeTab === 'documents' && (
           <Card className="shadow-xl border-0">
@@ -6845,7 +6943,6 @@ export default function ApplicationForm() {
                       </div>
                       )}
                     </div>
-
                   {/* ใบรับรองทหาร */}
                   <div className={`border-2 border-dashed rounded-lg p-4 text-center ${formData.gender === 'หญิง' ? 'border-gray-200 bg-gray-50' : 'border-gray-300'}`}>
                     <div className="mb-2">
@@ -6882,7 +6979,7 @@ export default function ApplicationForm() {
                       >
                         {formData.documents?.militaryCertificate ? 'เปลี่ยนไฟล์' : 'เลือกไฟล์'}
                       </Button>
-                      {formData.documents?.militaryCertificate && formData.gender !== 'หญิง' && (
+                      {formData.documents?.militaryCertificate && (
                         <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -6911,16 +7008,15 @@ export default function ApplicationForm() {
                           color="secondary"
                           variant="bordered"
                           size="sm"
-                            className="flex-1 bg-green-50 hover:bg-green-100 text-green-700 border-green-300 rounded-lg shadow-sm transition-all duration-200"
+                            className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 rounded-lg shadow-sm transition-all duration-200"
                             onClick={() => {
                               if (formData.documents!.militaryCertificate instanceof File) {
                                 handlePreviewFile(formData.documents!.militaryCertificate, 'ใบรับรองทหาร');
-                              } else {
-                                console.log('ℹ️ ไฟล์นี้ถูกอัปโหลดแล้วในระบบ');
                               }
                             }}
+                            disabled={isUploading}
                         >
-                          ดูตัวอย่าง
+                          {isUploading ? 'กำลังอัปโหลด...' : 'ดูตัวอย่าง'}
                         </Button>
                           <Button
                             color="danger"
@@ -7226,7 +7322,6 @@ export default function ApplicationForm() {
             </CardBody>
           </Card>
           )}
-
           {/* ประวัติการศึกษา */}
           {activeTab === 'education' && (
           <Card className="shadow-xl border-0">
@@ -7790,7 +7885,7 @@ export default function ApplicationForm() {
                 onClick={() => saveCurrentTab()}
                 disabled={isSaving}
               >
-                {isSaving ? 'กำลังบันทึกข้อมูล...' : (activeTab === 'documents' ? 'บันทึกแท็บนี้' : 'บันทึกแท็บนี้ และไปแท็บถัดไป')}
+                {isSaving ? 'กำลังบันทึกข้อมูล...' : (savedResume?.id ? 'อัปเดตข้อมูล' : 'บันทึกข้อมูล')}
                 
             </Button>
           </div>

@@ -508,6 +508,15 @@ export async function PATCH(
     } else {
       console.log('🔍 PATCH API - No status field in request data');
     }
+    
+    // อัปเดต suggestion
+    if (data.suggestion !== undefined) {
+      console.log('🔍 PATCH API - Processing suggestion field:', { 
+        suggestion: data.suggestion, 
+        type: typeof data.suggestion 
+      });
+      updateData.suggestion = data.suggestion;
+    }
 
     // Debug logs เพื่อตรวจสอบข้อมูลที่ได้รับ
     console.log('🔍 PATCH API - Received education data:', data.education);

@@ -119,7 +119,11 @@ export default function ContactPage() {
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
                   placeholder="กรอกชื่อของคุณ"
-                  className="w-full"
+                  className="w-lg"
+                  classNames={{
+                    input: "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                    inputWrapper: "border-2 border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 hover:border-blue-400"
+                  }}
                   required
                 />
               </div>
@@ -134,7 +138,11 @@ export default function ContactPage() {
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   placeholder="กรอกอีเมลของคุณ"
-                  className="w-full"
+                  className="w-lg"
+                  classNames={{
+                    input: "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                    inputWrapper: "border-2 border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 hover:border-blue-400"
+                  }}
                   required
                 />
               </div>
@@ -149,7 +157,11 @@ export default function ContactPage() {
                   value={formData.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
                   placeholder="กรอกเบอร์โทรศัพท์ของคุณ"
-                  className="w-full"
+                  className="w-lg"
+                  classNames={{
+                    input: "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                    inputWrapper: "border-2 border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 hover:border-blue-400"
+                  }}
                   required
                 />
               </div>
@@ -163,7 +175,12 @@ export default function ContactPage() {
                   placeholder="เลือกประเภทการติดต่อ"
                   value={formData.contactType}
                   onChange={(value) => handleInputChange('contactType', value)}
-                  className="w-full"
+                  className="w-lg"
+                  classNames={{
+                    trigger: "border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-blue-400",
+                    popover: "bg-white border border-gray-200 shadow-lg rounded-lg",
+                    listbox: "bg-white rounded-lg"
+                  }}
                   required
                 >
                   {contactTypes.map((type) => (
@@ -183,8 +200,12 @@ export default function ContactPage() {
                   value={formData.message}
                   onChange={(e) => handleInputChange('message', e.target.value)}
                   placeholder="เขียนข้อความ"
-                  className="w-full"
+                  className="w-lg"
                   rows={6}
+                  classNames={{
+                    input: "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                    inputWrapper: "border-2 border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 hover:border-blue-400"
+                  }}
                   required
                 />
               </div>

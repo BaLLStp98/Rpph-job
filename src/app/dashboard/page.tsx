@@ -612,7 +612,7 @@ export default function Dashboard() {
         {/* Mobile Overlay */}
         {isSidebarOpen && (
           <div 
-            className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
+            className="lg:hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-40 transition-all duration-300"
             onClick={() => setIsSidebarOpen(false)}
           />
         )}
@@ -621,9 +621,10 @@ export default function Dashboard() {
         {(
         <aside className={`
           fixed lg:static inset-y-0 left-0 z-50 lg:z-auto
-          w-64 bg-white shadow-lg border-r border-gray-200 p-3 sm:p-4 md:p-6
+          w-64 bg-white/95 backdrop-blur-md shadow-lg border-r border-gray-200 p-3 sm:p-4 md:p-6
           transform transition-transform duration-300 ease-in-out
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          lg:bg-white lg:backdrop-blur-none
         `}>
           <div className="space-y-3 sm:space-y-4">
             {/* Mobile Close Button */}

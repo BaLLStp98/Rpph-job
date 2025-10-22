@@ -417,6 +417,7 @@ model ResumeDeposit {
   additionalInfo                               String?                                  @map("additional_info") @db.Text
   profileImageUrl                              String?                                  @map("profile_image_url") @db.VarChar(255)
   status                                       ResumeDepositStatus                      @default(PENDING)
+  suggestion                                   String?                                  @db.Text
   notes                                        String?                                  @db.Text
   reviewedBy                                   String?                                  @map("reviewed_by") @db.VarChar(100)
   reviewedAt                                   DateTime?                                @map("reviewed_at")

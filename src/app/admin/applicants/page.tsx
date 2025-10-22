@@ -64,6 +64,7 @@ interface ApplicationData {
   phone: string;
   email: string;
   status: string;
+  suggestion?: string;
   createdAt: string;
   updatedAt: string;
   profileImage?: string;
@@ -245,6 +246,10 @@ export default function ApplicantsPage() {
   const [bulkStatus, setBulkStatus] = useState<string>('');
   const [showBulkModal, setShowBulkModal] = useState(false);
   
+  // ข้อเสนอแนะเพิ่มเติม
+  const [suggestion, setSuggestion] = useState<string>('');
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false);
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -319,7 +324,7 @@ export default function ApplicantsPage() {
     setCurrentPage(1);
   }, [hospitalDepartments, applications, searchTerm, selectedDepartmentId]);
 
-  // ฟังก์ชันแปลงวันที่จาก ISO format เป็น d/m/Y
+  // ฟังก์ชันแปลงวันที่จาก ISO format เป็น d/m/Y (ปีไทย)
   const formatDateForDisplay = (dateString: string) => {
     if (!dateString) return '-';
     try {
@@ -327,7 +332,8 @@ export default function ApplicantsPage() {
       const day = date.getDate().toString().padStart(2, '0');
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
       const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
+      const thaiYear = year + 543; // แปลงเป็นปีไทย
+      return `${day}/${month}/${thaiYear}`;
     } catch {
       return dateString;
     }
@@ -541,15 +547,19 @@ export default function ApplicantsPage() {
           setApplications(processedData);
           
           // คำนวณสถิติ
+          console.log('📊 Processing data for stats:', processedData.length, 'applications');
+          
           const approvedCount = processedData.filter((app: ApplicationData) => 
-            app.status === 'approved' || app.status === 'ผ่านการพิจารณา'
+            app.status === 'approved' || app.status === 'ผ่านการพิจารณา' || app.status === 'HIRED'
+          ).length;
+          
+          const pendingCount = processedData.filter((app: ApplicationData) => 
+            app.status === 'pending' || app.status === 'รอพิจารณา' || app.status === 'PENDING'
           ).length;
           
           const newStats = {
             total: processedData.length,
-            pending: processedData.filter((app: ApplicationData) => 
-              app.status === 'pending' || app.status === 'รอพิจารณา'
-            ).length,
+            pending: pendingCount,
             approved: approvedCount
           };
           
@@ -558,10 +568,12 @@ export default function ApplicantsPage() {
             pending: newStats.pending,
             approved: newStats.approved,
             approvedCount: approvedCount,
+            pendingCount: pendingCount,
             allStatuses: processedData.map(app => ({ id: app.id, status: app.status }))
           });
           
           setStats(newStats);
+          console.log('📊 Stats updated:', newStats);
           
         } else {
           console.error('❌ ไม่พบข้อมูลใน response:', responseData);
@@ -621,8 +633,16 @@ export default function ApplicantsPage() {
   );
 
   const handleViewDetails = (application: ApplicationData) => {
+    console.log('🔍 handleViewDetails - Setting selectedApplication:', {
+      id: application.id,
+      status: application.status,
+      name: `${application.firstName} ${application.lastName}`
+    });
     setSelectedApplication(application);
-    setDetailStatus(application.status);
+    // ตั้งค่าสถานะให้ตรงกับข้อมูลปัจจุบัน
+    const currentStatus = application.status === 'approved' || application.status === 'ผ่านการพิจารณา' ? 'approved' : 'pending';
+    setDetailStatus(currentStatus);
+    console.log('🔍 handleViewDetails - Set detailStatus to:', currentStatus);
     onDetailModalOpen();
   };
 
@@ -673,7 +693,8 @@ export default function ApplicantsPage() {
           console.log('🔍 Updated applications state:', {
             oldStatus: selectedApplication.status,
             newStatus: newStatus,
-            updatedApp: updated.find(app => app.id === selectedApplication.id)
+            updatedApp: updated.find(app => app.id === selectedApplication.id),
+            totalApps: updated.length
           });
           return updated;
         });
@@ -682,15 +703,56 @@ export default function ApplicantsPage() {
         setDetailStatus(newStatus);
         setSelectedApplication(prev => {
           const updated = prev ? { ...prev, status: newStatus } : null;
-          console.log('🔍 Updated selectedApplication:', updated);
+          console.log('🔍 Updated selectedApplication:', {
+            prev: prev,
+            updated: updated,
+            newStatus: newStatus,
+            prevStatus: prev?.status
+          });
           return updated;
         });
         
-        // รีเฟรชข้อมูล (เรียกหลังจากอัปเดต state แล้ว)
-        setTimeout(() => {
-          console.log('🔄 Calling fetchApplications after status change...');
-          fetchApplications();
-        }, 100);
+        // ปิด modal หลังจากเปลี่ยนสถานะสำเร็จ
+        onDetailModalOpenChange();
+        
+        // อัปเดต stats หลังจากเปลี่ยนสถานะ
+        setStats(prevStats => {
+          const oldStatus = selectedApplication.status;
+          const isNewApproved = newStatus === 'approved' || newStatus === 'ผ่านการพิจารณา' || newStatus === 'HIRED';
+          const isOldApproved = oldStatus === 'approved' || oldStatus === 'ผ่านการพิจารณา' || oldStatus === 'HIRED';
+          const isNewPending = newStatus === 'pending' || newStatus === 'รอพิจารณา' || newStatus === 'PENDING';
+          const isOldPending = oldStatus === 'pending' || oldStatus === 'รอพิจารณา' || oldStatus === 'PENDING';
+          
+          const newStats = {
+            ...prevStats,
+            approved: isNewApproved && !isOldApproved 
+              ? prevStats.approved + 1 
+              : !isNewApproved && isOldApproved
+              ? prevStats.approved - 1
+              : prevStats.approved,
+            pending: isNewPending && !isOldPending
+              ? prevStats.pending + 1
+              : !isNewPending && isOldPending
+              ? prevStats.pending - 1
+              : prevStats.pending
+          };
+          
+          console.log('📊 Stats updated after status change:', {
+            prevStats,
+            newStats,
+            oldStatus,
+            newStatus,
+            isNewApproved,
+            isOldApproved,
+            isNewPending,
+            isOldPending
+          });
+          return newStats;
+        });
+        
+        // รีเฟรชข้อมูลเพื่อให้แน่ใจว่าข้อมูลเป็นปัจจุบัน
+        console.log('✅ Status updated successfully, refreshing data...');
+        await fetchApplications();
         
         // ส่งสัญญาณให้ dashboard รีเฟรชข้อมูลสถิติ
         localStorage.setItem('statusChanged', 'true');
@@ -786,6 +848,62 @@ export default function ApplicantsPage() {
     setPreviewFile(null);
   };
 
+  // บันทึกข้อเสนอแนะเพิ่มเติม
+  const handleSaveSuggestion = async () => {
+    if (!selectedApplication || !suggestion.trim()) {
+      alert('กรุณาใส่ข้อเสนอแนะ');
+      return;
+    }
+
+    try {
+      console.log('💾 บันทึกข้อเสนอแนะ:', {
+        applicationId: selectedApplication.id,
+        suggestion: suggestion.trim()
+      });
+
+      const response = await fetch(`/api/resume-deposit/${selectedApplication.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          suggestion: suggestion.trim() 
+        }),
+        cache: 'no-store',
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ บันทึกข้อเสนอแนะสำเร็จ:', result);
+        
+        // อัปเดตข้อมูลใน state
+        setApplications(prev => 
+          prev.map(app => 
+            app.id === selectedApplication.id 
+              ? { ...app, suggestion: suggestion.trim() }
+              : app
+          )
+        );
+        
+        // อัปเดต selectedApplication
+        setSelectedApplication(prev => 
+          prev ? { ...prev, suggestion: suggestion.trim() } : null
+        );
+        
+        alert('บันทึกข้อเสนอแนะสำเร็จ');
+        setShowSuggestionModal(false);
+        setSuggestion('');
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Error saving suggestion:', errorData);
+        alert(`เกิดข้อผิดพลาด: ${errorData.message || 'ไม่สามารถบันทึกข้อเสนอแนะได้'}`);
+      }
+    } catch (error) {
+      console.error('❌ Network Error:', error);
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -799,7 +917,7 @@ export default function ApplicantsPage() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
-          <Button onClick={fetchApplications}>ลองใหม่</Button>
+          <Button onClick={() => fetchApplications()}>ลองใหม่</Button>
         </div>
       </div>
     );
@@ -820,7 +938,12 @@ export default function ApplicantsPage() {
               <UsersIcon className="w-8 h-8 text-blue-500" />
               <div className="ml-3">
                 <p className="text-sm text-blue-600 font-medium">ทั้งหมด</p>
-                <p className="text-2xl font-bold text-blue-800">{stats.total}</p>
+                <p className="text-2xl font-bold text-blue-800">
+                  {(() => {
+                    console.log('📊 Stats card - total count:', stats.total);
+                    return stats.total;
+                  })()}
+                </p>
               </div>
             </div>
           </CardBody>
@@ -832,7 +955,12 @@ export default function ApplicantsPage() {
               <ClockIcon className="w-8 h-8 text-orange-500" />
               <div className="ml-3">
                 <p className="text-sm text-orange-600 font-medium">รอพิจารณา</p>
-                <p className="text-2xl font-bold text-orange-800">{stats.pending}</p>
+                <p className="text-2xl font-bold text-orange-800">
+                  {(() => {
+                    console.log('📊 Stats card - pending count:', stats.pending);
+                    return stats.pending;
+                  })()}
+                </p>
               </div>
             </div>
           </CardBody>
@@ -847,6 +975,8 @@ export default function ApplicantsPage() {
                 <p className="text-2xl font-bold text-green-800">
                   {(() => {
                     console.log('📊 Stats card - approved count:', stats.approved);
+                    console.log('📊 Stats card - full stats object:', stats);
+                    console.log('📊 Stats card - applications length:', applications.length);
                     return stats.approved;
                   })()}
                 </p>
@@ -866,25 +996,24 @@ export default function ApplicantsPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               startContent={<MagnifyingGlassIcon className="w-4 h-4 text-gray-400" />}
-              className="max-w-sm"
+              className="max-w-sm bg-white rounded-lg shadow-sm"
             />
   
             {/* กรองฝ่าย */}
-            <Select
-              placeholder="เลือกฝ่าย"
-              value={selectedDepartmentId || ''}
+            <select
+              value={selectedDepartmentId}
               onChange={(e) => setSelectedDepartmentId(e.target.value)}
-              className="max-w-sm"
+              className="max-w-sm w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
             >
-              <SelectItem key="all">
-                ทั้งหมด
-              </SelectItem>
+              <option value="">ทั้งหมด</option>
               {hospitalDepartments.map((dept) => (
-                <SelectItem key={dept.id}>
+                <option
+                className="bg-white hover:bg-gray-100 rounded-lg"
+                key={dept.id} value={dept.id}>
                   {dept.name}
-                </SelectItem>
+                </option>
               ))}
-            </Select>
+            </select>
             
             {/* ปุ่มรีเซ็ต */}
             <Button
@@ -895,9 +1024,9 @@ export default function ApplicantsPage() {
                 setSelectedDepartmentId('');
                 setCurrentPage(1);
               }}
-              className="max-w-sm"
+              className="max-w-24 bg-white text-gray-400 rounded-lg shadow-sm"
             >
-              รีเซ็ตตัวกรอง
+              ล้างตัวกรอง
             </Button>
             
             {/* ปุ่มเปลี่ยนสถานะหลายคน */}
@@ -918,18 +1047,18 @@ export default function ApplicantsPage() {
 
       {/* ตารางข้อมูล */}
       <Card className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <CardHeader className="bg-gray-50 rounded-t-lg border-b border-gray-200">
+        {/* <CardHeader className="bg-gray-50 rounded-t-lg border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-800">ฝ่ายที่เปิดรับสมัคร</h2>
-        </CardHeader>
+        </CardHeader> */}
         <CardBody className="p-0">
           <Table aria-label="Departments table" className="bg-white">
             <TableHeader className="bg-gray-100">
-              <TableColumn className="bg-gray-100 text-gray-700 font-semibold">ลำดับ</TableColumn>
+              <TableColumn className="bg-gray-100 text-gray-700 font-semibold rounded-l-lg">ลำดับ</TableColumn>
               <TableColumn className="bg-gray-100 text-gray-700 font-semibold">ฝ่าย</TableColumn>
               <TableColumn className="bg-gray-100 text-gray-700 font-semibold">ตำแหน่งที่เปิดรับ</TableColumn>
               <TableColumn className="bg-gray-100 text-gray-700 font-semibold">จำนวนที่เปิดรับ</TableColumn>
               <TableColumn className="bg-gray-100 text-gray-700 font-semibold">จำนวนผู้สมัคร</TableColumn>
-              <TableColumn className="bg-gray-100 text-gray-700 font-semibold">การดำเนินการ</TableColumn>
+              <TableColumn className="bg-gray-100 text-gray-700 font-semibold rounded-r-lg">การดำเนินการ</TableColumn>
             </TableHeader>
             <TableBody emptyContent="ไม่พบรายการ">
               {currentPageData.map((dept) => (
@@ -1083,40 +1212,30 @@ export default function ApplicantsPage() {
         <ModalContent>
           {(onClose) => (
             <>
-              <ModalHeader>
-                <div className="flex items-center gap-3">
-                  {selectedApplication?.profileImage ? (
-                    <img
-                      src={selectedApplication.profileImage}
-                      alt="รูปภาพโปรไฟล์"
-                      className="w-12 h-12 rounded-full object-cover border-2 border-gray-200 shadow-sm"
-                    />
-                  ) : (
-                    <Avatar
-                      name={`${selectedApplication?.firstName} ${selectedApplication?.lastName}`}
-                      size="md"
-                    />
-                  )}
-                  <div>
-                    <h3 className="text-lg font-semibold">
-                      {selectedApplication?.prefix} {selectedApplication?.firstName} {selectedApplication?.lastName}
-                    </h3>
-                    <p className="text-sm text-gray-500">{selectedApplication?.email}</p>
-                  </div>
-                </div>
-              </ModalHeader>
+              
               <ModalBody>
                 {selectedApplication && (
                   <div className="space-y-8">
                     {/* ข้อมูลส่วนตัว */}
-                    <Card className="shadow-xl border-0">
-                      <CardHeader className="bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600 text-white relative overflow-hidden">
+                    <Card className="shadow-xl border-0 rounded-lg">
+                      <CardHeader className="bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600 text-white relative overflow-hidden rounded-t-lg">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-indigo-400/20"></div>
-                        <div className="relative flex items-center gap-3">
-                          <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                            <UserIcon className="w-6 h-6" />
+                        <div className="relative flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                              <UserIcon className="w-6 h-6" />
+                            </div>
+                            <h2 className="text-xl font-semibold align-middle">ข้อมูลส่วนตัว</h2>
                           </div>
-                          <h2 className="text-xl font-semibold">ข้อมูลส่วนตัว</h2>
+                          {selectedApplication.status === 'HIRED' && (
+                            <Chip
+                              color="success"
+                              variant="flat"
+                              className="bg-green-100 text-green-800 border-green-300 "
+                            >
+                              ผ่านการพิจารณา
+                            </Chip>
+                          )}
                         </div>
                       </CardHeader>
                       <CardBody className="p-8">
@@ -1134,24 +1253,30 @@ export default function ApplicantsPage() {
                             
                             <div className="flex justify-center mb-6">
                               <div className="relative">
-                                {selectedApplication.profileImage ? (
-                                  <img
-                                    src={selectedApplication.profileImage.startsWith('http') ?
+                                <img
+                                  src={selectedApplication.profileImage ? 
+                                    (selectedApplication.profileImage.startsWith('http') ?
                                       selectedApplication.profileImage :
-                                      `/api/image?file=${encodeURIComponent(selectedApplication.profileImage)}`}
-                                    alt="รูปโปรไฟล์"
-                                    className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 shadow-lg"
-                                    onError={(e) => {
-                                      console.log('❌ Profile image load error:', selectedApplication.profileImage);
+                                      `/api/image?file=${encodeURIComponent(selectedApplication.profileImage)}`) :
+                                    `/api/image?file=profile_${selectedApplication.id}.jpg`
+                                  }
+                                  alt="รูปโปรไฟล์"
+                                  className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 shadow-lg"
+                                  onError={(e) => {
+                                    console.log('❌ Profile image load error, trying PNG:', selectedApplication.id);
+                                    e.currentTarget.src = `/api/image?file=profile_${selectedApplication.id}.png`;
+                                    e.currentTarget.onerror = () => {
+                                      console.log('❌ No profile image found for ID:', selectedApplication.id);
                                       e.currentTarget.style.display = 'none';
-                                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                    }}
-                                    onLoad={() => {
-                                      console.log('✅ Profile image loaded:', selectedApplication.profileImage);
-                                    }}
-                                  />
-                                ) : null}
-                                <div className={`w-32 h-32 rounded-full bg-gray-200 border-4 border-gray-300 shadow-lg flex items-center justify-center ${selectedApplication.profileImage ? 'hidden' : ''}`}>
+                                      const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                      if (fallback) fallback.classList.remove('hidden');
+                                    };
+                                  }}
+                                  onLoad={() => {
+                                    console.log('✅ Profile image loaded:', selectedApplication.id);
+                                  }}
+                                />
+                                <div className="w-32 h-32 rounded-full bg-gray-200 border-4 border-gray-300 shadow-lg flex items-center justify-center hidden">
                                   <UserIcon className="w-16 h-16 text-gray-400" />
                                 </div>
                               </div>
@@ -1198,7 +1323,14 @@ export default function ApplicantsPage() {
                               <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">เพศ</label>
                                 <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
-                                  {selectedApplication.gender || '-'}
+                                  {(() => {
+                                    const gender = selectedApplication.gender;
+                                    if (gender === 'MALE') return 'ชาย';
+                                    if (gender === 'FEMALE') return 'หญิง';
+                                    if (gender === 'ชาย') return 'ชาย';
+                                    if (gender === 'หญิง') return 'หญิง';
+                                    return gender || '-';
+                                  })()}
                                 </div>
                               </div>
                             </div>
@@ -1214,10 +1346,22 @@ export default function ApplicantsPage() {
                               <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">สถานภาพ</label>
                                 <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
-                                  {selectedApplication.maritalStatus || '-'}
+                                  {(() => {
+                                    const status = selectedApplication.maritalStatus;
+                                    if (status === 'SINGLE') return 'โสด';
+                                    if (status === 'MARRIED') return 'สมรส';
+                                    if (status === 'DIVORCED') return 'หย่า';
+                                    if (status === 'WIDOWED') return 'หม้าย';
+                                    if (status === 'UNKNOWN') return 'ไม่ระบุ';
+                                    if (status === 'โสด') return 'โสด';
+                                    if (status === 'สมรส') return 'สมรส';
+                                    if (status === 'หย่า') return 'หย่า';
+                                    if (status === 'หม้าย') return 'หม้าย';
+                                    return status || '-';
+                                  })()}
                                 </div>
                               </div>
-                              {selectedApplication.maritalStatus === 'MARRIED' && (
+                              {(selectedApplication.maritalStatus === 'MARRIED' || selectedApplication.maritalStatus === 'สมรส') && (
                                 <div className="space-y-2">
                                   <label className="text-sm font-medium text-gray-700">ชื่อ-สกุล คู่สมรส</label>
                                   <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
@@ -1446,7 +1590,7 @@ export default function ApplicantsPage() {
                     </Card>
 
                     {/* ๒. ข้อมูลการติดต่อ */}
-                    <Card className="shadow-xl border-0">
+                    <Card className="shadow-xl border-0 rounded-lg">
                       <CardHeader className="bg-gradient-to-r from-red-500 via-pink-500 to-red-600 text-white relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-r from-red-400/20 to-pink-400/20"></div>
                         <div className="relative flex items-center gap-3">
@@ -1529,7 +1673,7 @@ export default function ApplicantsPage() {
                     </Card>
 
                     {/* ๒. ความรู้ ความสามารถ/ทักษะพิเศษ */}
-                    <Card className="shadow-xl border-0">
+                    <Card className="shadow-xl border-0 rounded-lg">
                       <CardHeader className="bg-gradient-to-r from-purple-500 via-violet-500 to-purple-600 text-white relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 to-violet-400/20"></div>
                         <div className="relative flex items-center gap-3">
@@ -1583,7 +1727,7 @@ export default function ApplicantsPage() {
                     </Card>
 
                     {/* ๓. ข้อมูลการสมัคร */}
-                    <Card className="shadow-xl border-0">
+                    <Card className="shadow-xl border-0 rounded-lg">
                       <CardHeader className="bg-gradient-to-r from-green-500 via-emerald-500 to-green-600 text-white relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-r from-green-400/20 to-emerald-400/20"></div>
                         <div className="relative flex items-center gap-3">
@@ -1624,7 +1768,7 @@ export default function ApplicantsPage() {
                     </Card>
 
                     {/* ไฟล์แนบ */}
-                    <Card className="shadow-xl border-0">
+                    <Card className="shadow-xl border-0 rounded-lg">
                       <CardHeader className="bg-gradient-to-r from-gray-500 via-slate-500 to-gray-600 text-white relative overflow-hidden">
                         <div className="absolute inset-0 bg-gradient-to-r from-gray-400/20 to-slate-400/20"></div>
                         <div className="relative flex items-center gap-3">
@@ -1727,14 +1871,21 @@ export default function ApplicantsPage() {
                               สถานะปัจจุบัน:
                             </label>
                             <Chip
-                              color={selectedApplication?.status === 'approved' || selectedApplication?.status === 'ผ่านการพิจารณา' ? 'success' : 'warning'}
+                              color={selectedApplication?.status === 'approved' || selectedApplication?.status === 'ผ่านการพิจารณา' || selectedApplication?.status === 'HIRED' ? 'success' : 'warning'}
                               variant="flat"
-                              className="font-medium"
+                              className={`font-medium ${
+                                selectedApplication?.status === 'approved' || selectedApplication?.status === 'ผ่านการพิจารณา' || selectedApplication?.status === 'HIRED' 
+                                  ? 'bg-green-100 text-green-800 border-green-300' 
+                                  : 'bg-orange-100 text-orange-800 border-orange-300'
+                              }`}
                             >
                               {(() => {
                                 const status = selectedApplication?.status;
                                 console.log('🔍 Chip rendering - selectedApplication.status:', status);
-                                return status === 'approved' || status === 'ผ่านการพิจารณา' ? 'ผ่านการพิจารณา' : 'รอพิจารณา';
+                                console.log('🔍 Chip rendering - selectedApplication object:', selectedApplication);
+                                const displayText = status === 'approved' || status === 'ผ่านการพิจารณา' || status === 'HIRED' ? 'ผ่านการพิจารณา' : 'รอพิจารณา';
+                                console.log('🔍 Chip rendering - displayText:', displayText);
+                                return displayText;
                               })()}
                             </Chip>
                           </div>
@@ -1745,13 +1896,23 @@ export default function ApplicantsPage() {
                             </label>
                           <Select
                               placeholder="เลือกสถานะใหม่"
-                            value={detailStatus}
-                            onChange={(e) => setDetailStatus(e.target.value)}
-                            className="max-w-xs"
+                            selectedKeys={detailStatus ? [detailStatus] : []}
+                            onSelectionChange={(keys) => {
+                              const key = Array.from(keys)[0] as string;
+                              console.log('🔍 Select onSelectionChange - Setting detailStatus:', key);
+                              setDetailStatus(key || '');
+                            }}
+                            className="max-w-xs bg-white rounded-lg shadow-sm"
                               variant="bordered"
+                            classNames={{
+                              trigger: "bg-white border-gray-300",
+                              value: "text-gray-900",
+                              popover: "bg-white",
+                              listbox: "bg-white"
+                            }}
                           >
-                            <SelectItem key="pending">รอพิจารณา</SelectItem>
-                              <SelectItem key="approved">ผ่านการพิจารณา</SelectItem>
+                            <SelectItem key="pending" className="bg-white hover:bg-gray-50">รอพิจารณา</SelectItem>
+                              <SelectItem key="approved" className="bg-white hover:bg-gray-50">ผ่านการพิจารณา</SelectItem>
 
                           </Select>
                           </div>
@@ -1759,7 +1920,11 @@ export default function ApplicantsPage() {
                           <div className="flex gap-2 pt-2">
                           <Button
                             color="primary"
-                            onPress={() => handleStatusChange(detailStatus)}
+                            onPress={() => {
+                              console.log('🔍 Save button clicked - detailStatus:', detailStatus);
+                              console.log('🔍 Save button clicked - selectedApplication:', selectedApplication);
+                              handleStatusChange(detailStatus);
+                            }}
                               className="min-w-[120px]"
                             >
                               บันทึกการเปลี่ยนแปลง
@@ -1779,7 +1944,20 @@ export default function ApplicantsPage() {
                 )}
               </ModalBody>
               <ModalFooter>
-                <Button color="primary" variant="solid" onPress={onClose}>ปิด</Button>
+                <div className="flex gap-2">
+                  <Button 
+                    color="secondary" 
+                    variant="bordered" 
+                    onPress={() => {
+                      setSuggestion(selectedApplication?.suggestion || '');
+                      setShowSuggestionModal(true);
+                    }}
+                    startContent={<DocumentTextIcon className="w-4 h-4" />}
+                  >
+                    ข้อเสนอแนะ
+                  </Button>
+                  <Button color="primary" variant="solid" onPress={onClose}>ปิด</Button>
+                </div>
               </ModalFooter>
             </>
           )}
@@ -2059,11 +2237,55 @@ export default function ApplicantsPage() {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            color={applicant.status === 'approved' || applicant.status === 'ผ่านการพิจารณา' ? 'success' : 'warning'}
+                            color={(() => {
+                              const status = applicant.status;
+                              if (status === 'approved' || status === 'ผ่านการพิจารณา' || status === 'HIRED') {
+                                return 'success';
+                              } else if (status === 'pending' || status === 'รอพิจารณา' || status === 'PENDING') {
+                                return 'warning';
+                              } else if (status === 'REVIEWING') {
+                                return 'primary';
+                              } else if (status === 'CONTACTED') {
+                                return 'secondary';
+                              } else if (status === 'REJECTED') {
+                                return 'danger';
+                              } else if (status === 'ARCHIVED') {
+                                return 'default';
+                              } else {
+                                return 'warning';
+                              }
+                            })()}
                             variant="flat"
                             size="sm"
+                            className={(() => {
+                              const status = applicant.status;
+                              if (status === 'approved' || status === 'ผ่านการพิจารณา' || status === 'HIRED') {
+                                return 'bg-green-100 text-green-800 border-green-300';
+                              } else if (status === 'pending' || status === 'รอพิจารณา' || status === 'PENDING') {
+                                return 'bg-orange-100 text-orange-800 border-orange-300';
+                              } else {
+                                return '';
+                              }
+                            })()}
                           >
-                            {applicant.status === 'approved' || applicant.status === 'ผ่านการพิจารณา' ? 'ผ่านการพิจารณา' : 'รอพิจารณา'}
+                            {(() => {
+                              const status = applicant.status;
+                              if (status === 'approved' || status === 'ผ่านการพิจารณา' || status === 'HIRED') {
+                                return 'ผ่านการพิจารณา';
+                              } else if (status === 'pending' || status === 'รอพิจารณา' || status === 'PENDING') {
+                                return 'รอพิจารณา';
+                              } else if (status === 'REVIEWING') {
+                                return 'กำลังพิจารณา';
+                              } else if (status === 'CONTACTED') {
+                                return 'ติดต่อแล้ว';
+                              } else if (status === 'REJECTED') {
+                                return 'ปฏิเสธ';
+                              } else if (status === 'ARCHIVED') {
+                                return 'เก็บถาวร';
+                              } else {
+                                return status || 'รอพิจารณา';
+                              }
+                            })()}
                           </Chip>
                         </TableCell>
                         <TableCell>
@@ -2145,11 +2367,55 @@ export default function ApplicantsPage() {
                               {app.prefix} {app.firstName} {app.lastName}
                             </span>
                             <Chip
-                              color={app.status === 'approved' || app.status === 'ผ่านการพิจารณา' ? 'success' : 'warning'}
+                              color={(() => {
+                                const status = app.status;
+                                if (status === 'approved' || status === 'ผ่านการพิจารณา' || status === 'HIRED') {
+                                  return 'success';
+                                } else if (status === 'pending' || status === 'รอพิจารณา' || status === 'PENDING') {
+                                  return 'warning';
+                                } else if (status === 'REVIEWING') {
+                                  return 'primary';
+                                } else if (status === 'CONTACTED') {
+                                  return 'secondary';
+                                } else if (status === 'REJECTED') {
+                                  return 'danger';
+                                } else if (status === 'ARCHIVED') {
+                                  return 'default';
+                                } else {
+                                  return 'warning';
+                                }
+                              })()}
                               variant="flat"
                               size="sm"
+                              className={(() => {
+                                const status = app.status;
+                                if (status === 'approved' || status === 'ผ่านการพิจารณา' || status === 'HIRED') {
+                                  return 'bg-green-100 text-green-800 border-green-300';
+                                } else if (status === 'pending' || status === 'รอพิจารณา' || status === 'PENDING') {
+                                  return 'bg-orange-100 text-orange-800 border-orange-300';
+                                } else {
+                                  return '';
+                                }
+                              })()}
                             >
-                              {app.status === 'approved' || app.status === 'ผ่านการพิจารณา' ? 'ผ่านการพิจารณา' : 'รอพิจารณา'}
+                              {(() => {
+                                const status = app.status;
+                                if (status === 'approved' || status === 'ผ่านการพิจารณา' || status === 'HIRED') {
+                                  return 'ผ่านการพิจารณา';
+                                } else if (status === 'pending' || status === 'รอพิจารณา' || status === 'PENDING') {
+                                  return 'รอพิจารณา';
+                                } else if (status === 'REVIEWING') {
+                                  return 'กำลังพิจารณา';
+                                } else if (status === 'CONTACTED') {
+                                  return 'ติดต่อแล้ว';
+                                } else if (status === 'REJECTED') {
+                                  return 'ปฏิเสธ';
+                                } else if (status === 'ARCHIVED') {
+                                  return 'เก็บถาวร';
+                                } else {
+                                  return status || 'รอพิจารณา';
+                                }
+                              })()}
                             </Chip>
                           </div>
                         ) : null;
@@ -2167,10 +2433,16 @@ export default function ApplicantsPage() {
                       value={bulkStatus}
                       onChange={(e) => setBulkStatus(e.target.value)}
                       variant="bordered"
-                      className="w-full"
+                      className="w-full bg-white rounded-lg shadow-sm"
+                      classNames={{
+                        trigger: "bg-white border-gray-300",
+                        value: "text-gray-900",
+                        popover: "bg-white",
+                        listbox: "bg-white"
+                      }}
                     >
-                      <SelectItem key="pending">รอพิจารณา</SelectItem>
-                      <SelectItem key="approved">ผ่านการพิจารณา</SelectItem>
+                      <SelectItem key="pending" className="bg-white hover:bg-gray-50">รอพิจารณา</SelectItem>
+                      <SelectItem key="approved" className="bg-white hover:bg-gray-50">ผ่านการพิจารณา</SelectItem>
 
                     </Select>
                   </div>
@@ -2209,6 +2481,85 @@ export default function ApplicantsPage() {
                 >
                   เปลี่ยนสถานะ
                 </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* Suggestion Modal */}
+      <Modal 
+        isOpen={showSuggestionModal} 
+        onClose={() => setShowSuggestionModal(false)}
+        size="lg"
+        classNames={{
+          base: "max-h-[90vh] bg-white rounded-2xl shadow-lg",
+          body: "py-6",
+          backdrop: "bg-black/50 backdrop-blur-sm",
+          header: "bg-gray-50 rounded-t-2xl",
+          footer: "bg-gray-50 rounded-b-2xl"
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <DocumentTextIcon className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">ข้อเสนอแนะเพิ่มเติม</h3>
+                    <p className="text-sm text-gray-500">
+                      {selectedApplication?.prefix} {selectedApplication?.firstName} {selectedApplication?.lastName}
+                    </p>
+                  </div>
+                </div>
+              </ModalHeader>
+              <ModalBody>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      ข้อเสนอแนะ
+                    </label>
+                    <textarea
+                      placeholder="กรุณาใส่ข้อเสนอแนะเพิ่มเติม..."
+                      value={suggestion}
+                      onChange={(e) => setSuggestion(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={4}
+                    />
+                  </div>
+                  
+                  {selectedApplication?.suggestion && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">ข้อเสนอแนะเดิม:</h4>
+                      <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                        {selectedApplication.suggestion}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <div className="flex gap-2">
+                  <Button 
+                    color="default" 
+                    variant="light" 
+                    onPress={() => setShowSuggestionModal(false)}
+                    className="mr-2"
+                  >
+                    ยกเลิก
+                  </Button>
+                  <Button 
+                    color="primary" 
+                    onPress={handleSaveSuggestion}
+                    disabled={!suggestion.trim()}
+                    className="min-w-[120px]"
+                  >
+                    บันทึก
+                  </Button>
+                </div>
               </ModalFooter>
             </>
           )}
