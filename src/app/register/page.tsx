@@ -1123,7 +1123,7 @@ export default function ApplicationForm() {
               }
             }
           } else {
-            throw new Error(errorMessage);
+          throw new Error(errorMessage);
           }
         } else {
           setSavedResume(json.data || json);
@@ -5742,7 +5742,7 @@ export default function ApplicationForm() {
                     />
                       {hasError('registeredAddressProvince') && (
                         <p className="text-red-500 text-xs mt-1">{getErrorMessage('registeredAddressProvince')}</p>
-                      )}
+                    )}
                 </div>
                   <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">รหัสไปรษณีย์<span className="text-red-500">*</span></label>
@@ -6039,9 +6039,9 @@ export default function ApplicationForm() {
                         {hasError('emergencyContactFirstName') && (
                           <div className="text-xs text-red-600">
                             {getErrorMessage('emergencyContactFirstName')}
-              </div>
+                  </div>
                         )}
-                      </div>
+                </div>
 
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700">นามสกุล ผู้ติดต่อฉุกเฉิน<span className="text-red-500">*</span></label>
@@ -6055,7 +6055,7 @@ export default function ApplicationForm() {
                         {hasError('emergencyContactLastName') && (
                           <div className="text-xs text-red-600">
                             {getErrorMessage('emergencyContactLastName')}
-                          </div>
+              </div>
                         )}
                       </div>
                       <div className="space-y-2">

@@ -429,6 +429,16 @@ export default function Departments() {
   const [loading, setLoading] = useState(true);
   const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
+  const [loadingStates, setLoadingStates] = useState<{[key: string]: boolean}>({});
+  
+  // ฟังก์ชันสำหรับจัดการ loading state
+  const setButtonLoading = (buttonId: string, isLoading: boolean) => {
+    setLoadingStates(prev => ({
+      ...prev,
+      [buttonId]: isLoading
+    }));
+  };
+
   const [newDepartment, setNewDepartment] = useState<Partial<Department>>({
     name: '',
     code: '',
@@ -1355,88 +1365,106 @@ export default function Departments() {
   }
 
   return (
-    <div className="min-h-screen bg-white p-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-white p-2 sm:p-4">
+      <div className="max-w-7xl mx-auto w-full">
         {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
+        <div className="mb-4 sm:mb-6 lg:mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="p-2 sm:p-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl">
-                <BuildingOfficeIcon className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+                <BuildingOfficeIcon className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-white" />
               </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent truncate">
                 ประกาศรับสมัคร
                 </h1>
-                <p className="text-sm sm:text-base text-gray-600">จัดการและดูข้อมูลฝ่ายและกลุ่มงานทั้งหมดในองค์กร</p>
+                <p className="text-xs sm:text-sm lg:text-base text-gray-600 truncate">จัดการและดูข้อมูลฝ่ายและกลุ่มงานทั้งหมดในองค์กร</p>
               </div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
               <Button
                 color="success"
                 variant="ghost"
-                startContent={<PlusIcon className="w-5 h-5" />}
-                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700"
-                onClick={handleAddNewDepartment}
+                startContent={loadingStates['add-department'] ? <Spinner classNames={{label: "text-foreground mt-4"}} label="default" variant="default" /> : <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 text-sm sm:text-base px-3 sm:px-4 py-2 rounded-xl"
+                isLoading={loadingStates['add-department']}
+                onClick={async () => {
+                  setButtonLoading('add-department', true);
+                  try {
+                    await handleAddNewDepartment();
+                  } finally {
+                    setButtonLoading('add-department', false);
+                  }
+                }}
               >
-                เพิ่มประกาศรับสมัครใหม่
+                <span className="hidden sm:inline">เพิ่มประกาศรับสมัครใหม่</span>
+                <span className="sm:hidden">เพิ่มประกาศ</span>
               </Button>
               <Button
                 color="primary"
                 variant="ghost"
-                startContent={<ArrowLeftIcon className="w-5 h-5" />}
-                onClick={() => window.location.href = '/admin'}
-                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700"
+                startContent={loadingStates['navigate-back'] ? <Spinner classNames={{label: "text-foreground mt-4"}} label="default" variant="default" /> : <ArrowLeftIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 text-sm sm:text-base px-3 sm:px-4 py-2 rounded-xl"
+                isLoading={loadingStates['navigate-back']}
+                onClick={async () => {
+                  setButtonLoading('navigate-back', true);
+                  try {
+                    window.location.href = '/admin';
+                  } finally {
+                    setButtonLoading('navigate-back', false);
+                  }
+                }}
               >
-                กลับไปหน้า Dashboard Admin
+                <span className="hidden sm:inline">กลับไปหน้า Dashboard Admin</span>
+                <span className="sm:hidden">กลับ</span>
               </Button>
             </div>
           </div>
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
           <Card className="shadow-lg border-0 rounded-xl">
-            <CardBody className="p-6 ">
+            <CardBody className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">ฝ่ายทั้งหมด</p>
-                  <p className="text-2xl font-bold text-gray-800">{filteredDepartments.length}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600 truncate">ฝ่ายทั้งหมด</p>
+                  <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800 truncate">{filteredDepartments.length}</p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <BuildingOfficeIcon className="w-6 h-6 text-blue-600" />
+                <div className="p-2 sm:p-3 bg-blue-100 rounded-lg flex-shrink-0">
+                  <BuildingOfficeIcon className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-blue-600" />
                 </div>
               </div>
             </CardBody>
           </Card>
 
           <Card className="shadow-lg border-0 rounded-xl">
-            <CardBody className="p-6">
+            <CardBody className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">ฝ่ายที่เปิดใช้งาน</p>
-                  <p className="text-2xl font-bold text-green-600">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600 truncate">ฝ่ายที่เปิดใช้งาน</p>
+                  <p className="text-lg sm:text-xl lg:text-2xl font-bold text-green-600 truncate">
                     {filteredDepartments.filter(d => d.status === 'active').length}
                   </p>
                 </div>
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <UserGroupIcon className="w-6 h-6 text-green-600" />
+                <div className="p-2 sm:p-3 bg-green-100 rounded-lg flex-shrink-0">
+                  <UserGroupIcon className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-green-600" />
                 </div>
               </div>
             </CardBody>
           </Card>
 
           <Card className="shadow-lg border-0 rounded-xl">
-            <CardBody className="p-6">
+            <CardBody className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">จำนวนตำแหน่งที่เปิดรับสมัคร</p>
-                  <p className="text-2xl font-bold text-purple-600">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600 truncate">จำนวนตำแหน่งที่เปิดรับสมัคร</p>
+                  <p className="text-lg sm:text-xl lg:text-2xl font-bold text-purple-600 truncate">
                     {filteredDepartments.reduce((sum, d) => sum + d.employeeCount, 0)}
                   </p>
                 </div>
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <UserGroupIcon className="w-6 h-6 text-purple-600" />
+                <div className="p-2 sm:p-3 bg-purple-100 rounded-lg flex-shrink-0">
+                  <UserGroupIcon className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-purple-600" />
                 </div>
               </div>
             </CardBody>
@@ -1468,7 +1496,7 @@ export default function Departments() {
                 </div>
               </div>
               {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
                 <div className="space-y-1">
                   <label className="text-sm text-gray-700">กลุ่มงาน</label>
                   <select
@@ -1527,23 +1555,136 @@ export default function Departments() {
             </div>
           </CardHeader>
           <CardBody className="p-0">
-            <Table 
-              aria-label="Departments table"
-              selectionMode="none"
-              classNames={{
-                wrapper: "min-h-[400px]",
-              }}
-            >
-              <TableHeader>
-                <TableColumn>ลำดับ</TableColumn>
-                <TableColumn>กลุ่มงาน</TableColumn>
-                <TableColumn>ฝ่าย</TableColumn>
-                <TableColumn>ตำแหน่งที่เปิดรับสมัคร</TableColumn>
-                <TableColumn>จำนวนที่เปิดรับ</TableColumn>
-                <TableColumn>สถานะ</TableColumn>
-                <TableColumn>วันที่สร้าง</TableColumn>
-                <TableColumn>การดำเนินการ</TableColumn>
-              </TableHeader>
+            {/* Mobile Card Layout */}
+            <div className="block sm:hidden p-2 sm:p-4 space-y-3 sm:space-y-4">
+              {(filteredItems as Department[]).map((department: Department, index: number) => {
+                const sequenceNumber = (page - 1) * rowsPerPage + index + 1;
+                return (
+                  <Card key={department.id} className="p-3 sm:p-4">
+                    <div className="space-y-2 sm:space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <Chip color="primary" variant="flat" size="sm" className="flex-shrink-0">
+                            {sequenceNumber}
+                          </Chip>
+                          <h3 className="font-semibold text-gray-800 truncate text-sm sm:text-base">{department.name}</h3>
+                        </div>
+                        <Chip
+                          color={getStatusColor(department.status)}
+                          variant="flat"
+                          size="sm"
+                          className="flex-shrink-0"
+                        >
+                          {getStatusText(department.status)}
+                        </Chip>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">กลุ่มงาน:</span>
+                          <span className="text-sm font-medium">{department.missionGroupName || '-'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">ตำแหน่ง:</span>
+                          <span className="text-sm font-medium">{department.positions}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">จำนวนที่เปิดรับ:</span>
+                          <span className="text-sm font-medium">{department.employeeCount}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-600">วันที่สร้าง:</span>
+                          <span className="text-sm font-medium">
+                            {formatDateForDisplay(department.createdAt || '')}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-row gap-1 sm:gap-2 pt-2">
+                        <Button
+                          size="sm"
+                          color="primary"
+                          variant="flat"
+                          startContent={loadingStates[`view-${department.id}`] ? <Spinner classNames={{label: "text-foreground mt-4"}} label="default" variant="default" /> : <EyeIcon className="w-3 h-3 sm:w-4 sm:h-4" />}
+                          className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl sm:bg-transparent sm:hover:bg-transparent sm:text-primary sm:border-transparent"
+                          isLoading={loadingStates[`view-${department.id}`]}
+                          onPress={async () => {
+                            setButtonLoading(`view-${department.id}`, true);
+                            try {
+                              setSelectedDepartment(department);
+                              onOpen();
+                            } finally {
+                              setButtonLoading(`view-${department.id}`, false);
+                            }
+                          }}
+                        >
+                          <span className="hidden sm:inline">ดูรายละเอียด</span>
+                          <span className="sm:hidden">ดู</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="warning"
+                          variant="flat"
+                          startContent={loadingStates[`edit-${department.id}`] ? <Spinner classNames={{label: "text-foreground mt-4"}} label="default" variant="default" /> : <PencilIcon className="w-3 h-3 sm:w-4 sm:h-4" />}
+                          className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 flex-1 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl sm:bg-transparent sm:hover:bg-transparent sm:text-warning sm:border-transparent"
+                          isLoading={loadingStates[`edit-${department.id}`]}
+                          onPress={async () => {
+                            setButtonLoading(`edit-${department.id}`, true);
+                            try {
+                              handleEditDepartment(department);
+                            } finally {
+                              setButtonLoading(`edit-${department.id}`, false);
+                            }
+                          }}
+                        >
+                          <span className="hidden sm:inline">แก้ไข</span>
+                          <span className="sm:hidden">แก้</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="danger"
+                          variant="flat"
+                          startContent={loadingStates[`delete-${department.id}`] ? <Spinner classNames={{label: "text-foreground mt-4"}} label="default" variant="default" /> : <TrashIcon className="w-3 h-3 sm:w-4 sm:h-4" />}
+                          className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 flex-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl sm:bg-transparent sm:hover:bg-transparent sm:text-danger sm:border-transparent"
+                          isLoading={loadingStates[`delete-${department.id}`]}
+                          onPress={async () => {
+                            setButtonLoading(`delete-${department.id}`, true);
+                            try {
+                              await handleDeleteDepartment(department.id);
+                            } finally {
+                              setButtonLoading(`delete-${department.id}`, false);
+                            }
+                          }}
+                        >
+                          ลบ
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table Layout */}
+            <div className="hidden sm:block overflow-x-auto">
+              <Table 
+                aria-label="Departments table"
+                selectionMode="none"
+                classNames={{
+                  wrapper: "min-h-[400px]",
+                }}
+                className="min-w-full"
+              >
+                <TableHeader>
+                  <TableColumn className="hidden sm:table-cell">ลำดับ</TableColumn>
+                  <TableColumn className="hidden md:table-cell">กลุ่มงาน</TableColumn>
+                  <TableColumn>ฝ่าย</TableColumn>
+                  <TableColumn className="hidden lg:table-cell">ตำแหน่งที่เปิดรับสมัคร</TableColumn>
+                  <TableColumn className="hidden sm:table-cell">จำนวนที่เปิดรับ</TableColumn>
+                  <TableColumn className="hidden sm:table-cell">สถานะ</TableColumn>
+                  <TableColumn className="hidden md:table-cell">วันที่สร้าง</TableColumn>
+                  <TableColumn>การดำเนินการ</TableColumn>
+                </TableHeader>
               <TableBody emptyContent={"ไม่พบข้อมูลฝ่าย"}>
                 {(filteredItems as Department[]).map((department: Department, index: number) => {
                   // คำนวณลำดับที่ต่อจากหน้าก่อนหน้า
@@ -1551,12 +1692,12 @@ export default function Departments() {
                   
                   return (
                     <TableRow key={department.id} className="hover:bg-gray-100 transition-colors">
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <Chip color="primary" variant="flat" size="sm">
                           {sequenceNumber}
                         </Chip>
                       </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       <div>
                         <p className="text-gray-800">{department.missionGroupName || '-'}</p>
                       </div>
@@ -1564,15 +1705,16 @@ export default function Departments() {
                     <TableCell>
                       <div>
                         <p className="font-semibold text-gray-800">{department.name}</p>
+                        <p className="text-sm text-gray-600 sm:hidden">{department.missionGroupName || '-'}</p>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <span className="font-medium text-gray-800">{department.positions}</span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <span className="font-medium text-gray-800">{department.employeeCount}</span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <Chip
                         color={getStatusColor(department.status)}
                         variant="flat"
@@ -1581,7 +1723,7 @@ export default function Departments() {
                         {getStatusText(department.status)}
                       </Chip>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       <div className="text-sm text-gray-600">
                         {formatDateForDisplay(department.createdAt || '')}
                       </div>
@@ -1630,20 +1772,22 @@ export default function Departments() {
                 })}
               </TableBody>
             </Table>
+            </div>
             {/* Custom Pagination */}
             {(filteredPages > 1 ? filteredPages : pages) > 1 && (
-              <div className="flex justify-center items-center space-x-2 mt-8 py-4">
+              <div className="flex flex-row justify-center items-center gap-1 sm:gap-2 lg:gap-4 mt-4 sm:mt-6 lg:mt-8 py-3 sm:py-4 px-2 sm:px-4 overflow-x-auto">
                 {/* Previous Button */}
                 <button
                   onClick={() => setPage(page - 1)}
                   disabled={page === 1}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-2 sm:px-3 py-1 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors flex-shrink-0 ${
                     page === 1
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 sm:bg-white sm:text-gray-700 sm:hover:bg-gray-50 sm:border-gray-300'
                   }`}
                 >
-                  ‹
+                  <span className="hidden sm:inline">‹</span>
+                  <span className="sm:hidden">ก่อนหน้า</span>
                 </button>
 
                 {/* Page Numbers */}
@@ -1677,10 +1821,10 @@ export default function Departments() {
                     <button
                       key={pageNum}
                       onClick={() => setPage(pageNum)}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      className={`px-2 sm:px-3 py-1 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors flex-shrink-0 ${
                         page === pageNum
                           ? 'bg-blue-600 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                          : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200 sm:bg-white sm:hover:bg-gray-50 sm:border-gray-300'
                       }`}
                     >
                       {pageNum}
@@ -1692,13 +1836,14 @@ export default function Departments() {
                 <button
                   onClick={() => setPage(page + 1)}
                   disabled={page === pages}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-2 sm:px-3 py-1 sm:py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors flex-shrink-0 ${
                     page === pages
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 sm:bg-white sm:text-gray-700 sm:hover:bg-gray-50 sm:border-gray-300'
                   }`}
                 >
-                  ›
+                  <span className="hidden sm:inline">›</span>
+                  <span className="sm:hidden">ถัดไป</span>
                 </button>
               </div>
             )}
@@ -1713,7 +1858,7 @@ export default function Departments() {
             size="4xl"
             classNames={{
               backdrop: "bg-white/80 backdrop-blur-sm",
-              base: "bg-white shadow-2xl max-h-[90vh]",
+              base: "bg-white shadow-2xl max-h-[90vh] sm:max-h-[95vh]",
               header: "bg-white",
               body: "bg-white overflow-y-auto max-h-[60vh]",
               footer: "bg-white"
@@ -1736,7 +1881,7 @@ export default function Departments() {
               <ModalBody>
                 <div className="space-y-6">
                   {/* Basic Information (เหมือน modal แก้ไข) */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">กลุ่มงาน</label>
                       <input
@@ -1758,7 +1903,7 @@ export default function Departments() {
                     </div>
 
                   {/* Positions + Salary */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">ตำแหน่งที่เปิดรับสมัคร</label>
                       <input
@@ -1784,7 +1929,7 @@ export default function Departments() {
                       </div>
 
                   {/* Coordinator + Phone */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">ชื่อผู้ประสานงาน</label>
                       <input
@@ -1806,7 +1951,7 @@ export default function Departments() {
                   </div>
 
                   {/* Headcount + Status */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">จำนวนที่เปิดรับ</label>
                       <input
@@ -1830,7 +1975,7 @@ export default function Departments() {
                   </div>
 
                   {/* Dates */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">วันที่เปิดรับสมัคร</label>
                       <input
@@ -1852,7 +1997,7 @@ export default function Departments() {
                   </div>
 
                   {/* Education + Gender */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">วุฒิการศึกษา</label>
                       <textarea
@@ -1895,7 +2040,7 @@ export default function Departments() {
             size="4xl"
             classNames={{
               backdrop: "bg-white/80 backdrop-blur-sm",
-              base: "bg-white shadow-2xl max-h-[90vh]",
+              base: "bg-white shadow-2xl max-h-[90vh] sm:max-h-[95vh]",
               header: "bg-white",
               body: "bg-white overflow-y-auto max-h-[60vh]",
               footer: "bg-white"
@@ -2010,7 +2155,7 @@ export default function Departments() {
                     </div>
 
                     {/* Coordinator name + phone in the same row */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700">ชื่อผู้ประสานงาน</label>
                         <input
@@ -2034,7 +2179,7 @@ export default function Departments() {
                     </div>
 
                     {/* Headcount + status in the same row */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700">จำนวนที่เปิดรับ</label>
                         <input
@@ -2079,12 +2224,12 @@ export default function Departments() {
                     </div>
                     
                   {/* Additional Information */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     
                   </div>
 
                                                        {/* Application Requirements */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                           <div className="space-y-2">
                         <label className="text-sm font-medium text-gray-700">วันที่เปิดรับสมัคร</label>
                         <div className="relative">

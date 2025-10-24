@@ -1616,7 +1616,7 @@ export default function ApplicantsPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="space-y-2">
                                 <label className="text-sm font-medium text-gray-700">ชื่อ-นามสกุล</label>
-                                <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md">
+                                <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md ">
                                   {selectedApplication.emergencyContactFirstName} {selectedApplication.emergencyContactLastName}
                                 </div>
                               </div>
