@@ -1606,7 +1606,7 @@ export default function Departments() {
                           color="primary"
                           variant="flat"
                           startContent={loadingStates[`view-${department.id}`] ? <Spinner classNames={{label: "text-foreground mt-4"}} label="default" variant="default" /> : <EyeIcon className="w-3 h-3 sm:w-4 sm:h-4" />}
-                          className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl sm:bg-transparent sm:hover:bg-transparent sm:text-primary sm:border-transparent"
+                          className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 flex-1 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-xl"
                           isLoading={loadingStates[`view-${department.id}`]}
                           onPress={async () => {
                             setButtonLoading(`view-${department.id}`, true);

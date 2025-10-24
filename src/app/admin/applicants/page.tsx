@@ -35,7 +35,8 @@ import {
   DocumentTextIcon,
   PrinterIcon,
   UserIcon,
-  BriefcaseIcon
+  BriefcaseIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 
 interface ApplicationData {
@@ -848,6 +849,32 @@ export default function ApplicantsPage() {
     setPreviewFile(null);
   };
 
+  // ฟังก์ชันสำหรับ preview ไฟล์แนบ
+  const handleFilePreview = (fileUrl: string, fileName: string) => {
+    const fileExtension = fileName.split('.').pop()?.toLowerCase();
+    
+    // ตรวจสอบประเภทไฟล์ที่สามารถ preview ได้
+    const previewableTypes = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'txt'];
+    
+    if (fileExtension && previewableTypes.includes(fileExtension)) {
+      setPreviewFile({
+        url: fileUrl,
+        name: fileName,
+        type: fileExtension
+      });
+      setShowPreviewModal(true);
+    } else {
+      // สำหรับไฟล์ที่ไม่สามารถ preview ได้ ให้ดาวน์โหลด
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = fileName;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   // บันทึกข้อเสนอแนะเพิ่มเติม
   const handleSaveSuggestion = async () => {
     if (!selectedApplication || !suggestion.trim()) {
@@ -1201,9 +1228,10 @@ export default function ApplicantsPage() {
         onOpenChange={onDetailModalOpenChange}
         size="5xl"
         scrollBehavior="inside"
+        placement="center"
         classNames={{
-          base: "max-h-[90vh] bg-white rounded-2xl shadow-lg",
-          body: "py-6",
+          base: "max-h-[90vh] sm:max-h-[95vh] bg-white rounded-2xl shadow-lg mx-2 sm:mx-4",
+          body: "py-4 sm:py-6 overflow-y-auto",
           backdrop: "bg-black/50 backdrop-blur-sm",
           header: "bg-gray-50 rounded-t-2xl",
           footer: "bg-gray-50 rounded-b-2xl"
@@ -1812,11 +1840,13 @@ export default function ApplicantsPage() {
                                       startContent={<EyeIcon className="w-4 h-4" />}
                                       onPress={() => {
                                         if (Array.isArray(value)) {
-                                          value.forEach((filePath: string) => {
-                                            window.open(`/api/image?path=${encodeURIComponent(filePath)}`, '_blank');
-                                          });
+                                          // ถ้ามีหลายไฟล์ ให้ preview ไฟล์แรก
+                                          const firstFile = value[0];
+                                          const fileName = firstFile.split('/').pop() || 'ไฟล์';
+                                          handleFilePreview(`/api/image?path=${encodeURIComponent(firstFile)}`, fileName);
                                         } else if (typeof value === 'string') {
-                                          window.open(`/api/image?path=${encodeURIComponent(value)}`, '_blank');
+                                          const fileName = value.split('/').pop() || 'ไฟล์';
+                                          handleFilePreview(`/api/image?path=${encodeURIComponent(value)}`, fileName);
                                         }
                                       }}
                                     >
@@ -1907,7 +1937,6 @@ export default function ApplicantsPage() {
                             classNames={{
                               trigger: "bg-white border-gray-300",
                               value: "text-gray-900",
-                              popover: "bg-white",
                               listbox: "bg-white"
                             }}
                           >
@@ -1970,9 +1999,10 @@ export default function ApplicantsPage() {
         onOpenChange={onPendingModalOpenChange}
         size="5xl"
         scrollBehavior="inside"
+        placement="center"
         classNames={{
-          base: "max-h-[90vh] bg-gray-50 rounded-2xl shadow-lg",
-          body: "py-6",
+          base: "max-h-[90vh] sm:max-h-[95vh] bg-gray-50 rounded-2xl shadow-lg mx-2 sm:mx-4",
+          body: "py-4 sm:py-6 overflow-y-auto",
           backdrop: "bg-black/50 backdrop-blur-sm",
           header: "bg-gray-50 rounded-t-2xl",
           footer: "bg-gray-50 rounded-b-2xl"
@@ -2080,9 +2110,10 @@ export default function ApplicantsPage() {
         onOpenChange={onApprovedModalOpenChange}
         size="5xl"
         scrollBehavior="inside"
+        placement="center"
         classNames={{
-          base: "max-h-[90vh] bg-gray-50 rounded-2xl shadow-lg",
-          body: "py-6",
+          base: "max-h-[90vh] sm:max-h-[95vh] bg-gray-50 rounded-2xl shadow-lg mx-2 sm:mx-4",
+          body: "py-4 sm:py-6 overflow-y-auto",
           backdrop: "bg-black/50 backdrop-blur-sm",
           header: "bg-gray-50 rounded-t-2xl",
           footer: "bg-gray-50 rounded-b-2xl"
@@ -2174,9 +2205,10 @@ export default function ApplicantsPage() {
         onOpenChange={setShowPositionModal}
         size="5xl"
         scrollBehavior="inside"
+        placement="center"
         classNames={{
-          base: "max-h-[90vh] bg-white rounded-2xl shadow-lg",
-          body: "py-6",
+          base: "max-h-[90vh] sm:max-h-[95vh] bg-white rounded-2xl shadow-lg mx-2 sm:mx-4",
+          body: "py-4 sm:py-6 overflow-y-auto",
           backdrop: "bg-black/50 backdrop-blur-sm",
           header: "bg-gray-50 rounded-t-2xl",
           footer: "bg-gray-50 rounded-b-2xl"
@@ -2437,7 +2469,6 @@ export default function ApplicantsPage() {
                       classNames={{
                         trigger: "bg-white border-gray-300",
                         value: "text-gray-900",
-                        popover: "bg-white",
                         listbox: "bg-white"
                       }}
                     >
@@ -2561,6 +2592,91 @@ export default function ApplicantsPage() {
                   </Button>
                 </div>
               </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      {/* File Preview Modal */}
+      <Modal 
+        isOpen={showPreviewModal} 
+        onClose={handleClosePreviewModal}
+        size="4xl"
+        placement="center"
+        classNames={{
+          base: "max-h-[90vh] sm:max-h-[95vh] bg-white rounded-2xl shadow-lg mx-2 sm:mx-4",
+          body: "p-0 overflow-hidden",
+          backdrop: "bg-black/50 backdrop-blur-sm"
+        }}
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <EyeIcon className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">ดูไฟล์แนบ</h3>
+                    <p className="text-sm text-gray-500">{previewFile?.name}</p>
+                  </div>
+                </div>
+                <Button
+                  isIconOnly
+                  variant="light"
+                  onPress={onClose}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </Button>
+              </ModalHeader>
+              <ModalBody className="p-0">
+                {previewFile && (
+                  <div className="w-full h-[70vh] flex items-center justify-center bg-gray-50">
+                    {previewFile.type === 'pdf' ? (
+                      <iframe
+                        src={previewFile.url}
+                        className="w-full h-full border-0"
+                        title={previewFile.name}
+                      />
+                    ) : ['jpg', 'jpeg', 'png', 'gif'].includes(previewFile.type) ? (
+                      <img
+                        src={previewFile.url}
+                        alt={previewFile.name}
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    ) : previewFile.type === 'txt' ? (
+                      <iframe
+                        src={previewFile.url}
+                        className="w-full h-full border-0"
+                        title={previewFile.name}
+                      />
+                    ) : (
+                      <div className="text-center">
+                        <DocumentTextIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-600">ไม่สามารถแสดงตัวอย่างไฟล์นี้ได้</p>
+                        <Button
+                          color="primary"
+                          variant="flat"
+                          className="mt-4"
+                          onPress={() => {
+                            const link = document.createElement('a');
+                            link.href = previewFile.url;
+                            link.download = previewFile.name;
+                            link.target = '_blank';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                        >
+                          ดาวน์โหลดไฟล์
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </ModalBody>
             </>
           )}
         </ModalContent>
